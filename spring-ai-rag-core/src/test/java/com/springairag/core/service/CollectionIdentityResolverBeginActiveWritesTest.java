@@ -51,6 +51,10 @@ class CollectionIdentityResolverBeginActiveWritesTest {
                 .thenReturn(java.util.Optional.of(collection(2L, 4L, true)));
         when(repository.findByIdAndDeletedFalse(5L))
                 .thenReturn(java.util.Optional.of(collection(5L, 1L, true)));
+        when(repository.findActiveVersion(2L))
+                .thenReturn(java.util.Optional.of(4L));
+        when(repository.findActiveVersion(5L))
+                .thenReturn(java.util.Optional.of(1L));
         when(repository.advanceActiveVersion(anyLong(), anyLong()))
                 .thenReturn(1);
 
@@ -69,6 +73,8 @@ class CollectionIdentityResolverBeginActiveWritesTest {
     void casMissOrDisabledCollectionThrowsOptimisticLocking() {
         when(repository.findByIdAndDeletedFalse(3L))
                 .thenReturn(java.util.Optional.of(collection(3L, 2L, true)));
+        when(repository.findActiveVersion(3L))
+                .thenReturn(java.util.Optional.of(2L));
         // CAS 未命中（并发已推进版本）。
         when(repository.advanceActiveVersion(3L, 2L)).thenReturn(0);
 

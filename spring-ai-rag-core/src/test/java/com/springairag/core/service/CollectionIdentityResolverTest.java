@@ -78,6 +78,7 @@ class CollectionIdentityResolverTest {
         collection.setVersion(4L);
         when(repository.findByIdAndDeletedFalse(7L))
                 .thenReturn(Optional.of(collection));
+        when(repository.findActiveVersion(7L)).thenReturn(Optional.of(4L));
         when(repository.advanceActiveVersion(7L, 4L)).thenReturn(1);
 
         CollectionIdentityResolver.ActiveCollectionToken token =
@@ -87,6 +88,31 @@ class CollectionIdentityResolverTest {
         assertEquals(7L, token.collectionId());
         assertEquals(5L, token.version());
         verify(repository).advanceActiveVersion(7L, 4L);
+    }
+
+    @Test
+    void repeatedReservationsReadTheCurrentDatabaseVersion() {
+        // 导入等多文档写入会在同一事务里连续预留写位置。批量 UPDATE 不会刷新
+        // 一级缓存中的实体版本，因此第二次预留必须从数据库读取新版本，而不是
+        // 复用实体里过期的 version，否则会误报 409 CONCURRENT_MODIFICATION。
+        RagCollection staleEntity = collection(9L, "import:target", false);
+        staleEntity.setVersion(0L);
+        when(repository.findByIdAndDeletedFalse(9L))
+                .thenReturn(Optional.of(staleEntity));
+        when(repository.findActiveVersion(9L))
+                .thenReturn(Optional.of(0L), Optional.of(1L));
+        when(repository.advanceActiveVersion(9L, 0L)).thenReturn(1);
+        when(repository.advanceActiveVersion(9L, 1L)).thenReturn(1);
+
+        CollectionIdentityResolver.ActiveCollectionToken first =
+                resolver.beginActiveWrite(9L);
+        CollectionIdentityResolver.ActiveCollectionToken second =
+                resolver.beginActiveWrite(9L);
+
+        assertEquals(1L, first.version());
+        assertEquals(2L, second.version());
+        assertEquals(0L, staleEntity.getVersion(),
+                "批量更新不刷新实体，这正是必须读数据库的原因");
     }
 
     @Test

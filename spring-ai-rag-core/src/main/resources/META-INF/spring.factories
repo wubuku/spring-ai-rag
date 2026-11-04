@@ -1,0 +1,4 @@
+# 在任何 bean / 日志系统初始化之前固定进程默认时区（默认 UTC）。
+# 见 com.springairag.core.config.TimeZoneEnvironmentPostProcessor。
+org.springframework.boot.env.EnvironmentPostProcessor=\
+com.springairag.core.config.TimeZoneEnvironmentPostProcessor

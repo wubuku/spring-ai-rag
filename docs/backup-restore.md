@@ -15,6 +15,22 @@ they are not anonymized artifacts. The tool does not package `.env`, logs or ext
 Directories are 0700 and files 0600. Use trusted encrypted storage and access controls; checksums prove integrity,
 not authenticity. Never commit backups or restore untrusted SQL/archives.
 
+### Collection export is not a backup
+
+`GET /api/v1/rag/collections/by-key/export` emits only one Collection's metadata and
+document content/metadata/source identity. It contains **no chunk text, embedding
+vectors, audit records, permissions, or deletion state**. `POST
+/api/v1/rag/collections/import` writes documents with `EmbeddingPolicy.SKIP`; call
+`embed-vector-reembed` afterwards to restore retrieval. A same-database rebuild must
+also change `sourceNamespace` so the import does not match the source documents by
+external identity.
+
+It is useful for migration and content-level rebuilds, but it is **not a recoverable
+backup** and does not satisfy RPO/RTO. Disaster recovery always uses the full
+`rag-backup.py` snapshot described here. Round-trip equivalence is verified by
+`scripts/verify-collection-export-roundtrip-e2e.py` and documented in
+[rest-api.md](rest-api.md#collection-export-and-import).
+
 ## Prerequisites
 
 - Python 3.10+, `psql`, `pg_dump`, `pg_restore`; tools matching the server's major version are recommended.

@@ -3007,6 +3007,26 @@ are globally unique, change it before importing as a second Collection.
 }
 ```
 
+Import is a **content-level rebuild**, not a database-level restore:
+
+- The export JSON contains Collection metadata plus document content, metadata, and
+  source identity. It **does not contain chunk text or embedding vectors**. Import
+  writes documents with `EmbeddingPolicy.SKIP` and does not chunk or embed them.
+- For equivalent retrieval results, call
+  `POST /api/v1/rag/documents/embed-vector-reembed?embeddingPolicy=SYNC` after
+  import. With the same embedding model and deterministic vectors, the same query
+  yields the same top-k and scores as the source Collection. The acceptance script
+  `scripts/verify-collection-export-roundtrip-e2e.py` compares document counts,
+  chunk fingerprints, vector dimensions, and retrieval results item by item.
+- External identity `(sourceNamespace, externalId)` is globally unique. When
+  rebuilding **in the same database**, change the imported documents'
+  `sourceNamespace` (the script uses `roundtrip-copy`); otherwise the import
+  matches the source document and updates/relocates it instead of creating an
+  independent copy. Cross-database rebuilds may keep the original namespace.
+- `/export` is a data export/migration entry point, **not a recoverable backup**.
+  Disaster recovery (chunks, vectors, audit, permissions) uses
+  [`scripts/rag-backup.py`](backup-restore.md).
+
 ---
 
 ### Deprecated Numeric Collection Routes
@@ -3245,6 +3265,12 @@ the string `Invalid Date`. **It cannot recover an offset that was never sent.**
 Making the offset travel is an API change with external business clients attached
 (`docs/business-client-integration.md`), so it is recorded here as a decision for a
 person rather than changed in a WebUI batch.
+
+Whichever Java type a field uses, the **server clock is pinned to UTC** (see
+[configuration.md](configuration.md#time-zone-and-time-semantics)):
+`LocalDateTime` fields are offset-free UTC wall-clock values and `Instant` fields
+carry `Z`. JSON never contains a server-local offset. Date/time query parameters
+accept both `2026-11-04T10:00:00Z` and `2026-11-04T10:00:00+00:00`.
 
 ## Alerts — Monitoring & Alerting
 

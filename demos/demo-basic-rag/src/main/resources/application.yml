@@ -15,6 +15,15 @@ spring:
   main:
     allow-bean-definition-overriding: true
 
+  jackson:
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+
+  task:
+    scheduling:
+      timezone: ${APP_CRON_TIME_ZONE:Asia/Shanghai}
+
   autoconfigure:
     exclude:
 
@@ -30,6 +39,8 @@ spring:
       # statement_timeout 让慢查询/锁等待不会永久占住连接。
       connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:10000}
       connection-init-sql: "SET statement_timeout = ${DB_STATEMENT_TIMEOUT_MS:30000}"
+      data-source-properties:
+        options: "-c TimeZone=UTC"
 
   flyway:
     enabled: true
@@ -53,6 +64,7 @@ app:
     provider: ${LLM_PROVIDER:openai}
 
 rag:
+  time-zone: ${RAG_TIME_ZONE:UTC}
   embedding:
     api-key: ${RAG_EMBEDDING_API_KEY:}
     base-url: ${RAG_EMBEDDING_BASE_URL:https://api.siliconflow.cn}

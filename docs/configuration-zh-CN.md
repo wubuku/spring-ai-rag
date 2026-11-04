@@ -1579,6 +1579,35 @@ rag:
 | `messages_en.properties` | 英文 |
 | `messages_zh_CN.properties` | 中文（简体） |
 
+## 时区与时间语义
+
+服务端时间语义固定为 **UTC**，不读宿主机 `TZ`：
+
+```yaml
+rag:
+  time-zone: ${RAG_TIME_ZONE:UTC}          # JVM 默认时区（LocalDateTime.now() 等的来源）
+spring:
+  jackson:
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+  task:
+    scheduling:
+      timezone: ${APP_CRON_TIME_ZONE:Asia/Shanghai}   # @Scheduled(cron) 的显式 zone
+```
+
+- 启动最早阶段由 `TimeZoneEnvironmentPostProcessor`（注册于 `META-INF/spring.factories`）
+  设置 `TimeZone.setDefault` 与 `Locale.setDefault(Locale.ROOT)`，早于日志系统与 Bean
+  创建；`rag.time-zone` 可显式覆盖，非法值回退 UTC。
+- 需要"按业务本地日历执行"的 cron 用显式 `zone`（默认 `Asia/Shanghai`）；所有 cron
+  `@Scheduled` 都必须声明 `zone`，`TimeZoneEnvironmentPostProcessorTest` 会扫描强制校验，
+  避免触发时刻跟随 JVM 默认时区漂移。
+- 数据库连接带 `options=-c TimeZone=UTC`，`TIMESTAMP(6)` 列的墙上时间即 UTC，与 Jackson
+  输出一致。
+- 日志时间格式为 `yyyy-MM-dd HH:mm:ss.SSSXXX`，零偏移输出 `Z`。
+- 真实进程的三时区验收：`python3 scripts/verify-timezone-consistency-e2e.py`。夏令时切换日
+  的日算术（UTC 24h vs 纽约 23h/25h）由单元测试覆盖；生产进程固定 UTC，本身没有 DST 跳变。
+
 ## 配置文件遮蔽与环境变量生效规则
 
 demo 模块自带 `application.yml`，与 `spring-ai-rag-core` jar 内的同名文件冲突。

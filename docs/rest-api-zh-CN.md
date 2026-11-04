@@ -2614,6 +2614,21 @@ GET /api/v1/rag/collections/by-key/export?collectionKey=customer-42%3Amanual%3Av
 }
 ```
 
+导入是**内容级重建**，不是数据库级恢复：
+
+- 导出 JSON 只含 Collection 元数据与文档正文/元数据/来源标识，**不含 chunk 文本和
+  embedding 向量**；导入按 `EmbeddingPolicy.SKIP` 写入文档，不会自动分块或向量化。
+- 需要等价检索结果时，导入后显式调用
+  `POST /api/v1/rag/documents/embed-vector-reembed?embeddingPolicy=SYNC` 完成分块与重嵌入。
+  同一 embedding 模型和确定性向量下，同一 query 的 top-k、分数可与源 Collection 对齐；
+  验收脚本 `scripts/verify-collection-export-roundtrip-e2e.py` 逐项比对文档数、chunk
+  指纹、向量维度与检索结果。
+- 外部身份 `(sourceNamespace, externalId)` 全局唯一。在**同一个库**里重建时，必须把导入
+  文档的 `sourceNamespace` 改成新值（脚本用 `roundtrip-copy`），否则导入会命中源文档并
+  更新/迁移它，得不到独立副本；跨库重建可保留原 namespace。
+- 因此 `/export` 是数据导出/迁移入口，**不是可恢复备份**。灾难恢复（含 chunk、向量、
+  审计、权限）走 [`scripts/rag-backup.py`](backup-restore-zh-CN.md)。
+
 ---
 
 ### Deprecated 数字 Collection 路由
@@ -2833,6 +2848,11 @@ WebUI 在不猜测的前提下把它处理到最好：`src/utils/time.ts` 解析
 渲染成 `—` 而不是字符串 `Invalid Date`。**但它无法凭空恢复一个从未被发送过的偏移量。**
 让偏移量上线是一次牵动外部业务客户端（`docs/business-client-integration.md`）的 API
 变更，所以这里把它记为需要人来拍板的事，而不是在一个 WebUI 批次里顺手改掉。
+
+不管字段是哪种 Java 类型，**服务端时钟语义固定为 UTC**（见
+[configuration-zh-CN.md](configuration-zh-CN.md#时区与时间语义)）：`LocalDateTime` 字段
+是无偏移的 UTC 墙上时间，`Instant` 字段带 `Z`。JSON 中不会出现服务器本地时区偏移。
+日期/时间查询参数同时接受 `2026-11-04T10:00:00Z` 与 `2026-11-04T10:00:00+00:00`。
 
 ## Alerts — 监控与告警
 

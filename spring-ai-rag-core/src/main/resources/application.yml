@@ -16,6 +16,17 @@ spring:
   main:
     allow-bean-definition-overriding: true
 
+  # 时间戳统一按 UTC 序列化；不允许“数字时间戳”或机器默认时区参与。
+  jackson:
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+
+  # 所有 @Scheduled cron 的显式时区（不是 JVM 默认时区）。
+  task:
+    scheduling:
+      timezone: ${APP_CRON_TIME_ZONE:Asia/Shanghai}
+
   # Exclude unwanted auto-configurations
   # MiniMax Chat/Embedding: manually managed by SpringAiConfig / EmbeddingModelConfig (avoid conflict with SiliconFlow)
   autoconfigure:
@@ -57,6 +68,9 @@ spring:
       metrics:
         enable: true                    # Enable HikariCP metrics for Micrometer
       data-source-properties:
+        # 固定数据库会话时区，避免 DB 端 CURRENT_TIMESTAMP 写入 TIMESTAMP(6)
+        # 列时按服务器时区换算，导致同一份数据随部署地域漂移。
+        options: "-c TimeZone=UTC"
         # PostgreSQL prepared statement cache: reuse query execution plans for repeated queries
         prepareThreshold: 5             # Use server-prepared statements after 5 repeated uses
         cachePrepStmts: true            # Enable prepared statement cache (default: false)
@@ -265,6 +279,9 @@ app:
 # Embedding Model Configuration (independent of Chat provider, always active)
 # ============================================
 rag:
+  # 进程默认时区（显式配置，不读宿主机时区）。所有 LocalDateTime.now()、日志偏移
+  # 与 TTL 判定都以它为准；默认 UTC，修改前先读 docs/configuration-zh-CN.md。
+  time-zone: ${RAG_TIME_ZONE:UTC}
   multi-instance:
     # 声明本进程与其他副本共享同一个 PostgreSQL；启动期拒绝会被副本数放大的本地限流配置。
     enabled: ${RAG_MULTI_INSTANCE_ENABLED:false}

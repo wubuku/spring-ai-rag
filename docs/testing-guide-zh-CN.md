@@ -144,6 +144,8 @@ mvn clean package -DskipTests
 | 安全边界全入口回归 | `./scripts/verify-security-boundary.py` | 真实 PostgreSQL + mock provider：受限 NORMAL key 对 search/chat/collections/upload/PDF-to-RAG/files tree·raw·preview/evaluation/feedback 的跨 Collection 与跨 principal 断言；路径穿越拒绝；root 全局视图不变 |
 | 资源饱和与降级语义 | `./scripts/verify-resource-saturation-e2e.py` | 一次性 pgvector 容器 + 真实进程：池耗尽 → 503 `DATABASE_UNAVAILABLE` + `Retry-After: 5`（有界排队非挂死）、慢查询 → 504 `DATABASE_TIMEOUT`、数据库停止/恢复后无需重启自动回 200、无连接泄漏、健康检查 DOWN→UP |
 | 上传与存储边界 | `./scripts/verify-upload-boundaries-e2e.py` | 真实进程：超单文件/超总请求 → 413 `PAYLOAD_TOO_LARGE`（解析阶段拒绝）、并发上传与中断上传无临时文件残留、multipart 目录不可写 → 503 `UPLOAD_STORAGE_UNAVAILABLE`、PDF 超限在读文件前 400 且失败后清理 `pdf-import-*` |
+| 时区与 Locale 无关性 | `./scripts/verify-timezone-consistency-e2e.py` | 同一临时库上依次以 `TZ=Asia/Shanghai`、`UTC`、`America/New_York` 启动真实进程：库内/API 时间戳均为 UTC、`exportedAt` 带 `Z`、日期参数 `Z`/`+00:00` 均可解析、TTL cutoff 恰为 UTC now-30d、日志时间带显式偏移、health UP；cron 显式 zone 与 DST 日算术由 `TimeZoneEnvironmentPostProcessorTest` 覆盖 |
+| Collection 导出 round-trip | `./scripts/verify-collection-export-roundtrip-e2e.py` | 真实进程 + 确定性 mock 向量：导出 3 篇文档 → 新 Collection 导入 → `embed-vector-reembed` → 文档数/externalId/标题/正文/元数据/size、chunk 指纹、1024 维向量指纹、同 query 的 top-k/分数逐项一致；并断言导出 JSON 不含 chunk/向量（不是可恢复备份） |
 | 接口兼容 | `node scripts/verify-openapi-breaking-change.mjs --self-test`；`./scripts/verify-api-compatibility.sh` | 删除 operation/字段/响应、改类型、改必填、删枚举值算破坏；新增可选字段不算；基线在 `testdata/api-contract/openapi-baseline.json` |
 | 构建可复现 | `./mvnw -v`（钉住 3.9.14）、`mvn -o -B -DskipTests compile`、`cd spring-ai-rag-webui && npm ci --dry-run` | Wrapper 版本、离线构建、lockfile 一致性 |
 

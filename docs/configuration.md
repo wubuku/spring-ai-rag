@@ -1746,6 +1746,39 @@ Error messages are internationalized via Spring `MessageSource`, auto-selecting 
 | `messages_en.properties` | English |
 | `messages_zh_CN.properties` | Chinese (Simplified) |
 
+## Time zone and time semantics
+
+Server-side time semantics are pinned to **UTC** and never read the host `TZ`:
+
+```yaml
+rag:
+  time-zone: ${RAG_TIME_ZONE:UTC}          # JVM default zone (source of LocalDateTime.now())
+spring:
+  jackson:
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+  task:
+    scheduling:
+      timezone: ${APP_CRON_TIME_ZONE:Asia/Shanghai}   # explicit zone for @Scheduled(cron)
+```
+
+- `TimeZoneEnvironmentPostProcessor` (registered in `META-INF/spring.factories`) runs before
+  logging and bean creation and sets `TimeZone.setDefault` plus
+  `Locale.setDefault(Locale.ROOT)`. `rag.time-zone` can override the zone (an invalid value
+  falls back to UTC).
+- Crons that must follow a business calendar declare an explicit `zone` (default
+  `Asia/Shanghai`). Every cron `@Scheduled` must declare `zone`;
+  `TimeZoneEnvironmentPostProcessorTest` enforces this so trigger instants cannot drift with
+  the JVM default zone.
+- JDBC sessions carry `options=-c TimeZone=UTC`, so the wall-clock values in `TIMESTAMP(6)`
+  columns are UTC and match Jackson output.
+- Log timestamps use `yyyy-MM-dd HH:mm:ss.SSSXXX`; a zero offset renders as `Z`.
+- Real-process verification across three zones:
+  `python3 scripts/verify-timezone-consistency-e2e.py`. DST transition-day arithmetic
+  (UTC 24h vs New York 23h/25h) is covered by unit tests; the production process is pinned
+  to UTC and therefore has no DST jump itself.
+
 ## Config-file shadowing and environment-variable resolution
 
 Demo modules ship their own `application.yml`, which collides with the same file inside

@@ -13,6 +13,19 @@ PITR 或密钥托管。正常服务启动不自动导出数据。上传原件在
 日志或外部模型配置文件；目录 0700、文件 0600。必须使用可信存储、加密和访问控制；校验和只能证明
 完整性，不能证明来源可信。不要把备份提交 Git 或恢复不可信来源的 SQL/archive。
 
+### Collection 导出不是备份
+
+`GET /api/v1/rag/collections/by-key/export` 只输出单个 Collection 的元数据与文档
+正文/元数据/来源标识，**不含 chunk 文本、embedding 向量、审计、权限与删除状态**。
+`POST /api/v1/rag/collections/import` 以 `EmbeddingPolicy.SKIP` 写回文档，需要再调用
+`embed-vector-reembed` 才能恢复检索能力；同库重建还要替换 `sourceNamespace` 以避免
+命中源文档的外部身份。
+
+因此它对数据迁移与内容级重建有用，但**不构成可恢复备份**，也不满足 RPO/RTO。
+灾难恢复一律走本文的 `rag-backup.py` 全量快照。round-trip 的等价性验收见
+`scripts/verify-collection-export-roundtrip-e2e.py` 与
+[rest-api-zh-CN.md](rest-api-zh-CN.md#collection-导出与导入)。
+
 ## 前置条件
 
 - `python3`（3.10+）、`psql`、`pg_dump`、`pg_restore`，推荐使用与服务器同主版本的 PostgreSQL 工具。

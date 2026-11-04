@@ -8,7 +8,6 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
@@ -134,7 +133,7 @@ public class DocumentSyncRunItemReceiptRepository {
         }
         if (value instanceof java.sql.Date date) {
             return date.toLocalDate()
-                    .atStartOfDay(ZoneId.systemDefault())
+                    .atStartOfDay(ZoneOffset.UTC)
                     .toOffsetDateTime();
         }
         throw new IllegalStateException(

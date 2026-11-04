@@ -42,6 +42,8 @@ class RagCollectionKeyConstraintDetectionTest {
                 .thenReturn(false);
         when(collectionRepository.advanceActiveVersion(
                 any(Long.class), any(Long.class))).thenReturn(1);
+        when(collectionRepository.findActiveVersion(any(Long.class)))
+                .thenReturn(java.util.Optional.of(0L));
         var source = new RagCollection();
         source.setId(1L);
         source.setCollectionKey("source");

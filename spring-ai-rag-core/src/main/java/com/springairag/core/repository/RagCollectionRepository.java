@@ -88,6 +88,17 @@ public interface RagCollectionRepository extends JpaRepository<RagCollection, Lo
             @Param("deletedAt") LocalDateTime deletedAt);
 
     /**
+     * 读取当前生命周期版本。
+     *
+     * <p>同一事务内 {@link #advanceActiveVersion(Long, Long)} 是批量更新，不会刷新
+     * 一级缓存里的实体版本；调用方如果连续多次预留写位置（例如 Collection 导入
+     * 循环逐篇写文档），必须从数据库读取最新版本，而不是复用可能过期的实体字段。
+     */
+    @Query("SELECT c.version FROM RagCollection c WHERE c.id = :id "
+            + "AND c.deleted = false AND c.enabled = true AND c.purgedAt IS NULL")
+    Optional<Long> findActiveVersion(@Param("id") Long id);
+
+    /**
      * Advance the lifecycle version only when the caller still owns its read token.
      */
     @Modifying

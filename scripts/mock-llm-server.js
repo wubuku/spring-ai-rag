@@ -17,6 +17,8 @@
  *   MOCK_STREAM_DELAY_MS      - Delay between stream chunks in ms (default: 20)
  *   MOCK_STREAM_CHUNKS        - Number of chunks to emit (default: words in the message)
  *   MOCK_STREAM_FIRST_DELAY_MS - Delay after SSE headers before the first chunk (default: 0)
+ *   MOCK_DETERMINISTIC_EMBEDDINGS - true 时按文本生成确定性单位向量（默认 false，随机）
+ *                                  用于导出→重建 round-trip 的同 query 分数比对。
  */
 
 const http = require('http');
@@ -29,6 +31,8 @@ const STREAM_DELAY_MS = parseInt(process.env.MOCK_STREAM_DELAY_MS || '20', 10);
 const STREAM_CHUNKS = parseInt(process.env.MOCK_STREAM_CHUNKS || '0', 10);
 const STREAM_FIRST_DELAY_MS = parseInt(
   process.env.MOCK_STREAM_FIRST_DELAY_MS || '0', 10);
+const DETERMINISTIC_EMBEDDINGS =
+  process.env.MOCK_DETERMINISTIC_EMBEDDINGS === 'true';
 
 // ---------- utilities ----------
 
@@ -68,6 +72,40 @@ function mockEmbeddingVector() {
   let norm = 0;
   for (let i = 0; i < dim; i++) {
     const v = Math.random() * 2 - 1;
+    vec.push(v);
+    norm += v * v;
+  }
+  norm = Math.sqrt(norm);
+  return vec.map((v) => v / norm);
+}
+
+/**
+ * 确定性单位向量：同一文本在任何进程/请求中都得到相同向量。
+ * 导出→导入→重嵌入后，同一条 chunk 的向量应逐位一致，同 query 的分数才可精确比对。
+ *
+ * 每个分量在共享的 1.0 基线上叠加 ±0.1 的文本噪声：任意两段文本的余弦相似度
+ * 都明显高于默认 min-score=0.3，检索不会被阈值清空，同时排序仍由文本决定。
+ */
+function deterministicEmbeddingVector(text) {
+  const dim = 1024;
+  let state = 0x9e3779b9;
+  const input = String(text);
+  for (let i = 0; i < input.length; i++) {
+    state = Math.imul(state ^ input.charCodeAt(i), 0x85ebca6b);
+    state ^= state >>> 13;
+  }
+  state = (state || 1) >>> 0;
+  const next = () => {
+    state += 0x6d2b79f5;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const vec = [];
+  let norm = 0;
+  for (let i = 0; i < dim; i++) {
+    const v = (next() * 2 - 1) * 0.1 + 1.0;
     vec.push(v);
     norm += v * v;
   }
@@ -186,14 +224,16 @@ async function handleEmbeddings(req, res, body) {
 
   const { input = [], model } = body;
   const texts = Array.isArray(input) ? input : [input];
-
-  const embedding = mockEmbeddingVector();
+  // 随机模式保持原有行为：一次请求内的所有 input 共用一个随机向量。
+  const sharedRandomEmbedding = mockEmbeddingVector();
 
   jsonResponse(res, 200, {
     object: 'list',
     data: texts.map((text, i) => ({
       object: 'embedding',
-      embedding,
+      embedding: DETERMINISTIC_EMBEDDINGS
+        ? deterministicEmbeddingVector(text)
+        : sharedRandomEmbedding,
       index: i,
     })),
     model: model || 'BAAI/bge-m3',

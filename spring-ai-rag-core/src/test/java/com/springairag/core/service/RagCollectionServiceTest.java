@@ -49,6 +49,8 @@ class RagCollectionServiceTest {
         service.setDocumentMutationService(documentMutationService);
         lenient().when(collectionRepository.advanceActiveVersion(
                 anyLong(), anyLong())).thenReturn(1);
+        lenient().when(collectionRepository.findActiveVersion(anyLong()))
+                .thenReturn(Optional.of(0L));
     }
 
     private RagCollection createCollection(Long id, String name) {

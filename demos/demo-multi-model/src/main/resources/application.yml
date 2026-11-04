@@ -16,6 +16,15 @@ spring:
   application:
     name: spring-ai-rag-multi-model-demo
 
+  jackson:
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+
+  task:
+    scheduling:
+      timezone: ${APP_CRON_TIME_ZONE:Asia/Shanghai}
+
   # PostgreSQL configuration
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DATABASE:${POSTGRES_DB:spring_ai_rag_dev}}
@@ -27,6 +36,8 @@ spring:
       minimum-idle: ${DB_POOL_MIN_IDLE:2}
       connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:10000}
       connection-init-sql: "SET statement_timeout = ${DB_STATEMENT_TIMEOUT_MS:30000}"
+      data-source-properties:
+        options: "-c TimeZone=UTC"
 
   # Flyway database migrations
   flyway:
@@ -57,6 +68,7 @@ app:
     provider: ${LLM_PROVIDER:openai}
 
 rag:
+  time-zone: ${RAG_TIME_ZONE:UTC}
   embedding:
     api-key: ${RAG_EMBEDDING_API_KEY:}
     base-url: ${RAG_EMBEDDING_BASE_URL:https://api.siliconflow.cn}

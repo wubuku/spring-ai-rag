@@ -38,7 +38,6 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -1296,7 +1295,7 @@ public class DocumentSyncRunService {
         }
         if (value instanceof java.sql.Date date) {
             return date.toLocalDate()
-                    .atStartOfDay(ZoneId.systemDefault())
+                    .atStartOfDay(ZoneOffset.UTC)
                     .toOffsetDateTime();
         }
         throw new IllegalStateException(

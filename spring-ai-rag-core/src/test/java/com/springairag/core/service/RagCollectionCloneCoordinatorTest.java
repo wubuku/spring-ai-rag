@@ -65,9 +65,12 @@ class RagCollectionCloneCoordinatorTest {
                 });
         when(collectionRepository.existsByCollectionKey("clone-key"))
                 .thenReturn(false);
-        // 真实 CollectionIdentityResolver 的活动写 CAS 需命中。
+        // 真实 CollectionIdentityResolver 的活动写 CAS 需命中；批量更新后实体版本
+        // 不会刷新，因此预留写位置时从数据库读取当前版本。
         when(collectionRepository.advanceActiveVersion(
                 any(Long.class), any(Long.class))).thenReturn(1);
+        when(collectionRepository.findActiveVersion(any(Long.class)))
+                .thenReturn(java.util.Optional.of(0L));
     }
 
     private RagDocument sourceDocument(long id, String title) {

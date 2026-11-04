@@ -107,7 +107,9 @@ public class ChatExportService {
         StringBuilder sb = new StringBuilder();
         sb.append("# Chat Export: `").append(sessionId).append("`\n\n");
         sb.append("**Total messages:** ").append(records.size()).append("\n");
-        sb.append("**Exported at:** ").append(java.time.LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)).append("\n\n");
+        sb.append("**Exported at:** ")
+                .append(java.time.format.DateTimeFormatter.ISO_INSTANT.format(java.time.Instant.now()))
+                .append("\n\n");
         sb.append("---\n\n");
 
         for (RagChatHistory r : records) {
@@ -215,8 +217,8 @@ public class ChatExportService {
         StringBuilder sb = new StringBuilder();
         sb.append("# Chat Export: `").append(sessionId).append("`\n\n");
         sb.append("**Total messages:** ").append(records.size()).append("\n");
-        sb.append("**Exported at:** ").append(java.time.LocalDateTime.now()
-                .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)).append("\n\n");
+        sb.append("**Exported at:** ").append(DateTimeFormatter.ISO_INSTANT
+                .format(java.time.Instant.now())).append("\n\n");
         sb.append("---\n\n");
         for (RagChatHistory r : records) {
             String time = formatTime(r.getCreatedAt());
@@ -365,8 +367,15 @@ public class ChatExportService {
         return needsQuotes ? "\"" + escaped + "\"" : escaped;
     }
 
+    /**
+     * 导出时间统一为 UTC 墙上时间的 ISO-8601 表示，并显式追加 {@code Z}。
+     *
+     * <p>数据库列是 {@code TIMESTAMP(6)}，进程默认时区被固定为 UTC（见
+     * {@code TimeZoneEnvironmentPostProcessor}）；不带偏移的输出会让下游无法
+     * 判断这是本机时间还是 UTC，因此在导出边界补齐时区标识。
+     */
     private String formatTime(java.time.LocalDateTime dt) {
         if (dt == null) return "";
-        return dt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        return dt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME) + "Z";
     }
 }

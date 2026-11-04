@@ -37,7 +37,8 @@ public class RetrievalDiagnosticsRetentionJob {
         return properties;
     }
 
-    @Scheduled(cron = "${rag.retrieval-diagnostics.cleanup-cron:0 25 * * * *}")
+    @Scheduled(cron = "${rag.retrieval-diagnostics.cleanup-cron:0 25 * * * *}",
+            zone = "${spring.task.scheduling.timezone:Asia/Shanghai}")
     public void cleanup() {
         if (properties.getDataGovernance().isCentralCleanupEnabled()) {
             return;

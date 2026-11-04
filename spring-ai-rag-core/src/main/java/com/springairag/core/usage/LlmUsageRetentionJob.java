@@ -28,7 +28,8 @@ public final class LlmUsageRetentionJob {
         this.properties = properties;
     }
 
-    @Scheduled(cron = "${rag.usage.cleanup-cron:0 20 * * * *}")
+    @Scheduled(cron = "${rag.usage.cleanup-cron:0 20 * * * *}",
+            zone = "${spring.task.scheduling.timezone:Asia/Shanghai}")
     void scheduledCleanup() {
         if (properties.getDataGovernance().isCentralCleanupEnabled()) {
             return;

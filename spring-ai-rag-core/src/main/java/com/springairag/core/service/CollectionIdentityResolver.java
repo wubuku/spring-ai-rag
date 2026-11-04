@@ -88,9 +88,16 @@ public class CollectionIdentityResolver {
             throw new IllegalArgumentException("collectionId must be positive");
         }
         RagCollection collection = requireActive(id, null);
-        long version = collection.getVersion() == null ? 0L : collection.getVersion();
-        if (!Boolean.TRUE.equals(collection.getEnabled())
-                || repository.advanceActiveVersion(id, version) != 1) {
+        if (!Boolean.TRUE.equals(collection.getEnabled())) {
+            throw new ObjectOptimisticLockingFailureException(
+                    RagCollection.class, id);
+        }
+        // 同一事务里重复预留（例如 Collection 导入逐篇写文档）时，实体的一级缓存
+        // 版本落后于批量 UPDATE 后的数据库版本；CAS 必须基于数据库当前值。
+        long version = repository.findActiveVersion(id)
+                .orElseThrow(() -> new ObjectOptimisticLockingFailureException(
+                        RagCollection.class, id));
+        if (repository.advanceActiveVersion(id, version) != 1) {
             throw new ObjectOptimisticLockingFailureException(
                     RagCollection.class, id);
         }

@@ -107,6 +107,10 @@ class LocalStack:
         output = self.sql(statement, db)
         return [line.split("\t") for line in output.splitlines() if line]
 
+    def execute(self, statement: str, db: str | None = None) -> None:
+        """执行无返回值语句（INSERT/UPDATE），失败即抛异常。"""
+        self._psql(db or self.db_name, statement, scalar=False)
+
     def create_database(self, name: str | None = None) -> str:
         name = name or self.db_name
         self._psql("postgres", f'DROP DATABASE IF EXISTS "{name}"', scalar=False)
@@ -153,8 +157,12 @@ class LocalStack:
 
     def start_mock(self, delay_ms: int = 0, stream_delay_ms: int = 20,
                    stream_chunks: int = 0, stream_first_delay_ms: int = 0,
-                   error_rate: float = 0.0) -> None:
+                   error_rate: float = 0.0,
+                   extra_env: dict[str, str] | None = None) -> None:
         log = (self.log_dir / "mock.log").open("w")
+        mock_env = dict(os.environ)
+        if extra_env:
+            mock_env.update({k: str(v) for k, v in extra_env.items()})
         self.mock_process = subprocess.Popen(
             [str(MOCK_SCRIPT), "--port", str(self.mock_port),
              "--delay", str(delay_ms),
@@ -163,7 +171,7 @@ class LocalStack:
              "--stream-chunks", str(stream_chunks),
              "--stream-first-delay", str(stream_first_delay_ms)],
             cwd=str(PROJECT_DIR), stdout=log, stderr=subprocess.STDOUT,
-            env=dict(os.environ),
+            env=mock_env,
         )
         self._wait_http(f"http://127.0.0.1:{self.mock_port}/health", 60, "mock provider")
         log.close()
