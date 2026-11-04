@@ -304,6 +304,23 @@ pass "Error-code-catalog self-test"
 node scripts/verify-error-code-catalog.mjs
 pass "Error code catalog"
 
+# The catalog answers "which code and which status". This one answers the
+# three questions it cannot see: is every error body joinable to its logs
+# (traceId), does every shortcut writer set X-RAG-Failure-Class before the
+# order-1000 header filter is even in the chain, does a 5xx keep internal type
+# names and stack frames off the wire, and do container-level failures (the
+# ones thrown by filters, which never reach an @ExceptionHandler) share the
+# same body and header at all.
+node scripts/test-support/error-response-contract-self-test.mjs >/dev/null || {
+  echo "Error-response-contract self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/error-response-contract-self-test.mjs >&2 || true
+  exit 1
+}
+pass "Error-response contract self-test"
+
+node scripts/verify-error-response-contract.mjs
+pass "Error-response contract"
+
 # An eighth question, and the smallest surface of the lot: five acceptance gates
 # read the same four counters off a surefire report, each with its own copy of
 # the same `sed` pipeline, and none of them had a self-test — so the reading was

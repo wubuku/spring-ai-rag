@@ -127,7 +127,7 @@ class RateLimitFilterTest {
             filter.doFilterInternal(request, response, chain);
 
             assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), response.getStatus());
-            assertEquals(MediaType.APPLICATION_JSON_VALUE, response.getContentType());
+            assertEquals(MediaType.APPLICATION_PROBLEM_JSON_VALUE, response.getContentType());
             assertEquals("60", response.getHeader("Retry-After"));
         }
 

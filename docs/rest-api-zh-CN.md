@@ -513,6 +513,26 @@ X-RateLimit-Remaining: 0
 }
 ```
 
+#### 统一错误契约（所有出口）
+
+原生错误只有一个信封：`ErrorResponse`。过滤器短路（401/403/429/503）、异常处理器、
+以及不经过任何 advice 的容器级 `/error` 都必须产出同一组字段：
+`type`、`title`、`status`、`detail`、`instance`、`error`、`message`、`timestamp`、
+`path`、`traceId`、`failureClass`（未取到的值为 `null`，字段本身始终存在）。
+
+- **分类头**：每个失败响应都带 `X-RAG-Failure-Class`，包括过滤器和容器级出口；
+  其值与 body 的 `failureClass` 相同。稳定值见下文“失败分类”。
+- **关联 ID**：body 的 `traceId` 与响应头 `X-Trace-Id` 相同。
+- **内容类型**：统一为 `application/problem+json`。
+- **5xx 脱敏**：`detail` / `message` 会移除堆栈帧、内部全限定类名和 `Foo.java:42`
+  形式的源码位置；4xx 保留原始描述，因为调用方需要据此改请求。
+- **OpenAI 兼容入口**：`/v1` 使用 OpenAI 自己的错误信封（见本节末尾），
+  但仍带同一个分类头，且 5xx 同样脱敏；两套信封不会混用。
+
+可执行门禁：`node scripts/verify-error-response-contract.mjs` 从源码普查全部错误
+出口（规则 R1–R5），真实进程验收见
+[testing-guide-zh-CN.md](testing-guide-zh-CN.md)。
+
 ---
 
 ## OpenAI Chat Completions 兼容预览

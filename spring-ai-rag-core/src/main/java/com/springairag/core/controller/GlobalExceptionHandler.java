@@ -5,7 +5,7 @@ import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.exception.ChatTurnInProgressException;
 import com.springairag.core.filter.RequestTraceFilter;
-import com.springairag.core.logging.SensitiveDataMaskingConverter;
+import com.springairag.core.logging.ErrorMessageSanitizer;
 import com.springairag.core.security.ApiCapabilitySupport;
 import com.springairag.core.web.ApiKeyRotationHttpPolicy;
 import jakarta.servlet.http.HttpServletRequest;
@@ -221,11 +221,16 @@ public class GlobalExceptionHandler {
                                                             HttpServletRequest request) {
         var code = e.getErrorCodeEnum();
         log.warn("RAG business error: [{}] {}", code.getCode(), e.getMessage());
+        // 5xx 的 detail 可能来自内部组件（SQL、Provider、转换器），不能原样外泄；
+        // 4xx 的 detail 是调用方改请求的依据，保持原样。
+        String detail = code.getHttpStatus() >= 500
+                ? ErrorMessageSanitizer.sanitize(e.getMessage())
+                : e.getMessage();
         ErrorResponse body = ErrorResponse.builder()
                 .error(code.getCode())
                 .status(code.getHttpStatus())
                 .type(code.getProblemTypeUri())
-                .detail(e.getMessage())
+                .detail(detail)
                 .instance(request.getRequestURI())
                 .build();
         // Set human-readable title without triggering the builder's title() side effect
@@ -250,11 +255,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleException(Exception e,
                                                          HttpServletRequest request) {
-        // Exception messages may contain internal paths, SQL errors, etc.; desensitize before returning to user
+        // Exception messages may contain internal paths, SQL errors or fully-qualified
+        // class names; desensitize before returning to user. Batch 952 added the
+        // internal-type/stack-frame scrub: masking secrets alone still let
+        // `com.springairag.core.foo.Bar` and `at com.foo.Bar.m(Bar.java:42)` through.
         String rawMessage = e.getMessage() != null ? e.getMessage() : "Unknown error";
-        String safeMessage = SensitiveDataMaskingConverter.maskSensitiveData(rawMessage);
+        String safeMessage = ErrorMessageSanitizer.sanitize(rawMessage);
         var details = com.springairag.core.resilience.UpstreamFailureClassifier.classify(e);
-        if ("UPSTREAM".equals(details.origin())) safeMessage = "Model provider request failed: " + details.reason();
+        if ("UPSTREAM".equals(details.origin())) {
+            safeMessage = ErrorMessageSanitizer.sanitize(
+                    "Model provider request failed: " + details.reason());
+        }
         // Batch 920. The status is named in the line rather than left implicit.
         // It used to read `Request failed: {message}` and nothing else — and for
         // a provider that answers 401, the *message* begins with `401 - {…}`,

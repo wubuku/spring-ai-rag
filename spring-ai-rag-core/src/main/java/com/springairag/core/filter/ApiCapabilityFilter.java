@@ -1,7 +1,6 @@
 package com.springairag.core.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.openai.OpenAiErrorResponse;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.security.ApiCapabilitySupport;
@@ -76,7 +75,7 @@ public class ApiCapabilityFilter extends OncePerRequestFilter {
             return;
         }
         if (decision == ApiRoutePolicyDecision.UNDECLARED) {
-            sendRouteNotDeclared(response, request.getRequestURI());
+            sendRouteNotDeclared(request, response, request.getRequestURI());
             return;
         }
         String required = decision == ApiRoutePolicyDecision.READ
@@ -90,7 +89,7 @@ public class ApiCapabilityFilter extends OncePerRequestFilter {
             return;
         }
 
-        sendForbidden(response, request.getRequestURI(), required);
+        sendForbidden(request, response, request.getRequestURI(), required);
     }
 
     private ApiRoutePolicyDecision legacyDecision(HttpServletRequest request) {
@@ -165,13 +164,17 @@ public class ApiCapabilityFilter extends OncePerRequestFilter {
         return path;
     }
 
-    private void sendForbidden(HttpServletResponse response,
+    private void sendForbidden(HttpServletRequest request,
+                               HttpServletResponse response,
                                String path,
                                String requiredCapability) throws IOException {
-        response.setStatus(HttpStatus.FORBIDDEN.value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         String message = "API principal requires capability " + requiredCapability;
+        // ApiCapabilityFilter 的 order(-5) 在 FailureClassResponseHeaderFilter(1000)
+        // 之前，短路返回时后者还没进入链，所以分类头必须在这里自己写。
+        FailureClassHttpSupport.apply(response, HttpStatus.FORBIDDEN.value(), "FORBIDDEN");
         if (path.startsWith("/v1/")) {
+            response.setStatus(HttpStatus.FORBIDDEN.value());
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write(OBJECT_MAPPER.writeValueAsString(
                     OpenAiErrorResponse.of(
                             message,
@@ -180,21 +183,19 @@ public class ApiCapabilityFilter extends OncePerRequestFilter {
                             "insufficient_permissions")));
             return;
         }
-        ErrorResponse error = ErrorResponse.builder()
-                .error("FORBIDDEN")
-                .status(HttpStatus.FORBIDDEN.value())
-                .message(message)
-                .path(path)
-                .build();
-        response.getWriter().write(OBJECT_MAPPER.writeValueAsString(error));
+        NativeErrorResponseWriter.write(
+                OBJECT_MAPPER, request, response, HttpStatus.FORBIDDEN.value(),
+                "FORBIDDEN", message);
     }
 
-    private void sendRouteNotDeclared(HttpServletResponse response, String path)
+    private void sendRouteNotDeclared(HttpServletRequest request,
+                                      HttpServletResponse response, String path)
             throws IOException {
-        response.setStatus(HttpStatus.FORBIDDEN.value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         String message = "API route is not declared in the route policy registry";
+        FailureClassHttpSupport.apply(response, HttpStatus.FORBIDDEN.value(), "ROUTE_NOT_DECLARED");
         if (path != null && path.startsWith("/v1/")) {
+            response.setStatus(HttpStatus.FORBIDDEN.value());
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write(OBJECT_MAPPER.writeValueAsString(
                     OpenAiErrorResponse.of(
                             message,
@@ -203,12 +204,8 @@ public class ApiCapabilityFilter extends OncePerRequestFilter {
                             "ROUTE_NOT_DECLARED")));
             return;
         }
-        ErrorResponse error = ErrorResponse.builder()
-                .error("ROUTE_NOT_DECLARED")
-                .status(HttpStatus.FORBIDDEN.value())
-                .message(message)
-                .path(path)
-                .build();
-        response.getWriter().write(OBJECT_MAPPER.writeValueAsString(error));
+        NativeErrorResponseWriter.write(
+                OBJECT_MAPPER, request, response, HttpStatus.FORBIDDEN.value(),
+                "ROUTE_NOT_DECLARED", message);
     }
 }

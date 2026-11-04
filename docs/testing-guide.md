@@ -1007,6 +1007,43 @@ root credential is available, use `--skip-acl` explicitly and record the skip.
 The script does not call a Chat LLM and does not print API keys or complete
 payloads.
 
+### Error Contract And Scheduled-Job Live Acceptance
+
+A static census only answers "did the code deviate"; the two scripts below send
+requests to a live process and check what clients actually receive.
+
+**Unified error contract** (temporary PostgreSQL + mock LLM + demo, ports
+18091/18092):
+
+```bash
+python3 scripts/verify-error-response-contract-e2e.py
+```
+
+It constructs 401 (filter short circuit), 400 (malformed JSON), 404 (undeclared
+route), 409 (idempotency fingerprint conflict), 429 (rate-limit short circuit),
+504 (upstream timeout), 500 (upstream 500), the container-level `/error`, plus
+OpenAI-compatibility 401 and 5xx. Every exit asserts HTTP status, all 11 native
+fields, `application/problem+json`, `X-RAG-Failure-Class` equal to the body's
+`failureClass`, body `traceId` equal to `X-Trace-Id`, and that a 5xx body
+contains no stack frame, internal fully qualified class name or source location.
+
+**Real scheduled execution** (three ports 18093–18095, short-cycle configuration):
+
+```bash
+python3 scripts/verify-scheduled-jobs-e2e.py
+```
+
+With `--rag.data-governance.cleanup-cron=*/2 * * * * *` and a one-second
+rate-limit bucket cleanup it verifies: the cron fires ≥4 times in 12 seconds
+(6 measured) with the `completed` count growing; expired bucket rows are deleted
+within 0.34 seconds and again on the next round (0.93 seconds); two instances
+sharing one database delete only expired rows, keep fresh rows and log no
+duplicate-cleanup errors; and after a restart the schedule resumes with ≥2 runs
+in 6 seconds (3 measured). `ScheduledWorkerRegistrationTest` censuses every
+`@Scheduled` worker from source and rejects `@ConditionalOnBean` plus
+out-of-plan default-disabled workers, so a worker bean cannot silently disappear
+again.
+
 ### External Document Synchronization Acceptance Gate
 
 The ordinary external-document path has service, MockMvc, OpenAPI, migration,

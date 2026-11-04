@@ -5,6 +5,7 @@ import com.springairag.api.enums.FailureClass;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.exception.ChatTurnInProgressException;
 import com.springairag.core.filter.FailureClassHttpSupport;
+import com.springairag.core.logging.ErrorMessageSanitizer;
 import com.springairag.core.openai.OpenAiProtocolException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -54,8 +55,13 @@ public class OpenAiCompatibilityExceptionHandler {
         } else if (error.getRetryAfterSeconds() != null) {
             builder.header("Retry-After", Integer.toString(error.getRetryAfterSeconds()));
         }
+        // 5xx 的 message 可能来自内部组件；OpenAI 信封同样不能外泄类型名/堆栈。
+        String message = status >= 500
+                ? ErrorMessageSanitizer.sanitize(
+                        error.getMessage())
+                : error.getMessage();
         return builder.body(OpenAiErrorResponse.of(
-                        error.getMessage(),
+                        message,
                         status >= 500
                                 ? "server_error"
                                 : "invalid_request_error",

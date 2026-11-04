@@ -63,6 +63,62 @@ class GlobalExceptionHandlerTest {
         assertEquals("/api/v1/rag/test", body.getInstance());
     }
 
+    // ==================== 5xx 内部信息不外泄 ====================
+
+    @Test
+    void handleException_scrubsInternalTypeNamesFromDetail() {
+        ResponseEntity<ErrorResponse> response = handler.handleException(
+                new IllegalStateException(
+                        "failed in com.springairag.core.service.SecretServiceImpl: "
+                                + "java.lang.IllegalArgumentException: bad input"),
+                request);
+
+        String detail = response.getBody().getDetail();
+        assertNotNull(detail);
+        assertFalse(detail.contains("com.springairag.core.service"),
+                "fully-qualified internal types must not reach the wire: " + detail);
+        assertFalse(detail.contains("java.lang.IllegalArgumentException"),
+                "exception class names must not reach the wire: " + detail);
+    }
+
+    @Test
+    void handleException_scrubsStackFramesFromDetail() {
+        ResponseEntity<ErrorResponse> response = handler.handleException(
+                new IllegalStateException(
+                        "boom\n\tat com.springairag.core.service.Foo.bar(Foo.java:42)"),
+                request);
+
+        String detail = response.getBody().getDetail();
+        assertNotNull(detail);
+        assertFalse(detail.contains("at com.springairag.core.service.Foo.bar"),
+                "stack frames must not reach the wire: " + detail);
+        assertFalse(detail.contains("Foo.java:42"));
+    }
+
+    @Test
+    void handleRagException_scrubsInternalDetailFor5xx() {
+        ResponseEntity<ErrorResponse> response = handler.handleRagException(
+                new com.springairag.core.exception.RagException(
+                        com.springairag.api.enums.ErrorCode.INTERNAL_ERROR,
+                        "backend call to com.example.internal.Client failed"),
+                request);
+
+        String detail = response.getBody().getDetail();
+        assertFalse(detail.contains("com.example.internal.Client"),
+                "5xx detail must be scrubbed: " + detail);
+    }
+
+    @Test
+    void handleRagException_keeps4xxDetailBecauseCallersNeedIt() {
+        ResponseEntity<ErrorResponse> response = handler.handleRagException(
+                new com.springairag.core.exception.RagException(
+                        com.springairag.api.enums.ErrorCode.BAD_REQUEST,
+                        "field 'query' must not be blank"),
+                request);
+
+        assertEquals("field 'query' must not be blank", response.getBody().getDetail());
+    }
+
     @Test
     void rfc7807_errorResponse_typeGeneratedFromErrorCode() {
         ResponseEntity<ErrorResponse> response = handler.handleBadRequest(new IllegalArgumentException("x"), request);

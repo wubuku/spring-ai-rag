@@ -80,6 +80,8 @@ class LocalStack:
             self.pg_env["PGPASSWORD"] = self.pg_password
 
         self.app_process: subprocess.Popen | None = None
+        # 多实例验收：额外实例（用于观察调度是否被每个实例重复执行）。
+        self.extra_app_processes: list[tuple[subprocess.Popen, int]] = []
         self.mock_process: subprocess.Popen | None = None
         self.databases: list[str] = []
 
@@ -150,11 +152,13 @@ class LocalStack:
         return env
 
     def start_mock(self, delay_ms: int = 0, stream_delay_ms: int = 20,
-                   stream_chunks: int = 0, stream_first_delay_ms: int = 0) -> None:
+                   stream_chunks: int = 0, stream_first_delay_ms: int = 0,
+                   error_rate: float = 0.0) -> None:
         log = (self.log_dir / "mock.log").open("w")
         self.mock_process = subprocess.Popen(
             [str(MOCK_SCRIPT), "--port", str(self.mock_port),
              "--delay", str(delay_ms),
+             "--error-rate", str(error_rate),
              "--stream-delay", str(stream_delay_ms),
              "--stream-chunks", str(stream_chunks),
              "--stream-first-delay", str(stream_first_delay_ms)],
@@ -163,6 +167,19 @@ class LocalStack:
         )
         self._wait_http(f"http://127.0.0.1:{self.mock_port}/health", 60, "mock provider")
         log.close()
+
+    def stop_mock(self) -> None:
+        process = self.mock_process
+        if process is None:
+            return
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+        self.mock_process = None
 
     @staticmethod
     def demo_jar() -> Path:
@@ -224,8 +241,10 @@ class LocalStack:
     def start_app(self, extra_env: dict[str, str] | None = None,
                   port: int | None = None,
                   database: str | None = None,
-                  extra_args: list[str] | None = None) -> str:
-        self.stop_app()
+                  extra_args: list[str] | None = None,
+                  keep_existing: bool = False) -> str:
+        if not keep_existing:
+            self.stop_app()
         port = port or self.app_port
         env = self._base_env(database)
         if extra_env:
@@ -237,14 +256,18 @@ class LocalStack:
                 # 因此 root key 直接走命令行属性，避免依赖 RAG_ROOT_API_KEY 绑定。
                 f"--rag.security.root-api-key={ROOT_API_KEY}"]
         args.extend(extra_args or [])
-        self.app_process = subprocess.Popen(
+        process = subprocess.Popen(
             args,
             cwd=str(PROJECT_DIR), stdout=log, stderr=subprocess.STDOUT, env=env,
         )
         log.close()
         self._wait_http(f"http://127.0.0.1:{port}/actuator/health", 180,
-                        f"demo（端口 {port}）", process=self.app_process,
+                        f"demo（端口 {port}）", process=process,
                         log_file=self.log_dir / f"app-{port}.log")
+        if keep_existing:
+            self.extra_app_processes.append((process, port))
+        else:
+            self.app_process = process
         return f"http://127.0.0.1:{port}"
 
     def kill_app(self) -> None:
@@ -270,6 +293,16 @@ class LocalStack:
                 process.kill()
                 process.wait(timeout=10)
         self.app_process = None
+        for extra, extra_port in self.extra_app_processes:
+            if extra.poll() is None:
+                extra.terminate()
+                try:
+                    extra.wait(timeout=30)
+                except subprocess.TimeoutExpired:
+                    extra.kill()
+                    extra.wait(timeout=10)
+            self._kill_port(extra_port)
+        self.extra_app_processes = []
         self._kill_port(self.app_port)
 
     def _kill_port(self, port: int) -> None:
@@ -343,6 +376,24 @@ def http_request(method: str, url: str, *, headers: dict[str, str] | None = None
             return response.status, response.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as error:
         return error.code, error.read().decode("utf-8", "replace")
+
+
+def http_request_full(method: str, url: str, *, headers: dict[str, str] | None = None,
+                      body: bytes | None = None,
+                      timeout: float = 30.0) -> tuple[int, dict[str, str], str]:
+    """与 http_request 相同，但同时返回响应头（错误契约要校验 X-RAG-Failure-Class）。"""
+    import urllib.error
+    import urllib.request
+    request = urllib.request.Request(url, data=body, method=method)
+    for name, value in (headers or {}).items():
+        request.add_header(name, value)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            response_headers = {k.lower(): v for k, v in response.headers.items()}
+            return response.status, response_headers, response.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as error:
+        response_headers = {k.lower(): v for k, v in error.headers.items()}
+        return error.code, response_headers, error.read().decode("utf-8", "replace")
 
 
 def json_request(method: str, url: str, payload: dict, *,

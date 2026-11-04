@@ -346,6 +346,19 @@ export const GATES = [
     selfTest: 'scripts/test-support/error-code-catalog-self-test.mjs',
   },
 
+  // Batch 952. The catalog gate answers "which code, which status, is the body
+  // complete". It says nothing about whether the body can be joined to its logs
+  // (traceId), whether the failure-class header is set on shortcuts that never
+  // reach the advice or the order-1000 header filter, whether a 5xx leaks
+  // internal type names, or whether container-level failures share the same
+  // shape at all. Five rules, one per exit class, and a self-test that proves
+  // each of them can reject.
+  {
+    gate: 'scripts/verify-error-response-contract.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/error-response-contract-self-test.mjs',
+  },
+
   // Batch 896. Inside `all(...)` or `any(...)`, a negative assertion — a field
   // compared with `!=`, or a `// ""`-guarded containment test negated with
   // `| not` — is satisfied by a field that reads as absent, so the predicate

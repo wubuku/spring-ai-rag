@@ -1,6 +1,5 @@
 package com.springairag.core.filter;
 
-import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.openai.OpenAiErrorResponse;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
@@ -132,21 +131,21 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         if (rootMode && request.getParameterMap().containsKey("apiKey")) {
             log.warn("Query API credential rejected in root mode: {} {}",
                     request.getMethod(), path);
-            sendUnauthorized(response, path,
+            sendUnauthorized(request, response, path,
                     "Query-string API credentials are not accepted. Use Authorization: Bearer or X-API-Key.");
             return;
         }
 
         CredentialResult credentialResult = resolveCredential(request, rootMode);
         if (credentialResult.error() != null) {
-            sendUnauthorized(response, path, credentialResult.error());
+            sendUnauthorized(request, response, path, credentialResult.error());
             return;
         }
         String requestApiKey = credentialResult.credential();
 
         if (requestApiKey == null || requestApiKey.isBlank()) {
             log.warn("API Key missing: {} {}", request.getMethod(), path);
-            sendUnauthorized(response, path, rootMode
+            sendUnauthorized(request, response, path, rootMode
                     ? "Missing API Key. Provide Authorization: Bearer or X-API-Key header."
                     : "Missing API Key. Provide X-API-Key header or ?apiKey= query parameter.");
             return;
@@ -172,11 +171,11 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             } catch (DataAccessException e) {
                 log.error("API credential store unavailable: {} {}",
                         request.getMethod(), path);
-                sendServiceUnavailable(response, path);
+                sendServiceUnavailable(request, response, path);
                 return;
             } catch (ApiCapabilitySupport.InvalidPersistedCapabilitiesException e) {
                 log.error("API principal policy is invalid: {} {}", request.getMethod(), path);
-                sendPolicyUnavailable(response, path);
+                sendPolicyUnavailable(request, response, path);
                 return;
             }
             if (validatedPrincipal != null) {
@@ -209,7 +208,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         }
 
         log.warn("API Key invalid: {} {}", request.getMethod(), path);
-        sendUnauthorized(response, path, "Invalid API Key.");
+        sendUnauthorized(request, response, path, "Invalid API Key.");
     }
 
     private CredentialResult resolveCredential(HttpServletRequest request, boolean rootMode) {
@@ -275,13 +274,14 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     }
 
     private void sendUnauthorized(
+            HttpServletRequest request,
             HttpServletResponse response,
             String path,
             String message) throws IOException {
-        response.setStatus(HttpStatus.UNAUTHORIZED.value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         FailureClassHttpSupport.apply(response, HttpStatus.UNAUTHORIZED.value(), "UNAUTHORIZED");
         if (path != null && path.startsWith("/v1/")) {
+            response.setStatus(HttpStatus.UNAUTHORIZED.value());
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write(objectMapper.writeValueAsString(
                     OpenAiErrorResponse.of(
                             message,
@@ -290,27 +290,20 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                             "invalid_api_key")));
             return;
         }
-        // Batch 873. This body carried the code and the sentence but no status,
-        // so the three sibling writers in this class disagreed: sendPolicy
-        // Unavailable below sets .status(...).path(...), and this one set
-        // neither. `path` has been a parameter of this method all along.
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .error("UNAUTHORIZED")
-                .status(HttpStatus.UNAUTHORIZED.value())
-                .message(message)
-                .path(path)
-                .build();
-        response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+        NativeErrorResponseWriter.write(
+                objectMapper, request, response, HttpStatus.UNAUTHORIZED.value(),
+                "UNAUTHORIZED", message);
     }
 
     private void sendServiceUnavailable(
+            HttpServletRequest request,
             HttpServletResponse response,
             String path) throws IOException {
-        response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         FailureClassHttpSupport.apply(
                 response, HttpStatus.SERVICE_UNAVAILABLE.value(), "CREDENTIAL_SERVICE_UNAVAILABLE");
         if (path != null && path.startsWith("/v1/")) {
+            response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write(objectMapper.writeValueAsString(
                     OpenAiErrorResponse.of(
                             "API credential service is unavailable.",
@@ -319,25 +312,20 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                             "credential_service_unavailable")));
             return;
         }
-        // Batch 873: see sendUnauthorized above — `path` is in scope here too and
-        // sendPolicyUnavailable, its third sibling, already used it.
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .error("CREDENTIAL_SERVICE_UNAVAILABLE")
-                .status(HttpStatus.SERVICE_UNAVAILABLE.value())
-                .message("API credential service is unavailable.")
-                .path(path)
-                .build();
-        response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+        NativeErrorResponseWriter.write(
+                objectMapper, request, response, HttpStatus.SERVICE_UNAVAILABLE.value(),
+                "CREDENTIAL_SERVICE_UNAVAILABLE", "API credential service is unavailable.");
     }
 
     private void sendPolicyUnavailable(
+            HttpServletRequest request,
             HttpServletResponse response,
             String path) throws IOException {
-        response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         FailureClassHttpSupport.apply(
                 response, HttpStatus.SERVICE_UNAVAILABLE.value(), "POLICY_SERVICE_UNAVAILABLE");
         if (path != null && path.startsWith("/v1/")) {
+            response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write(objectMapper.writeValueAsString(
                     OpenAiErrorResponse.of(
                             "API principal policy is unavailable.",
@@ -346,13 +334,9 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                             "policy_service_unavailable")));
             return;
         }
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .error("POLICY_SERVICE_UNAVAILABLE")
-                .status(HttpStatus.SERVICE_UNAVAILABLE.value())
-                .message("API principal policy is unavailable.")
-                .path(path)
-                .build();
-        response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+        NativeErrorResponseWriter.write(
+                objectMapper, request, response, HttpStatus.SERVICE_UNAVAILABLE.value(),
+                "POLICY_SERVICE_UNAVAILABLE", "API principal policy is unavailable.");
     }
 
     private record CredentialResult(String credential, String error) {

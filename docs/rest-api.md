@@ -590,6 +590,30 @@ distinct from the retrieval diagnostic `X-RAG-Retrieval-Trace-Id`.
 }
 ```
 
+#### Unified Error Contract (every exit)
+
+Native errors have exactly one envelope: `ErrorResponse`. Filter short circuits
+(401/403/429/503), exception handlers, and the container-level `/error` that runs
+without any advice must all produce the same field set: `type`, `title`, `status`,
+`detail`, `instance`, `error`, `message`, `timestamp`, `path`, `traceId`,
+`failureClass` (values that were not available are `null`; the fields themselves
+are always present).
+
+- **Classification header**: every failed response carries `X-RAG-Failure-Class`,
+  including filter and container exits; its value equals the body's `failureClass`.
+- **Correlation ID**: the body's `traceId` equals the `X-Trace-Id` response header.
+- **Content type**: always `application/problem+json`.
+- **5xx scrubbing**: `detail` / `message` lose stack frames, internal fully
+  qualified class names, and `Foo.java:42` source locations. 4xx keeps the raw
+  description because callers need it to fix the request.
+- **OpenAI compatibility entry**: `/v1` keeps the OpenAI error envelope, but
+  carries the same classification header and scrubs 5xx the same way; the two
+  envelopes never mix.
+
+Executable gate: `node scripts/verify-error-response-contract.mjs` censuses every
+error exit in source (rules R1–R5); the live-process acceptance run is documented
+in [testing-guide.md](testing-guide.md).
+
 ---
 
 ## OpenAI Chat Completions Compatibility Preview

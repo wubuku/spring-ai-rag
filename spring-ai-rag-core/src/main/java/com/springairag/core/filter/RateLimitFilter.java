@@ -191,7 +191,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
         if (currentCount > limit) {
             observability.recordDecision(backend, "rejected", clientId.type);
-            writeRateLimitResponse(response, path, clientId.type, limit, 60);
+            writeRateLimitResponse(request, response, path, clientId.type, limit, 60);
             return;
         }
 
@@ -210,7 +210,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (!(principalAttr instanceof String principalId) || principalId.isBlank()
                 || postgresStore == null) {
             observability.recordDecision("postgresql", "error", "UNKNOWN");
-            writeStoreUnavailable(response, path);
+            writeStoreUnavailable(request, response, path);
             return;
         }
         request.setAttribute(CLIENT_ID_ATTRIBUTE, principalId);
@@ -231,7 +231,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 observability.recordDecision(
                         "postgresql", "rejected", fixedPrincipalType(request));
                 writeRateLimitResponse(
-                        response, path, "principal", limit,
+                        request, response, path, "principal", limit,
                         decision.retryAfterSeconds());
                 return;
             }
@@ -245,7 +245,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
                     "postgresql", "error", fixedPrincipalType(request));
             log.error("PostgreSQL rate-limit decision failed: result=error principalType={}",
                     fixedPrincipalType(request));
-            writeStoreUnavailable(response, path);
+            writeStoreUnavailable(request, response, path);
         }
     }
 
@@ -301,17 +301,18 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return requestsPerMinute;
     }
 
-    private void writeRateLimitResponse(HttpServletResponse response, String path,
+    private void writeRateLimitResponse(HttpServletRequest request,
+                                        HttpServletResponse response, String path,
                                         String strategyType, int limit,
                                         int retryAfter) throws IOException {
         log.warn("Rate-limit decision: result=rejected backend={} strategy={}",
                 backend, strategyType);
-        response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setHeader(RETRY_AFTER_HEADER, String.valueOf(retryAfter));
         FailureClassHttpSupport.apply(
                 response, HttpStatus.TOO_MANY_REQUESTS.value(), "TOO_MANY_REQUESTS");
         if (path != null && path.startsWith("/v1/")) {
+            response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write(objectMapper.writeValueAsString(
                     OpenAiErrorResponse.of(
                             "Rate limit exceeded. Max " + limit
@@ -321,26 +322,21 @@ public class RateLimitFilter extends OncePerRequestFilter {
                             "rate_limit_exceeded")));
             return;
         }
-        // Batch 873: writeStoreUnavailable, the sibling method below, sets
-        // .status(...); this one set only .path(...). The HTTP status was on the
-        // response object, never in the body.
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .error("TOO_MANY_REQUESTS")
-                .status(HttpStatus.TOO_MANY_REQUESTS.value())
-                .message("Rate limit exceeded. Max " + limit + " requests per minute.")
-                .path(path)
-                .build();
-        response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+        NativeErrorResponseWriter.write(
+                objectMapper, request, response, HttpStatus.TOO_MANY_REQUESTS.value(),
+                "TOO_MANY_REQUESTS",
+                "Rate limit exceeded. Max " + limit + " requests per minute.");
     }
 
     private void writeStoreUnavailable(
+            HttpServletRequest request,
             HttpServletResponse response,
             String path) throws IOException {
-        response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         FailureClassHttpSupport.apply(
                 response, HttpStatus.SERVICE_UNAVAILABLE.value(), "RATE_LIMIT_STORE_UNAVAILABLE");
         if (path != null && path.startsWith("/v1/")) {
+            response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write(objectMapper.writeValueAsString(
                     OpenAiErrorResponse.of(
                             "Rate limit service is unavailable.",
@@ -349,13 +345,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
                             "rate_limit_store_unavailable")));
             return;
         }
-        response.getWriter().write(objectMapper.writeValueAsString(
-                ErrorResponse.builder()
-                        .error("RATE_LIMIT_STORE_UNAVAILABLE")
-                        .status(HttpStatus.SERVICE_UNAVAILABLE.value())
-                        .message("Rate limit service is unavailable.")
-                        .path(path)
-                        .build()));
+        NativeErrorResponseWriter.write(
+                objectMapper, request, response, HttpStatus.SERVICE_UNAVAILABLE.value(),
+                "RATE_LIMIT_STORE_UNAVAILABLE", "Rate limit service is unavailable.");
     }
 
     /**

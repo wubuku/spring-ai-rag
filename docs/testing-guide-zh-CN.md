@@ -873,6 +873,35 @@ RAG_API_KEY="$RAG_ROOT_API_KEY" \
 脚本需要真实 embedding provider；没有 root 凭据时只能显式使用 `--skip-acl`，
 并在验证记录中注明。该脚本不调用 Chat LLM，也不会输出 API Key 或完整 payload。
 
+### 错误契约与定时调度真实进程验收
+
+静态普查只能回答“代码里有没有偏离”，下面两个脚本把请求打到真实进程上验证行为。
+
+**统一错误契约**（临时 PostgreSQL + mock LLM + demo，端口 18091/18092）：
+
+```bash
+python3 scripts/verify-error-response-contract-e2e.py
+```
+
+逐一构造 401（过滤器短路）、400（非法 JSON）、404（未声明路由）、409（幂等指纹冲突）、
+429（限流短路）、504（上游超时）、500（上游 500）、容器级 `/error`，以及 OpenAI 兼容
+入口的 401 与 5xx。每个出口断言：HTTP status、11 个原生字段、`application/problem+json`、
+`X-RAG-Failure-Class` 与 body `failureClass` 一致、body `traceId` 与 `X-Trace-Id` 一致，
+且 5xx body 不含堆栈帧、内部全限定类名或源码位置。
+
+**定时任务真实调度**（三端口 18093–18095，短周期配置）：
+
+```bash
+python3 scripts/verify-scheduled-jobs-e2e.py
+```
+
+用 `--rag.data-governance.cleanup-cron=*/2 * * * * *` 与限流 bucket 清理 1 秒验证：
+cron 在 12 秒内触发 ≥4 次（实测 6 次）且 `completed` 计数同步增长；过期 bucket 行在
+0.34 秒内被删除、下一轮再次删除（0.93 秒）；两个实例共享同一数据库时只删除过期行、
+保留未过期行且无重复清理错误；应用重启后调度恢复，6 秒内再次触发 ≥2 次（实测 3 次）。
+`ScheduledWorkerRegistrationTest` 从源码普查所有 `@Scheduled` worker，禁止
+`@ConditionalOnBean` 与计划外的默认关闭，防止 worker bean 再次静默不创建。
+
 ### 外部文档同步验收门禁
 
 普通外部文档路径具备 Service、MockMvc、OpenAPI、迁移和真实 HTTP 覆盖。对已经启动的

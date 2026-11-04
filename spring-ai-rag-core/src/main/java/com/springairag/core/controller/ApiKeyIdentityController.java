@@ -80,6 +80,7 @@ public class ApiKeyIdentityController {
                     .status(HttpStatus.UNAUTHORIZED.value())
                     .message("A valid API credential is required")
                     .path(request == null ? null : request.getRequestURI())
+                    .traceId(com.springairag.core.filter.RequestTraceFilter.currentRequestTraceId())
                     .build();
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .cacheControl(CacheControl.noStore())
@@ -161,6 +162,7 @@ public class ApiKeyIdentityController {
                 .status(HttpStatus.UNAUTHORIZED.value())
                 .message("A valid API credential is required")
                 .path(request == null ? null : request.getRequestURI())
+                .traceId(com.springairag.core.filter.RequestTraceFilter.currentRequestTraceId())
                 .build();
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .cacheControl(CacheControl.noStore())
@@ -174,6 +176,7 @@ public class ApiKeyIdentityController {
                 .status(code.getHttpStatus())
                 .detail("The current API principal policy cannot be resolved completely")
                 .path(request == null ? null : request.getRequestURI())
+                .traceId(com.springairag.core.filter.RequestTraceFilter.currentRequestTraceId())
                 .build();
         error.setTitle(code.getTitle());
         return ResponseEntity.status(code.getHttpStatus())

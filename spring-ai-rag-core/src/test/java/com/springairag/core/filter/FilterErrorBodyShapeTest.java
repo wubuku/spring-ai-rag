@@ -98,6 +98,25 @@ class FilterErrorBodyShapeTest {
         }
 
         @Test
+        @DisplayName("401 carries the failure-class header and the request trace id")
+        void unauthorizedCarriesHeaderAndTraceId() throws Exception {
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", PATH);
+            request.setAttribute(RequestTraceFilter.REQUEST_TRACE_ID_ATTRIBUTE, "trace-42");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+
+            new ApiKeyAuthFilter("secret", true)
+                    .doFilterInternal(request, response, mock(MockFilterChain.class));
+
+            assertEquals(401, response.getStatus());
+            assertEquals("AUTHENTICATION",
+                    response.getHeader(FailureClassHttpSupport.HEADER));
+            ErrorResponse body = objectMapper.readValue(
+                    response.getContentAsString(), ErrorResponse.class);
+            assertEquals("trace-42", body.getTraceId(),
+                    "the body must let an operator join the request to its logs");
+        }
+
+        @Test
         @DisplayName("an invalid key answers the same shape as a missing one")
         void invalidKeyMatchesMissingKey() throws Exception {
             MockHttpServletRequest request = new MockHttpServletRequest("GET", PATH);

@@ -435,6 +435,7 @@ public class ApiKeyController {
                 .status(HttpStatus.FORBIDDEN.value())
                 .message(detail)
                 .path(request == null ? null : request.getRequestURI())
+                .traceId(com.springairag.core.filter.RequestTraceFilter.currentRequestTraceId())
                 .build();
     }
 }

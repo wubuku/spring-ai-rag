@@ -82,6 +82,15 @@ class ApiCapabilityFilterTest {
                 writeResponse.getContentAsString(), ErrorResponse.class);
         assertEquals("FORBIDDEN", error.getError());
         assertTrue(error.getMessage().contains("RAG_WRITE"));
+        // Batch 952. This filter's order(-5) runs before
+        // FailureClassResponseHeaderFilter(1000), so nothing downstream can add
+        // the classification header after it short-circuits. Both writers used
+        // to return without it; the body carried no path and no traceId either.
+        assertEquals("AUTHORIZATION",
+                writeResponse.getHeader(FailureClassHttpSupport.HEADER));
+        assertEquals("/api/v1/rag/documents/upsert", error.getPath());
+        assertEquals("trace-1", error.getTraceId());
+        assertEquals(403, error.getStatus());
     }
 
     @Test
@@ -141,6 +150,7 @@ class ApiCapabilityFilterTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setMethod(method);
         request.setRequestURI(uri);
+        request.setAttribute(RequestTraceFilter.REQUEST_TRACE_ID_ATTRIBUTE, "trace-1");
         return request;
     }
 
