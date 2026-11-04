@@ -12,8 +12,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import com.springairag.core.util.PaginationSupport;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -169,10 +169,10 @@ public class AbTestServiceImpl implements AbTestService {
     @Override
     @Transactional(readOnly = true)
     public ExperimentPage listExperiments(int page, int size) {
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        int safePage = PaginationSupport.page(page);
+        int safeSize = PaginationSupport.size(size, MAX_PAGE_SIZE);
         Page<RagAbExperiment> found = experimentRepository
-                .findAll(PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt")));
+                .findAll(PageRequest.of(safePage, safeSize, PaginationSupport.NEWEST_FIRST));
 
         return new ExperimentPage(
                 toExperiments(found.getContent()),
@@ -362,7 +362,9 @@ public class AbTestServiceImpl implements AbTestService {
         if (experimentId == null) {
             throw new IllegalArgumentException("Experiment id must not be null");
         }
-        return resultRepository.findByExperimentIdOrderByCreatedAtDesc(experimentId, PageRequest.of(page, size))
+        // 结果列表同样要有上限和稳定排序（createdAt 相同再按 id 倒序）。
+        var pageable = PaginationSupport.pageSize(page, size, PaginationSupport.NEWEST_FIRST);
+        return resultRepository.findByExperimentIdOrderByCreatedAtDesc(experimentId, pageable)
                 .getContent().stream()
                 .map(this::toExperimentResult)
                 .toList();

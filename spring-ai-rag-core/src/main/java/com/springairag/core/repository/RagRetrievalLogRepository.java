@@ -117,7 +117,7 @@ public interface RagRetrievalLogRepository extends JpaRepository<RagRetrievalLog
                    OR metadata #>> '{requestTraceId}' = :requestTraceId)
               AND (:citationStatus IS NULL
                    OR metadata #>> '{citationValidation,status}' = :citationStatus)
-            ORDER BY created_at DESC
+            ORDER BY created_at DESC, id DESC
             """,
             countQuery = """
             SELECT COUNT(*) FROM rag_retrieval_logs

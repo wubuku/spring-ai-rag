@@ -40,7 +40,7 @@ public class ChatExportService {
      * Export chat history for a session as JSON bytes.
      *
      * @param sessionId the session ID
-     * @param limit max records to export (0 = unlimited)
+     * @param limit max records to export (0 = all up to {@link #MAX_EXPORT_RECORDS})
      * @return JSON string bytes
      */
     public byte[] exportAsJson(String sessionId, int limit) {
@@ -96,7 +96,7 @@ public class ChatExportService {
      * Export chat history for a session as Markdown bytes.
      *
      * @param sessionId the session ID
-     * @param limit max records to export (0 = unlimited)
+     * @param limit max records to export (0 = all up to {@link #MAX_EXPORT_RECORDS})
      * @return Markdown string bytes
      */
     public byte[] exportAsMarkdown(String sessionId, int limit) {
@@ -138,7 +138,7 @@ public class ChatExportService {
      * Export chat history for a session as CSV bytes.
      *
      * @param sessionId the session ID
-     * @param limit max records to export (0 = unlimited)
+     * @param limit max records to export (0 = all up to {@link #MAX_EXPORT_RECORDS})
      * @return CSV string bytes
      */
     public byte[] exportAsCsv(String sessionId, int limit) {
@@ -248,16 +248,27 @@ public class ChatExportService {
         return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
+    /**
+     * 导出记录的硬上限。
+     *
+     * <p>导出会把整段会话拼成一个完整字符串再交给响应，没有上限时一条
+     * {@code limit=0} 请求就能把超长会话全部拉进堆内存。0 从此表示“上限内的
+     * 全部记录”，而不是“无限制”。</p>
+     */
+    public static final int MAX_EXPORT_RECORDS = 5000;
+
+    private static int safeExportLimit(int limit) {
+        return limit <= 0 ? MAX_EXPORT_RECORDS : Math.min(limit, MAX_EXPORT_RECORDS);
+    }
+
     private List<RagChatHistory> fetchRecords(String sessionId, int limit) {
-        if (limit > 0) {
-            // Use database-level LIMIT — avoids loading all records into memory
-            List<RagChatHistory> topN = historyRepository.findTopNBySessionIdNewestFirst(sessionId, limit);
-            // Reverse to return in chronological (ASC) order to match existing behavior
-            List<RagChatHistory> reversed = new java.util.ArrayList<>(topN);
-            Collections.reverse(reversed);
-            return reversed;
-        }
-        return historyRepository.findBySessionIdAsc(sessionId);
+        // Use database-level LIMIT — avoids loading all records into memory.
+        List<RagChatHistory> topN = historyRepository.findTopNBySessionIdNewestFirst(
+                sessionId, safeExportLimit(limit));
+        // Reverse to return in chronological (ASC) order to match existing behavior
+        List<RagChatHistory> reversed = new java.util.ArrayList<>(topN);
+        Collections.reverse(reversed);
+        return reversed;
     }
 
     private List<RagChatHistory> requireVisibleRecords(
@@ -267,24 +278,13 @@ public class ChatExportService {
         if (principal == null) {
             throw new IllegalArgumentException("principal must not be null");
         }
-        List<RagChatHistory> records;
-        if (limit > 0) {
-            records = historyRepository.findVisibleTopNNewestFirst(
-                    principal.id(),
-                    sessionId,
-                    principal.canReadLegacyRows(),
-                    limit);
-            records = new java.util.ArrayList<>(records);
-            Collections.reverse(records);
-        } else {
-            records = historyRepository.findVisibleByOwnerAndSessionNewestFirst(
-                    principal.id(),
-                    sessionId,
-                    principal.canReadLegacyRows(),
-                    org.springframework.data.domain.Pageable.unpaged());
-            records = new java.util.ArrayList<>(records);
-            Collections.reverse(records);
-        }
+        List<RagChatHistory> records = historyRepository.findVisibleTopNNewestFirst(
+                principal.id(),
+                sessionId,
+                principal.canReadLegacyRows(),
+                safeExportLimit(limit));
+        records = new java.util.ArrayList<>(records);
+        Collections.reverse(records);
         if (records.isEmpty()) {
             throw new RagException(
                     ErrorCode.SESSION_NOT_FOUND,

@@ -51,8 +51,7 @@ import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
+import com.springairag.core.util.PaginationSupport;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpHeaders;
@@ -357,8 +356,10 @@ public class RagCollectionController {
             @RequestParam(required = false) String query,
             @RequestParam(required = false) Boolean enabled) {
 
-        int page = offset / limit;
-        var pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        // 与文档列表共用同一分页契约：越界收敛、limit 有上限、主键 tie-break。
+        var pageable = PaginationSupport.offsetLimit(offset, limit, PaginationSupport.NEWEST_FIRST);
+        int safeOffset = (int) pageable.getOffset();
+        int safeLimit = pageable.getPageSize();
 
         var restrictedIds = ApiKeyCollectionAccess.restrictedCollectionIds(
                 ApiKeyCollectionAccess.currentPolicy());
@@ -376,8 +377,8 @@ public class RagCollectionController {
         return ResponseEntity.ok(Map.of(
                 "collections", items,
                 "total", pageResult.getTotalElements(),
-                "offset", offset,
-                "limit", limit));
+                "offset", safeOffset,
+                "limit", safeLimit));
     }
 
     ResponseEntity<Map<String, Object>> list(
@@ -563,8 +564,9 @@ public class RagCollectionController {
         ApiKeyCollectionAccess.requireCollectionId(
                 id, ApiKeyCollectionAccess.currentPolicy());
 
-        int page = offset / limit;
-        var pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        var pageable = PaginationSupport.offsetLimit(offset, limit, PaginationSupport.NEWEST_FIRST);
+        int safeOffset = (int) pageable.getOffset();
+        int safeLimit = pageable.getPageSize();
         Page<RagDocument> pageResult = collectionService.findDocuments(
                         id, keyword, documentType, processingStatus, pageable)
                 .orElse(null);
@@ -579,7 +581,7 @@ public class RagCollectionController {
 
         return ResponseEntity.ok(new CollectionDocumentListResponse(
                 id, identityResolver.mapKeys(List.of(id)).get(id),
-                docs, pageResult.getTotalElements(), offset, limit));
+                docs, pageResult.getTotalElements(), safeOffset, safeLimit));
     }
 
     @GetMapping("/by-key/documents")

@@ -1172,7 +1172,7 @@ class RagControllerIntegrationTest {
 
         @Test
         void getActiveAlerts_returnsList() throws Exception {
-            when(alertService.getActiveAlerts()).thenReturn(List.of());
+            when(alertService.getActiveAlerts(200)).thenReturn(List.of());
 
             mockMvc.perform(get("/api/v1/rag/alerts/active"))
                     .andExpect(status().isOk())

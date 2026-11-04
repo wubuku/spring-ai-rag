@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, useNavigationType } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Bell,
@@ -57,7 +57,12 @@ export function Layout() {
   const { t } = useTranslation();
   const { logout } = useApiKeyAuth();
   const location = useLocation();
+  const navigationType = useNavigationType();
   const mainRef = useRef<HTMLElement>(null);
+  // 每条浏览历史记录（location.key）各自记住滚动位置。前进/后退（POP）
+  // 回到一条旧记录时恢复；普通跳转（PUSH/REPLACE）回到顶部。
+  const activeHistoryKeyRef = useRef(location.key);
+  const scrollPositionsRef = useRef<Map<string, number>>(new Map());
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
   // Bumped after each route memory write so nav link hrefs re-read the
@@ -82,22 +87,41 @@ export function Layout() {
     setRouteMemoryVersion(version => version + 1);
   }, [location.pathname, location.search]);
 
+  // 记录当前历史条目的滚动位置。滚动容器是 <main>；window 只在页面
+  // 本身可滚动时才有值，两处都记以防不同布局下滚动条落在不同元素上。
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main) return;
+    const record = () => {
+      scrollPositionsRef.current.set(activeHistoryKeyRef.current, main.scrollTop);
+    };
+    main.addEventListener('scroll', record, { passive: true });
+    return () => main.removeEventListener('scroll', record);
+  }, []);
+
   useLayoutEffect(() => {
     const main = mainRef.current;
     if (!main) return;
 
-    const resetScroll = () => {
-      main.scrollTop = 0;
+    const restore = navigationType === 'POP'
+      ? scrollPositionsRef.current.get(location.key) ?? 0
+      : 0;
+
+    const apply = () => {
+      main.scrollTop = restore;
       main.scrollLeft = 0;
       document.documentElement.scrollTop = 0;
       document.documentElement.scrollLeft = 0;
       document.body.scrollTop = 0;
       document.body.scrollLeft = 0;
     };
-    resetScroll();
-    const frame = window.requestAnimationFrame(resetScroll);
+    activeHistoryKeyRef.current = location.key;
+    apply();
+    // 后退/前进时页面数据可能来自缓存并同步渲染，也可能要等一拍才撑开高度；
+    // 再补一帧让 `scrollTop = restore` 不被较小的瞬时高度截断。
+    const frame = window.requestAnimationFrame(apply);
     return () => window.cancelAnimationFrame(frame);
-  }, [location.pathname]);
+  }, [location.key, location.pathname, location.search, navigationType]);
 
   // Close sidebar when navigating on mobile
   const handleNavClick = () => {
@@ -177,7 +201,7 @@ export function Layout() {
           </Tooltip>
         )}
         <main ref={mainRef} className={styles.main}>
-          <ErrorBoundary>
+          <ErrorBoundary resetKey={location.pathname}>
             <Outlet />
           </ErrorBoundary>
         </main>

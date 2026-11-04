@@ -129,7 +129,7 @@ class PdfImportControllerTreeTailTest {
         when(pdfImportService.getImportBatches(anyCollection()))
                 .thenReturn(Map.of());
 
-        ResponseEntity<?> response = controller.listTree("  ");
+        ResponseEntity<?> response = controller.listTree("  ", 500);
 
         assertEquals(200, response.getStatusCode().value());
         var body = (org.springframework.http.ResponseEntity<?>) response;

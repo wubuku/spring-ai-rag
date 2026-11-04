@@ -25,17 +25,20 @@ public interface RagRetrievalEvaluationRepository extends JpaRepository<RagRetri
             ZonedDateTime startDate, ZonedDateTime endDate);
 
     /**
-     * Paginated query (ordered by creation time descending).
+     * Paginated query. Ordering comes from the caller's {@link Pageable}
+     * (createdAt desc, id desc) so that equal timestamps still form a total order.
      */
+    @Query("SELECT e FROM RagRetrievalEvaluation e")
     Page<RagRetrievalEvaluation> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     /** 受限 principal 的时间范围内评估记录。 */
     List<RagRetrievalEvaluation> findByOwnerPrincipalIdAndCreatedAtBetweenOrderByCreatedAtDesc(
             String ownerPrincipalId, ZonedDateTime startDate, ZonedDateTime endDate);
 
-    /** 受限 principal 的评估历史（分页）。 */
+    /** 受限 principal 的评估历史（分页），排序同样由 Pageable 提供。 */
+    @Query("SELECT e FROM RagRetrievalEvaluation e WHERE e.ownerPrincipalId = :ownerPrincipalId")
     Page<RagRetrievalEvaluation> findByOwnerPrincipalIdOrderByCreatedAtDesc(
-            String ownerPrincipalId, Pageable pageable);
+            @Param("ownerPrincipalId") String ownerPrincipalId, Pageable pageable);
 
     /**
      * Count evaluations in the specified time range.

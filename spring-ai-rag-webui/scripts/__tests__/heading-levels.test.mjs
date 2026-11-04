@@ -62,8 +62,8 @@ describe('heading levels', () => {
 describe('the real page tree', () => {
   const pages = pageFiles(pagesDir);
 
-  it('covers all fourteen screens', () => {
-    expect(pages.length).toBe(14);
+  it('covers all fifteen screens', () => {
+    expect(pages.length).toBe(15);
   });
 
   it('reports no skipped heading level', () => {

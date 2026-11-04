@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -74,8 +75,8 @@ class ChatExportVisibilityTest {
     void principalJsonExportQueriesOwnerVisibleRecords() {
         RagChatHistory row = record(
                 1L, "Hello", "Hi", LocalDateTime.of(2026, 9, 9, 10, 0));
-        when(historyRepository.findVisibleByOwnerAndSessionNewestFirst(
-                eq("db:1"), eq("session-1"), eq(false), any()))
+        when(historyRepository.findVisibleTopNNewestFirst(
+                eq("db:1"), eq("session-1"), eq(false), anyInt()))
                 .thenReturn(List.of(row));
 
         byte[] result = service.exportAsJson(dbPrincipal(), "session-1", 0);
@@ -107,8 +108,8 @@ class ChatExportVisibilityTest {
 
     @Test
     void principalExportThrowsWhenSessionIsMissingOrInvisible() {
-        when(historyRepository.findVisibleByOwnerAndSessionNewestFirst(
-                eq("db:1"), eq("ghost"), eq(false), any()))
+        when(historyRepository.findVisibleTopNNewestFirst(
+                eq("db:1"), eq("ghost"), eq(false), anyInt()))
                 .thenReturn(List.of());
 
         RagException error = assertThrows(RagException.class,
@@ -120,16 +121,16 @@ class ChatExportVisibilityTest {
     void rootPrincipalGrantsLegacyRecordVisibility() {
         ChatPrincipal root = new ChatPrincipal(
                 "root:environment-root", "ROOT", true);
-        when(historyRepository.findVisibleByOwnerAndSessionNewestFirst(
-                eq("root:environment-root"), eq("session-1"), eq(true), any()))
+        when(historyRepository.findVisibleTopNNewestFirst(
+                eq("root:environment-root"), eq("session-1"), eq(true), anyInt()))
                 .thenReturn(List.of(record(1L, "q", "a",
                         LocalDateTime.of(2026, 9, 9, 9, 0))));
 
         service.exportAsMarkdown(root, "session-1", 0);
 
-        verify(historyRepository).findVisibleByOwnerAndSessionNewestFirst(
+        verify(historyRepository).findVisibleTopNNewestFirst(
                 eq("root:environment-root"), eq("session-1"),
-                eq(true), eq(unpaged()));
+                eq(true), eq(ChatExportService.MAX_EXPORT_RECORDS));
     }
 
     @Test
@@ -137,8 +138,8 @@ class ChatExportVisibilityTest {
         RagChatHistory row = record(
                 1L, "Hello", "Hi there", LocalDateTime.of(2026, 9, 9, 9, 0));
         row.setSources(List.of(source("S1", "Manual.pdf")));
-        when(historyRepository.findVisibleByOwnerAndSessionNewestFirst(
-                eq("db:1"), eq("session-1"), eq(false), any()))
+        when(historyRepository.findVisibleTopNNewestFirst(
+                eq("db:1"), eq("session-1"), eq(false), anyInt()))
                 .thenReturn(List.of(row));
 
         byte[] result = service.exportAsMarkdown(dbPrincipal(), "session-1", 0);
@@ -156,8 +157,8 @@ class ChatExportVisibilityTest {
                 1L, "Hello", "Hi", LocalDateTime.of(2026, 9, 9, 9, 0));
         RagChatHistory withoutReply = record(
                 2L, "Silent", "  ", LocalDateTime.of(2026, 9, 9, 10, 0));
-        when(historyRepository.findVisibleByOwnerAndSessionNewestFirst(
-                eq("db:1"), eq("session-1"), eq(false), any()))
+        when(historyRepository.findVisibleTopNNewestFirst(
+                eq("db:1"), eq("session-1"), eq(false), anyInt()))
                 .thenReturn(List.of(withReply, withoutReply));
 
         byte[] result = service.exportAsCsv(dbPrincipal(), "session-1", 0);
@@ -177,7 +178,7 @@ class ChatExportVisibilityTest {
         assertThrows(IllegalArgumentException.class,
                 () -> service.exportAsJson(null, "session-1", 0));
         verify(historyRepository, never())
-                .findVisibleByOwnerAndSessionNewestFirst(
-                        any(), any(), anyBoolean(), any());
+                .findVisibleTopNNewestFirst(
+                        any(), any(), anyBoolean(), anyInt());
     }
 }

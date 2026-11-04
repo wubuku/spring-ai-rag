@@ -50,9 +50,9 @@ class AlertControllerTest {
         a2.setId(2L);
         a2.setAlertType("error_rate");
 
-        when(alertService.getActiveAlerts()).thenReturn(List.of(a1, a2));
+        when(alertService.getActiveAlerts(200)).thenReturn(List.of(a1, a2));
 
-        ResponseEntity<List<AlertService.AlertRecord>> response = controller.getActiveAlerts();
+        ResponseEntity<List<AlertService.AlertRecord>> response = controller.getActiveAlerts(200);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(2, response.getBody().size());
@@ -62,9 +62,9 @@ class AlertControllerTest {
 
     @Test
     void getActiveAlerts_empty_returnsEmptyList() {
-        when(alertService.getActiveAlerts()).thenReturn(List.of());
+        when(alertService.getActiveAlerts(200)).thenReturn(List.of());
 
-        ResponseEntity<List<AlertService.AlertRecord>> response = controller.getActiveAlerts();
+        ResponseEntity<List<AlertService.AlertRecord>> response = controller.getActiveAlerts(200);
 
         assertEquals(200, response.getStatusCode().value());
         assertTrue(response.getBody().isEmpty());
@@ -78,11 +78,11 @@ class AlertControllerTest {
         a1.setId(1L);
         a1.setSeverity("CRITICAL");
 
-        when(alertService.getAlertHistory(any(), any(), eq("CRITICAL"), eq(null)))
+        when(alertService.getAlertHistory(any(), any(), eq("CRITICAL"), eq(null), eq(200)))
                 .thenReturn(List.of(a1));
 
         ResponseEntity<List<AlertService.AlertRecord>> response = controller.getAlertHistory(
-                "2026-04-01T00:00:00+08:00", "2026-04-02T00:00:00+08:00", "CRITICAL", null);
+                "2026-04-01T00:00:00+08:00", "2026-04-02T00:00:00+08:00", "CRITICAL", null, 200);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1, response.getBody().size());
@@ -91,11 +91,11 @@ class AlertControllerTest {
 
     @Test
     void getAlertHistory_noSeverity_returnsAll() {
-        when(alertService.getAlertHistory(any(), any(), isNull(), isNull()))
+        when(alertService.getAlertHistory(any(), any(), isNull(), isNull(), eq(200)))
                 .thenReturn(List.of());
 
         ResponseEntity<List<AlertService.AlertRecord>> response = controller.getAlertHistory(
-                "2026-04-01T00:00:00+08:00", "2026-04-02T00:00:00+08:00", null, null);
+                "2026-04-01T00:00:00+08:00", "2026-04-02T00:00:00+08:00", null, null, 200);
 
         assertEquals(200, response.getStatusCode().value());
         assertTrue(response.getBody().isEmpty());

@@ -8,6 +8,14 @@ import { BASE_URL } from '../../api/client';
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
+  /**
+   * 路由标识。值变化时清除错误态，让崩溃的页面在用户离开后自动恢复，
+   * 而不是一直停在错误界面直到手动点"重试"。
+   *
+   * 用"变化"而不是"相等"来判断：同一个页面重新进入也可能需要重建，
+   * 调用方只需要传一个稳定的路径字符串即可。
+   */
+  resetKey?: unknown;
 }
 
 interface State {
@@ -83,6 +91,14 @@ export class ErrorBoundary extends Component<Props, State> {
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
+  }
+
+  componentDidUpdate(prevProps: Props) {
+    // 页面崩溃后用户切到另一个页面：错误来自已经卸载的旧页面，
+    // 继续展示旧页面的错误界面会把新页面也一起挡住。
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false, error: undefined });
+    }
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {

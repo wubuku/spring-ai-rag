@@ -57,6 +57,29 @@ X-API-Key: your-api-key
 未配置 root 时保持 legacy 模式：`rag.security.enabled=true` 后接受上述 Header，并继续
 兼容 `?apiKey=`；数据库 ADMIN/NORMAL 与静态 Key 语义保持不变。
 
+### 分页与排序约定
+
+列表、历史、日志类端点统一遵守以下契约（参数收敛由 `PaginationSupport` 实现）：
+
+- **两种风格不混用**：嵌套资源列表（文档、Collection、Collection 内文档）用
+  `offset` + `limit`；其余分页端点用 `page` + `size`。
+- **参数收敛**：负数 `offset`/`page` 按 `0` 处理；`limit`/`size` 小于 `1` 按 `1` 处理，
+  超过全局上限按上限截断（默认上限 **200**）。不会因 `limit=100000` 把整表拉进内存。
+- **offset 对齐页边界**：`offset` 会按 `limit` 对齐，响应回显**实际生效**的 `offset`。
+  例如 `offset=25&limit=20` 实际从第 20 条开始，响应里的 `offset` 是 `20`，不会出现
+  “说返回第 2 页、内容却是第 1 页”的不一致。
+- **超范围返回空**：`offset`/`page` 超出总量时返回空列表和真实的 `totalElements`，
+  不报错、不回绕到第 1 页。
+- **稳定全序**：按时间倒序的端点一律使用 `createdAt DESC, id DESC`（或对应的
+  业务时间 + 主键）作为 tie-break；同值记录在多次请求之间不会换位。SQL 端点同样
+  显式写 `ORDER BY ... , id DESC`。
+- **导出/历史有硬上限**：Chat 导出最多 5000 条、Alert 历史最多 1000 条、文件树单目录
+  最多 1000 条；需要更多数据时应分批请求，而不是把 `limit=0` 解释为“全部”。
+
+新增列表端点必须在 [`scripts/testdata/list-endpoints.json`](../scripts/testdata/list-endpoints.json)
+登记分页模式与排序证据；`scripts/verify-list-endpoint-pagination.mjs` 会从 controller
+源码逐项核对，未登记或证据缺失直接失败。
+
 ### API route policy 与未声明默认拒绝
 
 受保护的 `/api/*` 与 `/v1/*` route 会在 Servlet 应用启动时从真实 Spring MVC
@@ -913,7 +936,7 @@ cleanup 删除后，原 key 才允许重新使用。
 | 参数 | 类型 | 位置 | 说明 |
 |---|---|---|---|
 | `format` | string | query | `json` 或 `md`，默认 `json` |
-| `limit` | int | query | 最大 turn 记录数；`0` 表示全部，默认 `0` |
+| `limit` | int | query | 最大 turn 记录数；`0` 表示取到硬上限（5000 条），默认 `0` |
 
 响应为 `application/json; charset=utf-8` 或
 `text/markdown; charset=utf-8`，文件名为 `{sessionId}.{format}`。JSON 和 Markdown
@@ -1796,8 +1819,8 @@ Collection 身份的位置增加 `collectionKey`。
 
 | 参数 | 类型 | 默认值 | 说明 |
 |-----------|------|---------|-------------|
-| `offset` | int | 0 | 跳过的文档数 |
-| `limit` | int | 20 | 最多返回的文档数 |
+| `offset` | int | 0 | 跳过的文档数；按 `limit` 对齐并回显实际生效值 |
+| `limit` | int | 20 | 最多返回的文档数；上限 200 |
 | `title` | string | | 可选，按标题过滤 |
 | `documentType` | string | | 可选，按文档类型过滤 |
 | `processingStatus` | string | | 可选，按处理状态过滤 |
@@ -2267,8 +2290,8 @@ hash 和规范化请求 fingerprint，不保存原始 key 或请求体。
 
 | 参数 | 类型 | 默认值 | 说明 |
 |-----------|------|---------|-------------|
-| `offset` | int | 0 | 跳过的 Collection 数 |
-| `limit` | int | 20 | 最多返回的 Collection 数 |
+| `offset` | int | 0 | 跳过的 Collection 数；按 `limit` 对齐并回显实际生效值 |
+| `limit` | int | 20 | 最多返回的 Collection 数；上限 200 |
 | `name` | string | | 可选，按 Collection 名称过滤 |
 | `query` | string | | 对名称或原样存储 key 执行不区分大小写的子串匹配 |
 | `enabled` | boolean | | 可选，按启用状态过滤 |
@@ -2754,7 +2777,9 @@ WebUI 在不猜测的前提下把它处理到最好：`src/utils/time.ts` 解析
 
 ### `GET /api/v1/rag/alerts/active`
 
-返回所有 active 告警。V57 的 `API_PRINCIPAL_EXPIRY` 受管告警会输出服务端权威
+返回所有 active 告警，最多 `limit` 条（默认 200，上限 1000），按 `firedAt DESC, id DESC`
+稳定排序。未解决告警会持续累积，因此该端点有硬上限而不是无界返回。V57 的
+`API_PRINCIPAL_EXPIRY` 受管告警会输出服务端权威
 `conditionState` 和低敏 `metrics`：
 
 ```json

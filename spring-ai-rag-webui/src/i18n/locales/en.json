@@ -51,6 +51,12 @@
     "unknownError": "Unknown error",
     "draftNotSavedCredential": "Draft not saved: it looks like it contains an API key or token, so it was kept out of this browser's storage."
   },
+  "notFound": {
+    "title": "Page not found",
+    "subtitle": "This address does not exist in the management console.",
+    "description": "The link may be outdated, or the page may have moved. Use the navigation on the left to continue.",
+    "backToDashboard": "Back to dashboard"
+  },
   "dashboard": {
     "title": "Dashboard",
     "systemHealthy": "✅ System Healthy",

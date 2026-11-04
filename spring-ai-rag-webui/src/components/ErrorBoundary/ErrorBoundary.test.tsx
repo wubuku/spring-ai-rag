@@ -168,6 +168,42 @@ describe('ErrorBoundary', () => {
     expect(screen.getByText('common.retry')).toBeInTheDocument();
   });
 
+  it('clears the error when the reset key changes', () => {
+    const { rerender } = render(
+      <ErrorBoundary resetKey="/documents">
+        <ThrowError shouldThrow={true} />
+      </ErrorBoundary>
+    );
+    expect(screen.getByText('common.somethingWentWrong')).toBeInTheDocument();
+
+    // 用户切到另一个页面：旧页面的错误不能继续挡住新页面。
+    rerender(
+      <ErrorBoundary resetKey="/dashboard">
+        <ThrowError shouldThrow={false} />
+      </ErrorBoundary>
+    );
+
+    expect(screen.getByText('Normal content')).toBeInTheDocument();
+    expect(screen.queryByText('common.somethingWentWrong')).not.toBeInTheDocument();
+  });
+
+  it('keeps the error when the reset key is unchanged', () => {
+    const { rerender } = render(
+      <ErrorBoundary resetKey="/documents">
+        <ThrowError shouldThrow={true} />
+      </ErrorBoundary>
+    );
+
+    // 同一页面的重新渲染不代表错误已修复；继续展示错误而不是偷偷重试。
+    rerender(
+      <ErrorBoundary resetKey="/documents">
+        <ThrowError shouldThrow={false} />
+      </ErrorBoundary>
+    );
+
+    expect(screen.getByText('common.somethingWentWrong')).toBeInTheDocument();
+  });
+
   it('falls back to the root page url when the pathname is empty', () => {
     const originalLocation = window.location;
     Object.defineProperty(window, 'location', {

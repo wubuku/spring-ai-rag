@@ -51,6 +51,12 @@
     "unknownError": "未知错误",
     "draftNotSavedCredential": "草稿未保存：内容里像是有 API 密钥或令牌，为安全起见没有存进这个浏览器。"
   },
+  "notFound": {
+    "title": "页面不存在",
+    "subtitle": "管理控制台中没有这个地址。",
+    "description": "链接可能已经过期，或页面已经迁移。可以使用左侧导航继续操作。",
+    "backToDashboard": "返回仪表盘"
+  },
   "dashboard": {
     "title": "仪表盘",
     "systemHealthy": "✅ 系统正常",

@@ -421,10 +421,10 @@ describe('the real page tree', () => {
     .filter(name => name.endsWith('.tsx') && !name.includes('.test.'))
     .sort();
 
-  it('contains the thirteen protected pages plus the unlock screen', () => {
+  it('contains the thirteen protected pages, the unlock screen and the 404 page', () => {
     // If a page is renamed out from under the gate, this is the assertion that
     // notices rather than the suite quietly checking four files.
-    expect(pages.length).toBe(14);
+    expect(pages.length).toBe(15);
   });
 
   it('reports no violations', () => {

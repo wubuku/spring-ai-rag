@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.data.domain.PageRequest;
+import com.springairag.core.util.PaginationSupport;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -263,13 +263,13 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
     @Override
     @Transactional(readOnly = true)
     public List<RagRetrievalEvaluation> getHistory(int page, int size) {
+        var pageable = PaginationSupport.pageSize(page, size, PaginationSupport.NEWEST_FIRST);
         String owner = restrictedOwnerPrincipalId();
         if (owner == null) {
-            return evaluationRepository.findAllByOrderByCreatedAtDesc(
-                    PageRequest.of(page, size)).getContent();
+            return evaluationRepository.findAllByOrderByCreatedAtDesc(pageable).getContent();
         }
-        return evaluationRepository.findByOwnerPrincipalIdOrderByCreatedAtDesc(
-                owner, PageRequest.of(page, size)).getContent();
+        return evaluationRepository.findByOwnerPrincipalIdOrderByCreatedAtDesc(owner, pageable)
+                .getContent();
     }
 
     @Override

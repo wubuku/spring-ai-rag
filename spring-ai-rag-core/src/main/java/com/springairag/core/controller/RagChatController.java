@@ -834,7 +834,7 @@ public class RagChatController {
      *
      * @param sessionId Session ID
      * @param format Export format: json or md (default json)
-     * @param limit Maximum records to export (0 = unlimited)
+     * @param limit Maximum records to export (0 = all up to {@link ChatExportService#MAX_EXPORT_RECORDS})
      * @return File download response
      */
     @Operation(summary = "Export chat history", description = "Download session history as JSON or Markdown file.")

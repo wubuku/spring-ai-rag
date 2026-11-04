@@ -314,7 +314,7 @@ class DocumentSyncRunServiceTest {
                 .thenThrow(new org.springframework.dao
                         .EmptyResultDataAccessException(1));
         when(jdbcTemplate.queryForObject(
-                contains("ORDER BY created_at DESC LIMIT 1"),
+                contains("ORDER BY created_at DESC, id DESC LIMIT 1"),
                 any(RowMapper.class), any(), any()))
                 .thenAnswer(runRowMappedAnswer(DocumentSyncRunStatus.ACTIVE,
                         com.springairag.core.util.DigestUtils.sha256("lease-1")));
@@ -334,7 +334,7 @@ class DocumentSyncRunServiceTest {
                 .thenThrow(new org.springframework.dao
                         .EmptyResultDataAccessException(1));
         when(jdbcTemplate.queryForObject(
-                contains("ORDER BY created_at DESC LIMIT 1"),
+                contains("ORDER BY created_at DESC, id DESC LIMIT 1"),
                 any(RowMapper.class), any(), any()))
                 .thenThrow(new org.springframework.dao
                         .EmptyResultDataAccessException(1));

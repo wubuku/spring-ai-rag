@@ -414,13 +414,16 @@ public class PdfImportService {
 
     /**
      * List direct children (files) under a virtual path prefix.
+     *
+     * <p>结果按规范化路径全序排序（trim 后的 path，再按原始 path 兜底），
+     * 保证同一目录的多次列举顺序稳定，分页/截断不会抖动。
      */
     public List<FsFile> listChildren(String virtualPath) {
         Listing listing = normalizeListing(virtualPath);
         List<FsFile> files = listing.root()
                 ? fsFileRepository.findAll()
                 : fsFileRepository.findByPathStartingWithOrderByPathAsc(listing.queryPrefix());
-        return listing.root() ? files : filterDirectChildren(files, listing.normalized());
+        return sorted(listing.root() ? files : filterDirectChildren(files, listing.normalized()));
     }
 
     /**
@@ -439,7 +442,18 @@ public class PdfImportService {
                 ? fsFileRepository.findVisibleRootFiles(owner, allowed)
                 : fsFileRepository.findVisibleByPathPrefix(
                         owner, allowed, listing.queryPrefix());
-        return listing.root() ? files : filterDirectChildren(files, listing.normalized());
+        return sorted(listing.root() ? files : filterDirectChildren(files, listing.normalized()));
+    }
+
+    /** 规范化路径全序：trim 后为主键，原始 path 兜底（兼容带前导空格的遗留数据）。 */
+    private static final Comparator<FsFile> PATH_ORDER =
+            Comparator.comparing((FsFile file) -> file.getPath() == null ? "" : file.getPath().trim())
+                    .thenComparing(file -> file.getPath() == null ? "" : file.getPath());
+
+    private List<FsFile> sorted(List<FsFile> files) {
+        return files.stream()
+                .sorted(PATH_ORDER)
+                .toList();
     }
 
     private List<FsFile> filterDirectChildren(List<FsFile> files, String normalized) {

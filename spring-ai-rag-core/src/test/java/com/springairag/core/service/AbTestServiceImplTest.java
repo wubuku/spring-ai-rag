@@ -7,6 +7,7 @@ import com.springairag.core.entity.RagAbResult;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagAbExperimentRepository;
 import com.springairag.core.repository.RagAbResultRepository;
+import com.springairag.core.util.PaginationSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -323,7 +324,8 @@ class AbTestServiceImplTest {
         r1.setIsConverted(true);
 
         Page<RagAbResult> page = new org.springframework.data.domain.PageImpl<>(List.of(r1));
-        when(resultRepository.findByExperimentIdOrderByCreatedAtDesc(1L, PageRequest.of(0, 10))).thenReturn(page);
+        when(resultRepository.findByExperimentIdOrderByCreatedAtDesc(
+                1L, PaginationSupport.pageSize(0, 10, PaginationSupport.NEWEST_FIRST))).thenReturn(page);
 
         List<AbTestService.ExperimentResult> results = abTestService.getExperimentResults(1L, 0, 10);
 

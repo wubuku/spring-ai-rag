@@ -26,6 +26,7 @@ const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.S
 const Files = lazy(() => import('./pages/Files').then(m => ({ default: m.Files })));
 const Evaluation = lazy(() => import('./pages/Evaluation').then(m => ({ default: m.Evaluation })));
 const Embeddings = lazy(() => import('./pages/Embeddings').then(m => ({ default: m.Embeddings })));
+const NotFound = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -191,9 +192,18 @@ export default function App() {
                       </Suspense>
                     }
                   />
+                  {/* 未知路径保留在受保护布局内：导航仍可用，用户能自己走出去，
+                      而不是被静默重定向到一个并不相关的页面。 */}
+                  <Route
+                    path="*"
+                    element={
+                      <Suspense fallback={<PageFallback />}>
+                        <NotFound />
+                      </Suspense>
+                    }
+                  />
                 </Route>
               </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </ApiKeyAuthProvider>
         </BrowserRouter>

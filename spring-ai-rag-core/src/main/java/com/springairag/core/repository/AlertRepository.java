@@ -17,22 +17,29 @@ import java.util.List;
 public interface AlertRepository extends JpaRepository<RagAlert, Long> {
 
     /**
-     * Query alert history by time range and filter conditions.
+     * Query alert history by time range and filter conditions. 排序由调用的
+     * Pageable 提供（firedAt desc, id desc），且 limit 有调用方上限。
      */
     @Query("SELECT a FROM RagAlert a WHERE a.firedAt BETWEEN :startDate AND :endDate " +
            "AND (:severity IS NULL OR a.severity = :severity) " +
-           "AND (:alertType IS NULL OR a.alertType = :alertType) " +
-           "ORDER BY a.firedAt DESC")
+           "AND (:alertType IS NULL OR a.alertType = :alertType)")
     List<RagAlert> findAlertHistory(
             @Param("startDate") ZonedDateTime startDate,
             @Param("endDate") ZonedDateTime endDate,
             @Param("severity") String severity,
-            @Param("alertType") String alertType);
+            @Param("alertType") String alertType,
+            org.springframework.data.domain.Pageable pageable);
 
     /**
-     * Get active alerts (unresolved).
+     * Get active alerts (unresolved), bounded by the caller's Pageable.
+     *
+     * <p>未解决告警会持续累积，不能无界返回；排序由 Pageable 提供
+     * （firedAt desc, id desc）。
      */
-    List<RagAlert> findByStatusOrderByFiredAtDesc(String status);
+    @Query("SELECT a FROM RagAlert a WHERE a.status = :status")
+    List<RagAlert> findActiveAlerts(
+            @Param("status") String status,
+            org.springframework.data.domain.Pageable pageable);
 
     /**
      * Count alerts by severity.

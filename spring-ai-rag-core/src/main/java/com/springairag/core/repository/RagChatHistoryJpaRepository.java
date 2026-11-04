@@ -16,9 +16,13 @@ import java.util.List;
 public interface RagChatHistoryJpaRepository extends JpaRepository<RagChatHistory, Long> {
 
     /**
-     * Query history by session ID (paginated).
+     * Query history by session ID (paginated). 排序由 Pageable 提供
+     * （createdAt desc, id desc），保证同时间戳记录跨页稳定。
      */
-    List<RagChatHistory> findBySessionIdOrderByCreatedAtDesc(String sessionId, org.springframework.data.domain.Pageable pageable);
+    @Query("SELECT h FROM RagChatHistory h WHERE h.sessionId = :sessionId")
+    List<RagChatHistory> findBySessionIdOrderByCreatedAtDesc(
+            @Param("sessionId") String sessionId,
+            org.springframework.data.domain.Pageable pageable);
 
     @Query("""
             SELECT h FROM RagChatHistory h
@@ -70,13 +74,18 @@ public interface RagChatHistoryJpaRepository extends JpaRepository<RagChatHistor
     /**
      * Query all history by session ID (no pagination, descending by time).
      */
-    List<RagChatHistory> findAllBySessionIdOrderByCreatedAtDesc(String sessionId);
+    @Query("SELECT h FROM RagChatHistory h WHERE h.sessionId = :sessionId "
+            + "ORDER BY h.createdAt DESC, h.id DESC")
+    List<RagChatHistory> findAllBySessionIdOrderByCreatedAtDesc(
+            @Param("sessionId") String sessionId);
 
     /**
      * Query all history by session ID (no pagination, ascending by time).
      */
-    @Query("SELECT h FROM RagChatHistory h WHERE h.sessionId = :sessionId ORDER BY h.createdAt ASC")
-    List<RagChatHistory> findBySessionIdAsc(@Param("sessionId") String sessionId);
+    @Query("SELECT h FROM RagChatHistory h WHERE h.sessionId = :sessionId "
+            + "ORDER BY h.createdAt ASC, h.id ASC")
+    List<RagChatHistory> findBySessionIdAsc(
+            @Param("sessionId") String sessionId);
 
     /**
      * Query the most recent N history records by session ID, ordered newest-first.

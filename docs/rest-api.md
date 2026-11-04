@@ -62,6 +62,37 @@ Without a root credential, legacy behavior remains. Setting
 `rag.security.enabled=true` accepts the headers above and continues to support
 `?apiKey=` with the existing database ADMIN/NORMAL and static-key semantics.
 
+### Pagination and ordering contract
+
+List, history and log endpoints share one contract (parameter clamping lives in
+`PaginationSupport`):
+
+- **Two styles, never mixed**: nested-resource lists (documents, collections,
+  collection documents) use `offset` + `limit`; every other paged endpoint uses
+  `page` + `size`.
+- **Clamping**: negative `offset`/`page` becomes `0`; `limit`/`size` below `1`
+  becomes `1`, and anything above the global cap is truncated (default cap
+  **200**). `limit=100000` can never pull the whole table into memory.
+- **Offsets align to page boundaries**: `offset` is aligned by `limit` and the
+  response echoes the offset that actually took effect. For example
+  `offset=25&limit=20` really starts at row 20 and reports `offset=20`, so
+  "page 2" can never repeat page 1's contents.
+- **Out-of-range is empty**: an `offset`/`page` beyond the total returns an empty
+  list with the real `totalElements`; it never errors and never wraps back to
+  page 1.
+- **Stable total order**: every newest-first endpoint sorts by
+  `createdAt DESC, id DESC` (or its business timestamp plus primary key) as a
+  tie-break, so equal timestamps cannot swap places between requests. SQL
+  endpoints spell out `ORDER BY ..., id DESC` too.
+- **Hard caps on exports/history**: chat export is capped at 5000 records, alert
+  history at 1000, and a single file-tree directory at 1000 entries. Callers that
+  need more must page; `limit=0` does not mean "everything".
+
+New list endpoints must be registered with their pagination mode and sort
+evidence in [`scripts/testdata/list-endpoints.json`](../scripts/testdata/list-endpoints.json);
+`scripts/verify-list-endpoint-pagination.mjs` re-checks controller sources and
+fails on an unregistered endpoint or missing evidence.
+
 ### API route policy and default denial
 
 Protected `/api/*` and `/v1/*` routes build a route-policy registry from the real Spring MVC
@@ -1036,7 +1067,7 @@ file. Unknown and foreign sessions return `404 SESSION_NOT_FOUND`.
 | Parameter | Type | Location | Description |
 |-----------|------|---------|-------------|
 | `format` | string | query | `json` or `md` (default: `json`) |
-| `limit` | int | query | Max turn records to export; `0` means all (default `0`) |
+| `limit` | int | query | Max turn records to export; `0` means up to the hard cap (5000), default `0` |
 
 **Response:** `application/json; charset=utf-8` or
 `text/markdown; charset=utf-8`, with
@@ -2084,8 +2115,8 @@ Paginated document query.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `offset` | int | 0 | Number of documents to skip |
-| `limit` | int | 20 | Maximum number of documents to return |
+| `offset` | int | 0 | Number of documents to skip; aligned to `limit` and echoed as the effective value |
+| `limit` | int | 20 | Maximum number of documents to return; capped at 200 |
 | `title` | string | | Optional title filter |
 | `documentType` | string | | Optional document-type filter |
 | `processingStatus` | string | | Optional processing-status filter |
@@ -2601,8 +2632,8 @@ Paginated collection query.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `offset` | int | 0 | Number of collections to skip |
-| `limit` | int | 20 | Maximum number of collections to return |
+| `offset` | int | 0 | Number of collections to skip; aligned to `limit` and echoed as the effective value |
+| `limit` | int | 20 | Maximum number of collections to return; capped at 200 |
 | `name` | string | | Optional collection-name filter |
 | `query` | string | | Case-insensitive substring match on name or exact stored key text |
 | `enabled` | boolean | | Optional enabled-state filter |
@@ -3145,8 +3176,10 @@ callers are allowed. A database `NORMAL` principal receives a generic
 
 ### `GET /api/v1/rag/alerts/active`
 
-Get active alerts. V57-managed `API_PRINCIPAL_EXPIRY` alerts expose the
-server-authoritative `conditionState` and a low-sensitivity `metrics`
+Get active alerts, at most `limit` records (default 200, capped at 1000), ordered
+by `firedAt DESC, id DESC`. Unresolved alerts accumulate, so this endpoint is
+bounded rather than unbounded. V57-managed `API_PRINCIPAL_EXPIRY` alerts expose
+the server-authoritative `conditionState` and a low-sensitivity `metrics`
 projection:
 
 ```json

@@ -33,7 +33,7 @@ class ChatExportServiceTest {
 
     @Test
     void exportAsJson_emptySession_returnsValidJson() {
-        when(historyRepository.findBySessionIdAsc("empty-session")).thenReturn(Collections.emptyList());
+        when(historyRepository.findTopNBySessionIdNewestFirst("empty-session", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(Collections.emptyList());
 
         byte[] result = service.exportAsJson("empty-session", 0);
 
@@ -47,7 +47,7 @@ class ChatExportServiceTest {
     @Test
     void exportAsJson_withRecords_returnsCorrectJson() {
         RagChatHistory userMsg = createRecord(1L, "session-1", "Hello", "Hi there", now());
-        when(historyRepository.findBySessionIdAsc("session-1")).thenReturn(List.of(userMsg));
+        when(historyRepository.findTopNBySessionIdNewestFirst("session-1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(userMsg));
 
         byte[] result = service.exportAsJson("session-1", 0);
         String json = new String(result, StandardCharsets.UTF_8);
@@ -65,7 +65,7 @@ class ChatExportServiceTest {
         RagChatHistory record = createRecord(
                 1L, "s1", "Question", "Answer", now());
         record.setSources(List.of(source()));
-        when(historyRepository.findBySessionIdAsc("s1"))
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS))
                 .thenReturn(List.of(record));
 
         JsonNode json = objectMapper.readTree(
@@ -103,7 +103,7 @@ class ChatExportServiceTest {
     @Test
     void exportAsJson_nullAiResponse_omitsAssistantMessage() {
         RagChatHistory userOnly = createRecord(1L, "s1", "Just a question", null, now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(userOnly));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(userOnly));
 
         byte[] result = service.exportAsJson("s1", 0);
         String json = new String(result, StandardCharsets.UTF_8);
@@ -116,7 +116,7 @@ class ChatExportServiceTest {
     void exportAsJson_codeBlocks_areEscaped() {
         // Backticks are not special in JSON strings, so they pass through unchanged
         RagChatHistory record = createRecord(1L, "s1", "Code: ```java", "Answer: ```python", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsJson("s1", 0);
         String json = new String(result, StandardCharsets.UTF_8);
@@ -129,7 +129,7 @@ class ChatExportServiceTest {
     @Test
     void exportAsJson_specialCharacters_areEscaped() {
         RagChatHistory record = createRecord(1L, "s1", "Line1\nLine2", "Quote\"Here", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsJson("s1", 0);
         String json = new String(result, StandardCharsets.UTF_8);
@@ -142,7 +142,7 @@ class ChatExportServiceTest {
     void exportAsJson_blankAiResponse_omitsAssistantMessage() {
         // Blank (non-null, whitespace-only) AI response should be treated same as null
         RagChatHistory record = createRecord(1L, "s1", "Hello", "   ", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsJson("s1", 0);
         String json = new String(result, StandardCharsets.UTF_8);
@@ -172,38 +172,53 @@ class ChatExportServiceTest {
         assertTrue(middleIdx >= 0 && newestIdx >= 0 && middleIdx < newestIdx,
                 "Middle should appear before Newest (chronological order)");
         assertFalse(json.contains("Oldest"));
-        // Verify the optimized query was called (not findBySessionIdAsc)
+        // Verify the optimized query was called (not an unpaged scan)
         verify(historyRepository).findTopNBySessionIdNewestFirst("s1", 2);
         verify(historyRepository, never()).findBySessionIdAsc("s1");
     }
 
     @Test
-    void exportAsJson_withZeroLimit_usesFullScanQuery() {
-        // With limit=0, findBySessionIdAsc (full scan) should be called
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(Collections.emptyList());
+    void exportAsJson_withZeroLimit_usesCappedQuery() {
+        // limit=0 表示"上限内的全部"，仍然是有限查询，绝不退化成全表扫描。
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS))
+                .thenReturn(Collections.emptyList());
 
         service.exportAsJson("s1", 0);
 
-        verify(historyRepository).findBySessionIdAsc("s1");
-        verify(historyRepository, never()).findTopNBySessionIdNewestFirst(anyString(), anyInt());
+        verify(historyRepository).findTopNBySessionIdNewestFirst(
+                "s1", ChatExportService.MAX_EXPORT_RECORDS);
+        verify(historyRepository, never()).findBySessionIdAsc(anyString());
     }
 
     @Test
-    void exportAsJson_withNegativeLimit_usesFullScanQuery() {
-        // Negative limit should fall through to full scan (no DB LIMIT)
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(Collections.emptyList());
+    void exportAsJson_withNegativeLimit_usesCappedQuery() {
+        // 负数与 0 等价：收敛到上限，而不是无上限。
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS))
+                .thenReturn(Collections.emptyList());
 
         service.exportAsJson("s1", -5);
 
-        verify(historyRepository).findBySessionIdAsc("s1");
-        verify(historyRepository, never()).findTopNBySessionIdNewestFirst(anyString(), anyInt());
+        verify(historyRepository).findTopNBySessionIdNewestFirst(
+                "s1", ChatExportService.MAX_EXPORT_RECORDS);
+        verify(historyRepository, never()).findBySessionIdAsc(anyString());
+    }
+
+    @Test
+    void exportAsJson_oversizedLimit_isCapped() {
+        when(historyRepository.findTopNBySessionIdNewestFirst(
+                "s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(Collections.emptyList());
+
+        service.exportAsJson("s1", ChatExportService.MAX_EXPORT_RECORDS + 10);
+
+        verify(historyRepository).findTopNBySessionIdNewestFirst(
+                "s1", ChatExportService.MAX_EXPORT_RECORDS);
     }
 
     @Test
     void exportAsJson_nullUserMessage_includesAssistantMessage() {
         // Even with null user message, if AI response exists it should appear
         RagChatHistory record = createRecord(1L, "s1", null, "Answer only", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsJson("s1", 0);
         String json = new String(result, StandardCharsets.UTF_8);
@@ -218,7 +233,7 @@ class ChatExportServiceTest {
     void exportAsMarkdown_blankAiResponse_omitsAssistantSection() {
         // Blank (non-null, whitespace-only) AI response should be omitted
         RagChatHistory record = createRecord(1L, "s1", "Question", "  \n\t  ", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsMarkdown("s1", 0);
         String md = new String(result, StandardCharsets.UTF_8);
@@ -230,7 +245,7 @@ class ChatExportServiceTest {
     @Test
     void exportAsMarkdown_nullUserMessage_stillRendersAssistant() {
         RagChatHistory record = createRecord(1L, "s1", null, "Only the answer", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsMarkdown("s1", 0);
         String md = new String(result, StandardCharsets.UTF_8);
@@ -243,7 +258,7 @@ class ChatExportServiceTest {
 
     @Test
     void exportAsMarkdown_emptySession_returnsValidMarkdown() {
-        when(historyRepository.findBySessionIdAsc("empty")).thenReturn(Collections.emptyList());
+        when(historyRepository.findTopNBySessionIdNewestFirst("empty", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(Collections.emptyList());
 
         byte[] result = service.exportAsMarkdown("empty", 0);
         String md = new String(result, StandardCharsets.UTF_8);
@@ -256,7 +271,7 @@ class ChatExportServiceTest {
     @Test
     void exportAsMarkdown_withRecords_returnsCorrectMarkdown() {
         RagChatHistory record = createRecord(1L, "s1", "What is Spring AI?", "It is a framework.", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsMarkdown("s1", 0);
         String md = new String(result, StandardCharsets.UTF_8);
@@ -273,7 +288,7 @@ class ChatExportServiceTest {
         RagChatHistory record = createRecord(
                 1L, "s1", "Question", "Answer", now());
         record.setSources(List.of(source()));
-        when(historyRepository.findBySessionIdAsc("s1"))
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS))
                 .thenReturn(List.of(record));
 
         String markdown = new String(
@@ -305,7 +320,7 @@ class ChatExportServiceTest {
     @Test
     void exportAsMarkdown_codeBlocks_areEscaped() {
         RagChatHistory record = createRecord(1L, "s1", "```java", "```python", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsMarkdown("s1", 0);
         String md = new String(result, StandardCharsets.UTF_8);
@@ -318,7 +333,7 @@ class ChatExportServiceTest {
 
     @Test
     void exportAsCsv_emptySession_returnsHeaderOnly() {
-        when(historyRepository.findBySessionIdAsc("empty")).thenReturn(Collections.emptyList());
+        when(historyRepository.findTopNBySessionIdNewestFirst("empty", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(Collections.emptyList());
 
         byte[] result = service.exportAsCsv("empty", 0);
         String csv = new String(result, StandardCharsets.UTF_8);
@@ -329,7 +344,7 @@ class ChatExportServiceTest {
     @Test
     void exportAsCsv_withRecords_returnsCorrectCsv() {
         RagChatHistory record = createRecord(1L, "s1", "Hello", "Hi there", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsCsv("s1", 0);
         String csv = new String(result, StandardCharsets.UTF_8);
@@ -360,7 +375,7 @@ class ChatExportServiceTest {
     @Test
     void exportAsCsv_specialCharacters_areQuoted() {
         RagChatHistory record = createRecord(1L, "s1", "Hello, world", "Say \"hi\"", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsCsv("s1", 0);
         String csv = new String(result, StandardCharsets.UTF_8);
@@ -373,7 +388,7 @@ class ChatExportServiceTest {
     @Test
     void exportAsCsv_nullUserMessage_includesAssistantLine() {
         RagChatHistory record = createRecord(1L, "s1", null, "Answer only", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsCsv("s1", 0);
         String csv = new String(result, StandardCharsets.UTF_8);
@@ -385,7 +400,7 @@ class ChatExportServiceTest {
     @Test
     void exportAsCsv_blankAiResponse_omitsAssistantLine() {
         RagChatHistory record = createRecord(1L, "s1", "Question", "  ", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsCsv("s1", 0);
         String csv = new String(result, StandardCharsets.UTF_8);
@@ -400,7 +415,7 @@ class ChatExportServiceTest {
     void exportAsCsv_carriageReturnInContent_quoted() {
         // CR (\\r) must trigger quoting to prevent CSV row splitting
         RagChatHistory record = createRecord(1L, "s1", "Line1\rLine2", "Answer", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsCsv("s1", 0);
         String csv = new String(result, StandardCharsets.UTF_8);
@@ -416,7 +431,7 @@ class ChatExportServiceTest {
     void exportAsCsv_nullUserMessage_stillIncludesAssistantLine() {
         // When userMessage is null, user row should still appear (empty cell)
         RagChatHistory record = createRecord(1L, "s1", null, "Answer", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsCsv("s1", 0);
         String csv = new String(result, StandardCharsets.UTF_8);
@@ -430,7 +445,7 @@ class ChatExportServiceTest {
     void exportAsCsv_nullContentFields_escapedGracefully() {
         // Null content should render as empty string (not null)
         RagChatHistory record = createRecord(1L, "s1", null, null, now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsCsv("s1", 0);
         String csv = new String(result, StandardCharsets.UTF_8);
@@ -445,7 +460,7 @@ class ChatExportServiceTest {
         // Content with comma, quote, AND newline must all be handled correctly
         String content = "Hello, \"world\"\nnext line";
         RagChatHistory record = createRecord(1L, "s1", content, "Answer", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsCsv("s1", 0);
         String csv = new String(result, StandardCharsets.UTF_8);
@@ -458,7 +473,7 @@ class ChatExportServiceTest {
     void exportAsCsv_blankUserMessage_stillRendersUserRow() {
         // Blank (non-null whitespace-only) user message still produces a user row
         RagChatHistory record = createRecord(1L, "s1", "   ", "Answer", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsCsv("s1", 0);
         String csv = new String(result, StandardCharsets.UTF_8);
@@ -472,7 +487,7 @@ class ChatExportServiceTest {
     void exportAsCsv_multipleRecords_allFieldsPresent() {
         RagChatHistory r1 = createRecord(1L, "s1", "Q1", "A1", now());
         RagChatHistory r2 = createRecord(2L, "s1", "Q2", "A2", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(r1, r2));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(r1, r2));
 
         byte[] result = service.exportAsCsv("s1", 0);
         String csv = new String(result, StandardCharsets.UTF_8);
@@ -487,7 +502,7 @@ class ChatExportServiceTest {
     @Test
     void exportAsJson_carriageReturnInContent_escapedAsRN() {
         RagChatHistory record = createRecord(1L, "s1", "Line1\rLine2", "R", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsJson("s1", 0);
         String json = new String(result, StandardCharsets.UTF_8);
@@ -498,7 +513,7 @@ class ChatExportServiceTest {
     @Test
     void exportAsJson_tabInContent_escaped() {
         RagChatHistory record = createRecord(1L, "s1", "col1\tcol2", "tab", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsJson("s1", 0);
         String json = new String(result, StandardCharsets.UTF_8);
@@ -511,7 +526,7 @@ class ChatExportServiceTest {
     @Test
     void exportAsMarkdown_carriageReturnInContent_escaped() {
         RagChatHistory record = createRecord(1L, "s1", "Line1\rLine2", "Answer", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", ChatExportService.MAX_EXPORT_RECORDS)).thenReturn(List.of(record));
 
         byte[] result = service.exportAsMarkdown("s1", 0);
         String md = new String(result, StandardCharsets.UTF_8);

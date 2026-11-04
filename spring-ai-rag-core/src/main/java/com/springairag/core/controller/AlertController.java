@@ -19,6 +19,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.validation.annotation.Validated;
@@ -68,13 +70,14 @@ public class AlertController {
     /**
      * Get active alerts
      */
-    @Operation(summary = "Get active alerts", description = "Query all unresolved alert records, ordered by trigger time descending.")
+    @Operation(summary = "Get active alerts", description = "Query all unresolved alert records, ordered by trigger time descending. Bounded by limit (1-1000, default 200).")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Returns list of active alerts")
     })
     @GetMapping("/active")
-    public ResponseEntity<List<AlertService.AlertRecord>> getActiveAlerts() {
-        return ResponseEntity.ok(alertService.getActiveAlerts());
+    public ResponseEntity<List<AlertService.AlertRecord>> getActiveAlerts(
+            @RequestParam(defaultValue = "200") @Min(1) @Max(1000) int limit) {
+        return ResponseEntity.ok(alertService.getActiveAlerts(limit));
     }
 
     /**
@@ -90,9 +93,11 @@ public class AlertController {
             @RequestParam String startDate,
             @RequestParam String endDate,
             @RequestParam(required = false) String severity,
-            @RequestParam(required = false) String alertType) {
+            @RequestParam(required = false) String alertType,
+            @RequestParam(defaultValue = "200") @Min(1) @Max(1000) int limit) {
         return ResponseEntity.ok(alertService.getAlertHistory(
-                ZonedDateTime.parse(startDate), ZonedDateTime.parse(endDate), severity, alertType));
+                ZonedDateTime.parse(startDate), ZonedDateTime.parse(endDate),
+                severity, alertType, limit));
     }
 
     /**

@@ -599,4 +599,17 @@ pass "Interrupt-handling self-test"
 node scripts/verify-interrupt-handling.mjs
 pass "Interrupt handling"
 
+# 列表/历史/日志端点的分页契约：参数名、默认值、上限、稳定全序（含 tie-break）。
+# 之前 offset/limit 与 page/size 换算漂移过，第 2 页永远返回第 1 页；只修一个
+# 实例没有意义，所以从 controller 源码普查每个列表端点。
+node scripts/test-support/list-endpoint-pagination-self-test.mjs >/dev/null || {
+  echo "List-endpoint pagination self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/list-endpoint-pagination-self-test.mjs >&2 || true
+  exit 1
+}
+pass "List-endpoint pagination self-test"
+
+node scripts/verify-list-endpoint-pagination.mjs
+pass "List endpoint pagination"
+
 echo "Repository gate chain: $PASS_COUNT checks passed."

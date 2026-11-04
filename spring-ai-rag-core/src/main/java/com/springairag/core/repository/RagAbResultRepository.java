@@ -19,7 +19,10 @@ public interface RagAbResultRepository extends JpaRepository<RagAbResult, Long> 
 
     List<RagAbResult> findByExperimentId(Long experimentId);
 
-    Page<RagAbResult> findByExperimentIdOrderByCreatedAtDesc(Long experimentId, Pageable pageable);
+    /** 排序由调用方 Pageable 提供（createdAt desc, id desc）。 */
+    @Query("SELECT r FROM RagAbResult r WHERE r.experiment.id = :experimentId")
+    Page<RagAbResult> findByExperimentIdOrderByCreatedAtDesc(
+            @Param("experimentId") Long experimentId, Pageable pageable);
 
     List<RagAbResult> findByExperimentIdAndVariantName(Long experimentId, String variantName);
 

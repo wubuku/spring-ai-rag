@@ -77,7 +77,7 @@ class AlertControllerWebTest {
         record.setMetrics(Map.of(
                 "principalId", "principal-1",
                 "expiresAt", "2026-09-01T00:00:00+08:00[Asia/Shanghai]"));
-        when(alertService.getActiveAlerts()).thenReturn(List.of(record));
+        when(alertService.getActiveAlerts(200)).thenReturn(List.of(record));
 
         mockMvc.perform(get("/api/v1/rag/alerts/active")
                         .requestAttr(
@@ -109,13 +109,13 @@ class AlertControllerWebTest {
                 .andExpect(jsonPath("$.detail")
                         .value("Alert management requires operator access"));
 
-        verify(alertService, never()).getActiveAlerts();
+        verify(alertService, never()).getActiveAlerts(200);
     }
 
     @Test
     void databaseAdminAndAuthDisabledLoopbackRemainCompatible()
             throws Exception {
-        when(alertService.getActiveAlerts()).thenReturn(List.of());
+        when(alertService.getActiveAlerts(200)).thenReturn(List.of());
 
         mockMvc.perform(get("/api/v1/rag/alerts/active")
                         .requestAttr(
@@ -139,7 +139,7 @@ class AlertControllerWebTest {
                 .andExpect(status().isOk());
 
         verify(alertService, org.mockito.Mockito.times(2))
-                .getActiveAlerts();
+                .getActiveAlerts(200);
     }
 
     private AuthenticatedApiPrincipal principal(ApiKeyRole role) {

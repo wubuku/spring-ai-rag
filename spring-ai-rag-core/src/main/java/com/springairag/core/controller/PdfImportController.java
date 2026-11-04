@@ -27,12 +27,15 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -75,6 +78,7 @@ import java.util.UUID;
 @com.springairag.core.security.ApiRoutePolicy
 @RequestMapping("/rag/files")
 @Tag(name = "File System Import", description = "PDF import, directory tree management, and file preview")
+@Validated
 public class PdfImportController {
 
     private static final Logger log = LoggerFactory.getLogger(PdfImportController.class);
@@ -935,7 +939,10 @@ public class PdfImportController {
     public ResponseEntity<FileTreeResponse> listTree(
             @Parameter(description = "Virtual path prefix to list (URL-encoded, trailing slash optional). "
                                     + "Omit or use empty string to list root.")
-            @RequestParam(value = "path", required = false) String path) {
+            @RequestParam(value = "path", required = false) String path,
+            @Parameter(description = "Maximum number of entries returned (1-1000, default 500). "
+                                    + "A single directory can hold many files; this keeps the response bounded.")
+            @RequestParam(defaultValue = "500") @Min(1) @Max(1000) int limit) {
 
         String normalized = (path == null || path.isBlank())
                 ? "" : PdfImportService.validateVirtualPath(urlDecode(path));
@@ -961,6 +968,9 @@ public class PdfImportController {
         }
         Map<UUID, FsImportBatch> batches = pdfImportService.getImportBatches(rootImportIds);
         List<FileTreeEntryResponse> entries = buildTreeEntries(children, normalized, batches);
+        // 单个目录可能包含大量文件；限制返回条数，避免一次响应拉爆内存。
+        int total = entries.size();
+        List<FileTreeEntryResponse> visible = total > limit ? entries.subList(0, limit) : entries;
         String displayPath = normalized.isEmpty() ? "/" : normalized;
         FileImportMetadataResponse currentImportMetadata = currentImportId(normalized)
                 .flatMap(this::resolveImportBatch)
@@ -968,7 +978,7 @@ public class PdfImportController {
                 .orElse(null);
 
         return ResponseEntity.ok(new FileTreeResponse(
-                displayPath, entries, entries.size(), currentImportMetadata));
+                displayPath, visible, total, currentImportMetadata));
     }
 
     // ==================== Internal Helpers ====================

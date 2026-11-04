@@ -67,14 +67,15 @@ public interface AlertService {
      * @return list of alert records
      */
     List<AlertRecord> getAlertHistory(ZonedDateTime startDate, ZonedDateTime endDate,
-                                      String severity, String alertType);
+                                      String severity, String alertType, int limit);
 
     /**
      * Get active (unresolved) alerts.
      *
-     * @return list of active alerts
+     * @param limit maximum number of records (clamped to 1..1000)
+     * @return list of active alerts, newest first
      */
-    List<AlertRecord> getActiveAlerts();
+    List<AlertRecord> getActiveAlerts(int limit);
 
     /**
      * Resolve an alert.

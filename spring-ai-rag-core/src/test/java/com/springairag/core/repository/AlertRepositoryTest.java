@@ -49,13 +49,13 @@ class AlertRepositoryTest {
             RagAlert alert = createAlert(1L, "THRESHOLD_HIGH", "WARNING", "ACTIVE");
             ZonedDateTime start = ZonedDateTime.now().minusDays(1);
             ZonedDateTime end = ZonedDateTime.now();
-            when(repository.findAlertHistory(start, end, null, null)).thenReturn(List.of(alert));
+            when(repository.findAlertHistory(start, end, null, null, org.springframework.data.domain.PageRequest.of(0, 200))).thenReturn(List.of(alert));
 
-            List<RagAlert> result = repository.findAlertHistory(start, end, null, null);
+            List<RagAlert> result = repository.findAlertHistory(start, end, null, null, org.springframework.data.domain.PageRequest.of(0, 200));
 
             assertEquals(1, result.size());
             assertEquals("THRESHOLD_HIGH", result.get(0).getAlertType());
-            verify(repository).findAlertHistory(start, end, null, null);
+            verify(repository).findAlertHistory(start, end, null, null, org.springframework.data.domain.PageRequest.of(0, 200));
         }
 
         @Test
@@ -63,9 +63,9 @@ class AlertRepositoryTest {
         void returnsEmptyWhenNoAlerts() {
             ZonedDateTime start = ZonedDateTime.now().minusDays(1);
             ZonedDateTime end = ZonedDateTime.now();
-            when(repository.findAlertHistory(start, end, null, null)).thenReturn(List.of());
+            when(repository.findAlertHistory(start, end, null, null, org.springframework.data.domain.PageRequest.of(0, 200))).thenReturn(List.of());
 
-            List<RagAlert> result = repository.findAlertHistory(start, end, null, null);
+            List<RagAlert> result = repository.findAlertHistory(start, end, null, null, org.springframework.data.domain.PageRequest.of(0, 200));
 
             assertTrue(result.isEmpty());
         }
@@ -76,9 +76,9 @@ class AlertRepositoryTest {
             RagAlert alert = createAlert(1L, "THRESHOLD_HIGH", "CRITICAL", "ACTIVE");
             ZonedDateTime start = ZonedDateTime.now().minusDays(1);
             ZonedDateTime end = ZonedDateTime.now();
-            when(repository.findAlertHistory(start, end, "CRITICAL", null)).thenReturn(List.of(alert));
+            when(repository.findAlertHistory(start, end, "CRITICAL", null, org.springframework.data.domain.PageRequest.of(0, 200))).thenReturn(List.of(alert));
 
-            List<RagAlert> result = repository.findAlertHistory(start, end, "CRITICAL", null);
+            List<RagAlert> result = repository.findAlertHistory(start, end, "CRITICAL", null, org.springframework.data.domain.PageRequest.of(0, 200));
 
             assertEquals(1, result.size());
             assertEquals("CRITICAL", result.get(0).getSeverity());
@@ -90,9 +90,9 @@ class AlertRepositoryTest {
             RagAlert alert = createAlert(1L, "SLO_BREACH", "WARNING", "ACTIVE");
             ZonedDateTime start = ZonedDateTime.now().minusDays(1);
             ZonedDateTime end = ZonedDateTime.now();
-            when(repository.findAlertHistory(start, end, null, "SLO_BREACH")).thenReturn(List.of(alert));
+            when(repository.findAlertHistory(start, end, null, "SLO_BREACH", org.springframework.data.domain.PageRequest.of(0, 200))).thenReturn(List.of(alert));
 
-            List<RagAlert> result = repository.findAlertHistory(start, end, null, "SLO_BREACH");
+            List<RagAlert> result = repository.findAlertHistory(start, end, null, "SLO_BREACH", org.springframework.data.domain.PageRequest.of(0, 200));
 
             assertEquals(1, result.size());
             assertEquals("SLO_BREACH", result.get(0).getAlertType());
@@ -104,9 +104,9 @@ class AlertRepositoryTest {
             RagAlert alert = createAlert(1L, "THRESHOLD_LOW", "INFO", "ACTIVE");
             ZonedDateTime start = ZonedDateTime.now().minusDays(1);
             ZonedDateTime end = ZonedDateTime.now();
-            when(repository.findAlertHistory(start, end, "INFO", "THRESHOLD_LOW")).thenReturn(List.of(alert));
+            when(repository.findAlertHistory(start, end, "INFO", "THRESHOLD_LOW", org.springframework.data.domain.PageRequest.of(0, 200))).thenReturn(List.of(alert));
 
-            List<RagAlert> result = repository.findAlertHistory(start, end, "INFO", "THRESHOLD_LOW");
+            List<RagAlert> result = repository.findAlertHistory(start, end, "INFO", "THRESHOLD_LOW", org.springframework.data.domain.PageRequest.of(0, 200));
 
             assertEquals(1, result.size());
             assertEquals("INFO", result.get(0).getSeverity());
@@ -115,7 +115,7 @@ class AlertRepositoryTest {
     }
 
     @Nested
-    @DisplayName("findByStatusOrderByFiredAtDesc")
+    @DisplayName("findActiveAlerts")
     class FindByStatusOrderByFiredAtDesc {
 
         @Test
@@ -125,9 +125,9 @@ class AlertRepositoryTest {
             a1.setFiredAt(ZonedDateTime.now().minusHours(1));
             RagAlert a2 = createAlert(2L, "SLO_BREACH", "CRITICAL", "ACTIVE");
             a2.setFiredAt(ZonedDateTime.now());
-            when(repository.findByStatusOrderByFiredAtDesc("ACTIVE")).thenReturn(List.of(a2, a1));
+            when(repository.findActiveAlerts("ACTIVE", org.springframework.data.domain.PageRequest.of(0, 200, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "firedAt").and(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "id"))))).thenReturn(List.of(a2, a1));
 
-            List<RagAlert> result = repository.findByStatusOrderByFiredAtDesc("ACTIVE");
+            List<RagAlert> result = repository.findActiveAlerts("ACTIVE", org.springframework.data.domain.PageRequest.of(0, 200, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "firedAt").and(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "id"))));
 
             assertEquals(2, result.size());
             assertEquals(2L, result.get(0).getId());
@@ -136,9 +136,9 @@ class AlertRepositoryTest {
         @Test
         @DisplayName("returns empty list for unknown status")
         void returnsEmptyForUnknownStatus() {
-            when(repository.findByStatusOrderByFiredAtDesc("UNKNOWN")).thenReturn(List.of());
+            when(repository.findActiveAlerts("UNKNOWN", org.springframework.data.domain.PageRequest.of(0, 200, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "firedAt").and(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "id"))))).thenReturn(List.of());
 
-            List<RagAlert> result = repository.findByStatusOrderByFiredAtDesc("UNKNOWN");
+            List<RagAlert> result = repository.findActiveAlerts("UNKNOWN", org.springframework.data.domain.PageRequest.of(0, 200, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "firedAt").and(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "id"))));
 
             assertTrue(result.isEmpty());
         }

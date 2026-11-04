@@ -15,6 +15,9 @@ import com.springairag.core.repository.SloConfigRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import com.springairag.core.util.PaginationSupport;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +50,9 @@ import java.util.concurrent.ConcurrentMap;
  */
 @Service
 public class AlertServiceImpl implements AlertService {
+
+    /** 告警历史单次查询最多返回 1000 条。 */
+    private static final int MAX_ALERT_HISTORY_LIMIT = 1000;
 
     private static final Logger log = LoggerFactory.getLogger(AlertServiceImpl.class);
 
@@ -178,15 +184,26 @@ public class AlertServiceImpl implements AlertService {
     @Override
     @Transactional(readOnly = true)
     public List<AlertRecord> getAlertHistory(ZonedDateTime startDate, ZonedDateTime endDate,
-                                             String severity, String alertType) {
-        List<RagAlert> alerts = alertRepository.findAlertHistory(startDate, endDate, severity, alertType);
+                                             String severity, String alertType, int limit) {
+        // 时间窗本身可能非常大，必须再叠加一条记录数上限。
+        int safeLimit = PaginationSupport.size(limit, MAX_ALERT_HISTORY_LIMIT);
+        Sort sort = Sort.by(Sort.Direction.DESC, "firedAt")
+                .and(Sort.by(Sort.Direction.DESC, "id"));
+        List<RagAlert> alerts = alertRepository.findAlertHistory(
+                startDate, endDate, severity, alertType,
+                PageRequest.of(0, safeLimit, sort));
         return alerts.stream().map(this::toAlertRecord).toList();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<AlertRecord> getActiveAlerts() {
-        List<RagAlert> alerts = alertRepository.findByStatusOrderByFiredAtDesc("ACTIVE");
+    public List<AlertRecord> getActiveAlerts(int limit) {
+        // 未解决告警会持续累积（外部系统可以不断 fire），必须做记录数上限。
+        int safeLimit = PaginationSupport.size(limit, MAX_ALERT_HISTORY_LIMIT);
+        Sort sort = Sort.by(Sort.Direction.DESC, "firedAt")
+                .and(Sort.by(Sort.Direction.DESC, "id"));
+        List<RagAlert> alerts = alertRepository.findActiveAlerts(
+                "ACTIVE", PageRequest.of(0, safeLimit, sort));
         return alerts.stream().map(this::toAlertRecord).toList();
     }
 

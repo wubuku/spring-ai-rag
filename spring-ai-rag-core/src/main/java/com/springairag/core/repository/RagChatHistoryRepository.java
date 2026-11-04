@@ -13,6 +13,7 @@ import com.springairag.core.exception.RagException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +38,13 @@ import java.util.UUID;
 public class RagChatHistoryRepository {
 
     private static final Logger log = LoggerFactory.getLogger(RagChatHistoryRepository.class);
+
+    /** 单会话历史读取的硬上限，避免 limit=0/超大值把整段会话拉进内存。 */
+    private static final int MAX_SESSION_HISTORY_LIMIT = 500;
+
+    private static final Sort NEWEST_FIRST = Sort
+            .by(Sort.Direction.DESC, "createdAt")
+            .and(Sort.by(Sort.Direction.DESC, "id"));
 
     private final RagChatHistoryJpaRepository jpaRepository;
     private final JdbcTemplate jdbcTemplate;
@@ -266,8 +274,10 @@ public class RagChatHistoryRepository {
      */
     public List<ChatHistoryResponse> findBySessionId(String sessionId, int limit) {
         Objects.requireNonNull(sessionId, "sessionId must not be null");
+        // 上限 500 与面向 principal 的读取保持一致；同时补 id tie-break。
+        int safeLimit = Math.min(Math.max(limit, 1), MAX_SESSION_HISTORY_LIMIT);
         List<RagChatHistory> results = jpaRepository.findBySessionIdOrderByCreatedAtDesc(
-                sessionId, PageRequest.of(0, limit));
+                sessionId, PageRequest.of(0, safeLimit, NEWEST_FIRST));
         return results.stream()
                 .map(this::toDto)
                 .toList();

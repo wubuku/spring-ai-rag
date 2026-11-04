@@ -537,7 +537,7 @@ public class DocumentSyncRunService {
                 FROM rag_document_sync_runs
                 WHERE collection_id = ?
                   AND (? IS NULL OR source_namespace = ?)
-                ORDER BY created_at DESC
+                ORDER BY created_at DESC, id DESC
                 LIMIT ? OFFSET ?
                 """,
                 this::mapRun,
@@ -984,7 +984,7 @@ public class DocumentSyncRunService {
                     runSelect()
                             + " WHERE collection_id = ? AND source_namespace = ?"
                             + " AND status = 'ACTIVE'"
-                            + " ORDER BY created_at DESC LIMIT 1",
+                            + " ORDER BY created_at DESC, id DESC LIMIT 1",
                     this::mapRun,
                     collectionId,
                     namespace);

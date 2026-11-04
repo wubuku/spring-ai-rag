@@ -34,12 +34,12 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-    // 安全相关套件（可访问性 / 键盘 / 响应式）在非 Chromium 引擎上再跑一遍。
+    // 安全相关套件（可访问性 / 键盘 / 响应式）与崩溃/导航韧性套件在非 Chromium 引擎上再跑一遍。
     // 其余业务 spec 仍只跑 Chromium：它们依赖 Mock API 时序，跨引擎重跑
     // 收益低而成本高。这里用显式 testMatch，而不是静默 skip。
     {
       name: 'firefox',
-      testMatch: /(accessibility|keyboard|responsive)\.spec\.ts/,
+      testMatch: /(accessibility|keyboard|responsive|resilience)\.spec\.ts/,
       use: { ...devices['Desktop Firefox'] },
     },
     // WebKit 的故障形态是"单浏览器进程内的上下文堆积"：一个 project 连续跑完

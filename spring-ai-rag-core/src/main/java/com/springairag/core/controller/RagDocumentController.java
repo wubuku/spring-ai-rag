@@ -73,7 +73,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.data.domain.PageRequest;
+import com.springairag.core.util.PaginationSupport;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -408,8 +408,11 @@ public class RagDocumentController {
             @Parameter(description = "Filter documents created at or before this timestamp (ISO-8601, e.g. 2024-12-31T23:59:59)")
             @RequestParam(required = false) String createdBefore) {
 
-        int page = offset / limit;
-        var pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        // offset/limit 统一走 PaginationSupport：负数收敛、limit 有上限、
+        // offset 对齐页边界；排序补主键 tie-break，避免同时间戳记录跨页漂移。
+        var pageable = PaginationSupport.offsetLimit(offset, limit, PaginationSupport.NEWEST_FIRST);
+        int safeOffset = (int) pageable.getOffset();
+        int safeLimit = pageable.getPageSize();
 
         var currentKey = ApiKeyCollectionAccess.currentPolicy();
         var restrictedIds = ApiKeyCollectionAccess.restrictedCollectionIds(currentKey);
@@ -428,8 +431,8 @@ public class RagDocumentController {
         return ResponseEntity.ok(new DocumentListResponse(
                 docs,
                 pageResult.getTotalElements(),
-                offset,
-                limit
+                safeOffset,
+                safeLimit
         ));
     }
 
@@ -1203,12 +1206,15 @@ public class RagDocumentController {
             return ResponseEntity.notFound().build();
         }
 
-        var versions = documentVersionService.getVersionHistory(id, PageRequest.of(page, size));
+        // versionNumber 在同一文档内唯一，排序本身就是全序；这里只收敛分页参数。
+        var pageable = PaginationSupport.pageSize(page, size,
+                Sort.by(Sort.Direction.DESC, "versionNumber"));
+        var versions = documentVersionService.getVersionHistory(id, pageable);
         return ResponseEntity.ok(new VersionHistoryResponse(
                 id,
                 versions.getTotalElements(),
-                page,
-                size,
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
                 versions.getContent().stream()
                         .map(DocumentMapper::toVersionSummary)
                         .toList()

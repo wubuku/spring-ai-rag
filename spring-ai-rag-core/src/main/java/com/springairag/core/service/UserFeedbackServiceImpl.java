@@ -10,7 +10,7 @@ import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.PageRequest;
+import com.springairag.core.util.PaginationSupport;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -199,24 +199,24 @@ public class UserFeedbackServiceImpl implements UserFeedbackService {
     @Override
     @Transactional(readOnly = true)
     public List<RagUserFeedback> getHistory(int page, int size) {
+        var pageable = PaginationSupport.pageSize(page, size, PaginationSupport.NEWEST_FIRST);
         String owner = restrictedOwnerPrincipalId();
         if (owner == null) {
-            return feedbackRepository.findAll(PageRequest.of(page, size)).getContent();
+            return feedbackRepository.findAll(pageable).getContent();
         }
-        return feedbackRepository.findByOwnerPrincipalIdOrderByCreatedAtDesc(
-                owner, PageRequest.of(page, size));
+        return feedbackRepository.findByOwnerPrincipalIdOrderByCreatedAtDesc(owner, pageable);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<RagUserFeedback> getByType(String feedbackType, int page, int size) {
+        var pageable = PaginationSupport.pageSize(page, size, PaginationSupport.NEWEST_FIRST);
         String owner = restrictedOwnerPrincipalId();
         if (owner == null) {
-            return feedbackRepository.findByFeedbackTypeOrderByCreatedAtDesc(
-                    feedbackType, PageRequest.of(page, size));
+            return feedbackRepository.findByFeedbackTypeOrderByCreatedAtDesc(feedbackType, pageable);
         }
         return feedbackRepository.findByFeedbackTypeAndOwnerPrincipalIdOrderByCreatedAtDesc(
-                feedbackType, owner, PageRequest.of(page, size));
+                feedbackType, owner, pageable);
     }
 
     /** 受限 key 返回其 principal；root/不受限返回 null（表示全局视图）。 */

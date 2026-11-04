@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import com.springairag.core.util.PaginationSupport;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
@@ -178,7 +178,7 @@ public class AuditLogService {
      */
     public Page<RagAuditLog> getEntityHistory(String entityType, String entityId, int page, int size) {
         return repository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
-                entityType, entityId, PageRequest.of(page, size));
+                entityType, entityId, PaginationSupport.pageSize(page, size, PaginationSupport.NEWEST_FIRST));
     }
 
     /**
@@ -193,7 +193,8 @@ public class AuditLogService {
         if (sessionId == null || sessionId.isBlank()) {
             throw new IllegalArgumentException("sessionId must not be null or blank");
         }
-        return repository.findBySessionIdOrderByCreatedAtDesc(sessionId, PageRequest.of(page, size));
+        return repository.findBySessionIdOrderByCreatedAtDesc(
+                sessionId, PaginationSupport.pageSize(page, size, PaginationSupport.NEWEST_FIRST));
     }
 
     /**

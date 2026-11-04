@@ -198,9 +198,9 @@ class AlertServiceImplTest {
         alert.setStatus("ACTIVE");
         alert.setFiredAt(ZonedDateTime.now());
 
-        when(alertRepository.findByStatusOrderByFiredAtDesc("ACTIVE")).thenReturn(List.of(alert));
+        when(alertRepository.findActiveAlerts("ACTIVE", org.springframework.data.domain.PageRequest.of(0, 200, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "firedAt").and(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "id"))))).thenReturn(List.of(alert));
 
-        List<AlertService.AlertRecord> active = alertService.getActiveAlerts();
+        List<AlertService.AlertRecord> active = alertService.getActiveAlerts(200);
         assertEquals(1, active.size());
         assertEquals("Test Alert", active.get(0).getAlertName());
     }
@@ -253,10 +253,10 @@ class AlertServiceImplTest {
         alert2.setStatus("RESOLVED");
         alert2.setFiredAt(ZonedDateTime.now().minusDays(2));
 
-        when(alertRepository.findAlertHistory(start, end, "WARNING", null))
+        when(alertRepository.findAlertHistory(any(), any(), eq("WARNING"), isNull(), any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(List.of(alert1));
 
-        List<AlertService.AlertRecord> history = alertService.getAlertHistory(start, end, "WARNING", null);
+        List<AlertService.AlertRecord> history = alertService.getAlertHistory(start, end, "WARNING", null, 200);
         assertEquals(1, history.size());
         assertEquals("High Latency", history.get(0).getAlertName());
     }
@@ -267,9 +267,9 @@ class AlertServiceImplTest {
         ZonedDateTime start = ZonedDateTime.now().minusDays(1);
         ZonedDateTime end = ZonedDateTime.now();
 
-        when(alertRepository.findAlertHistory(start, end, null, null)).thenReturn(List.of());
+        when(alertRepository.findAlertHistory(any(), any(), isNull(), isNull(), any(org.springframework.data.domain.Pageable.class))).thenReturn(List.of());
 
-        List<AlertService.AlertRecord> history = alertService.getAlertHistory(start, end, null, null);
+        List<AlertService.AlertRecord> history = alertService.getAlertHistory(start, end, null, null, 200);
         assertTrue(history.isEmpty());
     }
 
@@ -575,9 +575,9 @@ class AlertServiceImplTest {
         alert.setConditionState("WARNING");
         alert.setFiredAt(ZonedDateTime.now().minusMinutes(5));
 
-        when(alertRepository.findByStatusOrderByFiredAtDesc("ACTIVE")).thenReturn(List.of(alert));
+        when(alertRepository.findActiveAlerts("ACTIVE", org.springframework.data.domain.PageRequest.of(0, 200, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "firedAt").and(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "id"))))).thenReturn(List.of(alert));
 
-        List<AlertService.AlertRecord> records = alertService.getActiveAlerts();
+        List<AlertService.AlertRecord> records = alertService.getActiveAlerts(200);
         assertEquals(1, records.size());
 
         AlertService.AlertRecord r = records.get(0);

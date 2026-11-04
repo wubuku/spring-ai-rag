@@ -19,26 +19,38 @@ import java.util.List;
 public interface RagAuditLogRepository extends JpaRepository<RagAuditLog, Long> {
 
     /**
-     * Query audit history for a specific entity.
+     * Query audit history for a specific entity. 排序由调用方 Pageable
+     * （createdAt desc, id desc）提供，保证同时间戳记录跨页稳定。
      */
+    @Query("SELECT a FROM RagAuditLog a "
+            + "WHERE a.entityType = :entityType AND a.entityId = :entityId")
     Page<RagAuditLog> findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
-            String entityType, String entityId, Pageable pageable);
+            @Param("entityType") String entityType,
+            @Param("entityId") String entityId,
+            Pageable pageable);
 
     /**
      * Query audit records for a specific session.
      */
-    Page<RagAuditLog> findBySessionIdOrderByCreatedAtDesc(String sessionId, Pageable pageable);
+    @Query("SELECT a FROM RagAuditLog a WHERE a.sessionId = :sessionId")
+    Page<RagAuditLog> findBySessionIdOrderByCreatedAtDesc(
+            @Param("sessionId") String sessionId, Pageable pageable);
 
     /**
      * Query audit records for a specific operation type.
      */
-    Page<RagAuditLog> findByOperationOrderByCreatedAtDesc(String operation, Pageable pageable);
+    @Query("SELECT a FROM RagAuditLog a WHERE a.operation = :operation")
+    Page<RagAuditLog> findByOperationOrderByCreatedAtDesc(
+            @Param("operation") String operation, Pageable pageable);
 
     /**
      * Query audit records within a time range.
      */
+    @Query("SELECT a FROM RagAuditLog a WHERE a.createdAt BETWEEN :start AND :end")
     Page<RagAuditLog> findByCreatedAtBetweenOrderByCreatedAtDesc(
-            ZonedDateTime start, ZonedDateTime end, Pageable pageable);
+            @Param("start") ZonedDateTime start,
+            @Param("end") ZonedDateTime end,
+            Pageable pageable);
 
     @Query(value = """
             SELECT * FROM rag_audit_log

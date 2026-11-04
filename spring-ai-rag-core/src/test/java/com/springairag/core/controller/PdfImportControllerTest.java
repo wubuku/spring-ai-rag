@@ -234,7 +234,7 @@ class PdfImportControllerTest {
         when(pdfImportService.listChildren(anyString()))
                 .thenReturn(List.of(subdirFile, newerSubdirFile, mdFile));
 
-        ResponseEntity<FileTreeResponse> response = controller.listTree("/papers");
+        ResponseEntity<FileTreeResponse> response = controller.listTree("/papers", 500);
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
@@ -244,10 +244,35 @@ class PdfImportControllerTest {
     }
 
     @Test
+    void listTree_limitTruncatesEntriesButKeepsTotal() {
+        FsFile first = new FsFile();
+        first.setPath("/papers/a.md");
+        first.setIsText(true);
+        first.setCreatedAt(OffsetDateTime.parse("2026-08-16T10:00:00+08:00"));
+        FsFile second = new FsFile();
+        second.setPath("/papers/b.md");
+        second.setIsText(true);
+        second.setCreatedAt(OffsetDateTime.parse("2026-08-16T09:00:00+08:00"));
+        FsFile third = new FsFile();
+        third.setPath("/papers/c.md");
+        third.setIsText(true);
+        third.setCreatedAt(OffsetDateTime.parse("2026-08-16T08:00:00+08:00"));
+
+        when(pdfImportService.listChildren(anyString()))
+                .thenReturn(List.of(first, second, third));
+
+        FileTreeResponse body = controller.listTree("/papers", 2).getBody();
+
+        assertNotNull(body);
+        assertEquals(3, body.total());
+        assertEquals(2, body.entries().size());
+    }
+
+    @Test
     void listTree_emptyDirectory_returnsEmptyList() {
         when(pdfImportService.listChildren(anyString())).thenReturn(List.of());
 
-        ResponseEntity<FileTreeResponse> response = controller.listTree("/papers");
+        ResponseEntity<FileTreeResponse> response = controller.listTree("/papers", 500);
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
@@ -261,7 +286,7 @@ class PdfImportControllerTest {
         authenticateRestrictedKey("10");
         when(pdfImportService.listVisibleChildren(eq("/"), any())).thenReturn(List.of());
 
-        ResponseEntity<FileTreeResponse> response = controller.listTree(null);
+        ResponseEntity<FileTreeResponse> response = controller.listTree(null, 500);
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
@@ -275,7 +300,7 @@ class PdfImportControllerTest {
         when(pdfImportService.listChildren("/")).thenReturn(List.of());
         when(pdfImportService.getImportBatches(any())).thenReturn(Map.of());
 
-        ResponseEntity<FileTreeResponse> response = controller.listTree(null);
+        ResponseEntity<FileTreeResponse> response = controller.listTree(null, 500);
 
         assertEquals(200, response.getStatusCode().value());
         verify(pdfImportService).listChildren("/");
@@ -299,7 +324,7 @@ class PdfImportControllerTest {
         when(pdfImportService.listChildren("/")).thenReturn(List.of(known, legacy));
         when(pdfImportService.getImportBatches(any())).thenReturn(Map.of(knownId, batch));
 
-        FileTreeResponse body = controller.listTree(null).getBody();
+        FileTreeResponse body = controller.listTree(null, 500).getBody();
 
         assertNotNull(body);
         assertEquals(2, body.entries().size());
@@ -326,7 +351,7 @@ class PdfImportControllerTest {
         when(pdfImportService.getImportBatches(any())).thenReturn(Map.of());
         when(pdfImportService.getImportBatch(id)).thenReturn(Optional.of(batch));
 
-        FileTreeResponse body = controller.listTree(id + "/").getBody();
+        FileTreeResponse body = controller.listTree(id + "/", 500).getBody();
 
         assertNotNull(body);
         assertNotNull(body.importMetadata());

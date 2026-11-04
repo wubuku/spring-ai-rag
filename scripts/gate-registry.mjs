@@ -643,6 +643,11 @@ export const GATES = [
     selfTest: 'scripts/test-support/pessimistic-locks-self-test.sh',
   },
   {
+    gate: 'scripts/verify-list-endpoint-pagination.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/list-endpoint-pagination-self-test.mjs',
+  },
+  {
     gate: 'scripts/verify-zh-translation.mjs',
     kind: 'gate',
     selfTest: 'scripts/test-support/zh-translation-self-test.mjs',
