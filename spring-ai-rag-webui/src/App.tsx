@@ -7,7 +7,6 @@ import { ToastProvider } from './components/Toast';
 import { ApiKeyAuthProvider } from './auth/ApiKeyAuthProvider';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { ThemeProvider } from './design-system/ThemeProvider';
-import { Unlock } from './pages/Unlock';
 import { STALE_TIME_MS } from './utils/timing';
 
 // Route-level code splitting: each page becomes a separate chunk.
@@ -27,6 +26,8 @@ const Files = lazy(() => import('./pages/Files').then(m => ({ default: m.Files }
 const Evaluation = lazy(() => import('./pages/Evaluation').then(m => ({ default: m.Evaluation })));
 const Embeddings = lazy(() => import('./pages/Embeddings').then(m => ({ default: m.Embeddings })));
 const NotFound = lazy(() => import('./pages/NotFound').then(m => ({ default: m.NotFound })));
+// 解锁页只在未登录时出现，代码和样式都不该进入登录后的首屏。
+const Unlock = lazy(() => import('./pages/Unlock').then(m => ({ default: m.Unlock })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -68,7 +69,14 @@ export default function App() {
           <BrowserRouter basename="/webui">
             <ApiKeyAuthProvider>
             <Routes>
-              <Route path="/unlock" element={<Unlock />} />
+              <Route
+                path="/unlock"
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <Unlock />
+                  </Suspense>
+                }
+              />
               <Route element={<ProtectedRoute />}>
                 <Route path="/" element={<Layout />}>
                   <Route index element={<Navigate to="dashboard" replace />} />

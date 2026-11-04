@@ -510,8 +510,8 @@ class SseStreamE2ETest {
     // ==================== SseEmitter Configuration ====================
 
     @Test
-    @DisplayName("SSE: emitter timeout set to 0 (no timeout limit)")
-    void stream_emitterNoTimeout() throws Exception {
+    @DisplayName("SSE: emitter timeout bounded by the chat-stream budget")
+    void stream_emitterTimeout() throws Exception {
         stubStream("测试", "session-timeout", null, Flux.just("test"));
 
         // 原来这里是 assertNotNull(emitter) 加一句注释"无法直接访问 timeout 字段"。
@@ -526,8 +526,12 @@ class SseStreamE2ETest {
                         .getDeclaredField("timeout");
         timeout.setAccessible(true);
         Object value = timeout.get(emitter);
-        assertNotNull(value, "SseEmitter(0L) 应当把 timeout 记成 0（无超时）");
-        assertEquals(0L, ((Number) value).longValue(),
-                "长连接的 SSE emitter 不应带超时");
+        assertNotNull(value, "SseEmitter 必须记录超时值");
+        long actual = ((Number) value).longValue();
+        // 长连接不能无限期占用 admission 名额：上限等于 chat 执行预算。
+        long expected = controller.streamTimeoutMs();
+        assertEquals(expected, actual,
+                "长连接的 SSE emitter 上限必须与 rag.timeout.chat-stream-ms 一致");
+        assertTrue(actual > 0L, "流式连接必须有上限，不能是 0（永不超时）");
     }
 }

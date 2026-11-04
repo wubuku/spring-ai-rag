@@ -226,15 +226,39 @@ Frontend performance budget vs measured (re-measured by the gate in 2026-11):
 
 | Metric | Budget | Measured (2026-11) | Notes |
 |--------|--------|--------------------|-------|
-| Initial resources (gzip) | ≤160 KB | 156.7 KB | index 138.8 + ui 7.1 + rest; ~3.3 KB headroom |
-| Initial resources (uncompressed) | ≤500 KB | 477.1 KB | worst case, proxy without gzip |
-| Critical resource count | ≤8 | 8 | script + 5 modulepreloads + 2 stylesheets |
-| Local FCP | ≤300 ms | 68–72 ms | re-measured by the gate |
-| Slow 4G FCP (1.6 Mbps / 150 ms) | ≤3.0 s | 2.84–2.87 s | no gzip; gzip shortens it substantially; ~4% headroom |
+| Initial resources (gzip) | ≤160 KB | 130.4 KB | index 115.6 + jsx 5.1 + Query 4.6 + CSS 4.1 + runtime; **29.6 KB (18.5%) headroom** |
+| Initial resources (uncompressed) | ≤500 KB | 403.8 KB | worst case, proxy without gzip; 96.2 KB headroom |
+| Critical resource count | ≤8 | 6 | script + 3 modulepreloads + 1 stylesheet + runtime |
+| Local FCP | ≤300 ms | 40 ms | re-measured by the gate |
+| Slow 4G FCP (1.6 Mbps / 150 ms) | ≤3.0 s | 2.44 s | no gzip; **560 ms (18.7%) headroom** |
 | Document list ready | ≤1.5 s | 1.48 s (unlock + 4 APIs) | page turn 83 ms |
 | Search end to end (10 rows) | ≤1.0 s | 815 ms | retrieval 374 ms |
 | 200 synthetic rows render | ≤100 ms | 53–70 ms | render path only, not a UI-reachable cap |
 | Export first byte | ≤100 ms | 12–13 ms | streamed response |
+
+**First-screen composition** (read from `dist/index.html` by the gate, 2026-11):
+
+| Resource | Raw | Gzip | Main content |
+|----------|-----|------|--------------|
+| `index-*.js` | 358.7 KB | 115.6 KB | React DOM ~174 KB, i18next 41 KB, react-router 38 KB, EN+ZH locale JSON ~66 KB, react-query core ~15 KB, Layout/App/auth/design-system ~25 KB |
+| `jsx-runtime-*.js` | 12.8 KB | 5.1 KB | React JSX runtime |
+| `QueryClientProvider-*.js` | 13.5 KB | 4.6 KB | TanStack Query provider and shared primitives |
+| `createLucideIcon-*.js` | 0.9 KB | 0.6 KB | Lucide icon factory (only used icons load first) |
+| `index-*.css` | 17.3 KB | 4.1 KB | design tokens, global styles, first-screen component CSS |
+| `rolldown-runtime-*.js` | 0.7 KB | 0.4 KB | chunk loading runtime |
+| **Total** | **403.8 KB** | **130.4 KB** | |
+
+Resources intentionally **not** on the first screen (check these before adding a
+new first-paint dependency):
+
+- `client-*.js` 64.6 KB (axios + retry + auth request stack): loaded on unlock
+  or the first page request; first paint only imports the `BASE_URL` constant
+  from `src/api/baseUrl.ts`. This split is what moved gzip from 156.7 KB to
+  130.4 KB this round.
+- `useChartTheme-*.js` 350.5 KB (recharts): loaded only by the metrics / ABTest
+  pages.
+- Every other page and `Unlock` are route-level `lazy` chunks; `Unlock` changed
+  from a static import to lazy this round.
 
 These numbers are no longer hand-recorded: `npm run check:performance-budget`
 runs [`performance-budget-self-test.mjs`](../spring-ai-rag-webui/scripts/test-support/performance-budget-self-test.mjs),
@@ -244,11 +268,67 @@ gzip/uncompressed size and resource count, then measures local and Slow 4G FCP
 with Playwright Chromium against a local static server (median of 3 runs). The
 backend-free CI job runs this command and fails on any overage; budgets live in
 [`performance-budget.json`](../spring-ai-rag-webui/scripts/testdata/performance-budget.json).
-Only ~3.3 KB of gzip headroom remains — split or compress before adding a new
-first-paint dependency rather than raising the budget.
+The budget was not raised; the headroom comes from splitting first-screen
+dependencies. New first-paint dependencies must be checked against the table
+above and should be lazy-loaded or split unless they are genuinely required.
 
 Not covered: mock embedding/chat does not represent real model latency; the proxy
 did not enable gzip; only Chromium was measured.
+
+### 3.9 SSE Concurrent Connection Resource Boundaries (measured 2026-11)
+
+Reproduce: `python3 scripts/verify-sse-concurrency.py --burst 20` (real
+PostgreSQL + real Spring Boot process + mock provider, ports 18088/18089,
+bounded concurrency; the script refuses `--burst > 64`).
+
+**Limits come from configuration, not hard-coding**
+
+| Key | Default | Effect |
+|-----|---------|--------|
+| `rag.admission.max-requests` | 64 | Total requests admitted per instance (an SSE stream holds one slot for the whole turn) |
+| `rag.admission.max-requests-per-principal` | 16 | Concurrent requests for one API key / principal |
+| `rag.sse.heartbeat-interval-seconds` | 30 | SSE comment heartbeat interval |
+| `rag.timeout.chat-stream-ms` | 180000 | Streaming execution budget; now also the `SseEmitter` async timeout |
+| `rag.timeout.read-timeout-ms` | 60000 | Read timeout for non-streaming RestClient; streaming uses WebClient, so this does not backstop it |
+
+The heartbeat scheduler is **two shared daemon threads**
+(`RagChatController.SSE_HEARTBEAT_SCHEDULER`), not one scheduler per connection.
+Tomcat's default 200 threads is not the first limit reached.
+
+**Measured (one API key, default 16 per principal)**
+
+- Burst of 20 SSE requests: **16 HTTP 200 streams established and kept
+  streaming**, **4 HTTP 429** with `code=TOO_MANY_REQUESTS` and
+  `Retry-After: 1`; **no queueing** — request 17 is rejected immediately.
+  Reaching the global 64 requires multiple API keys; only the single-key 16 was
+  measured this round.
+- Peak `rag.admission.active{kind=request}` = **16**; it returns to **0** after
+  all streams complete or disconnect.
+- Threads: baseline 79 → peak 91 (+12); heartbeat threads stay at **2** (the old
+  implementation used 16 — one single-thread `ScheduledExecutorService` per
+  connection). The rest of the delta is Tomcat NIO pool expansion, which
+  remains in the pool afterwards; that is pool semantics, not a per-connection
+  leak.
+- Memory: process RSS 820.6 MB → 823.6 MB peak (**+3.0 MB** for 16 connections,
+  roughly <200 KB per connection including socket and async request state;
+  RSS includes JVM heap noise, so use it as an order of magnitude only). It
+  fell back to 779.0 MB afterwards.
+- Client disconnect (close the socket right after the first `content`): the
+  admission lease returns to 0 within ~1.8 s; the heartbeat task is cancelled
+  in `onCompletion` and leaves no residue.
+- Idle upstream (mock sends headers then no token for 9 s): with
+  `chat-stream-ms=6 s`, the stream ends at **6.02 s** with an `error` event and
+  the lease returns to 0. The default is 180 s. Heartbeats keep the client
+  connection alive through proxies but do not extend the upstream lifetime.
+
+**Two leaks fixed this round**
+
+1. One single-thread scheduler per SSE connection → one shared 2-thread pool:
+   16 concurrent streams went from 16 heartbeat threads to 2.
+2. `SseEmitter.onCompletion` cancelled the model subscription but not the
+   heartbeat task → `heartbeat.stop()` added; the emitter timeout changed from
+   `0` (never) to `rag.timeout.chat-stream-ms`, so a silent upstream cannot
+   hold the connection, upstream socket and admission slot forever.
 
 ## 4. Capacity Boundaries
 
@@ -259,7 +339,8 @@ did not enable gzip; only Chromium was measured.
 | Index build | 4.7 s for 31k vectors | ~16 s projected for 100k; startup wait cap is 60 s, tune it or pre-warm asynchronously |
 | Retrieval | p50 ~50–90 ms | Dominated by the embedding call; SQL is near-constant. Candidate pool caps at 1000, so heavy staleness can reduce recall |
 | Lists | Fixed ≤20 rows per page | N+1 growth removed; processing summaries use 4 batched queries per page |
-| WebUI first paint | 157 KB gzip / 477 KB uncompressed; Slow 4G FCP 2.84 s | Budget and gate in §3.8; enabling gzip on the proxy shortens it substantially |
+| WebUI first paint | 130.4 KB gzip / 403.8 KB uncompressed; Slow 4G FCP 2.44 s | Budget and gate in §3.8; gzip headroom 29.6 KB and Slow 4G headroom 18.7%; axios and recharts are kept out of the first screen |
+| SSE concurrency | 16 streams per key, 64 globally; 16 streams peak at +3.0 MB RSS with exactly 2 heartbeat threads | Limits in §3.9; request 17 for one key gets HTTP 429 `TOO_MANY_REQUESTS` with no queueing; emitter timeout = `chat-stream-ms` (180 s default) |
 | WebUI lists | 20 rows per page, 510 DOM nodes, 9.5 MB heap | Documents, collections and evaluation history are paginated; 200 synthetic rows render in 53–70 ms |
 | WebUI export | Built into Collection cards; fetch + ReadableStream writes as it reads, with progress and cancel; 2.73 MB / 12–13 ms first byte at 5k docs | Browsers without a write API fall back to a Blob (platform boundary); ~27 MB at 50k docs |
 | Export | Streaming, 200 rows per batch, batch count in response headers | Memory does not grow with row count; limited by network and client consumption. Export very large collections off-peak |

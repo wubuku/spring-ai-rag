@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getCredentialHeaders } from '../auth/credentialStore';
-import { BASE_URL } from '../api/client';
+import { BASE_URL } from '../api/baseUrl';
 import {
   FAILURE_CLASS_HEADER,
   canAppendServerReason,

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { getCredentialHeaders } from '../../auth/credentialStore';
 import styles from './ErrorBoundary.module.css';
 import { TriangleAlert } from 'lucide-react';
-import { BASE_URL } from '../../api/client';
+import { BASE_URL } from '../../api/baseUrl';
 
 interface Props {
   children: ReactNode;

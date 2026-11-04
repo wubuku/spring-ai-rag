@@ -1,6 +1,7 @@
 import { getCredential } from '../auth/credentialStore';
 import { failureClassForStatus } from '../utils/failureClass';
-import { ApiRequestError, BASE_URL } from './client';
+import { ApiRequestError } from './client';
+import { BASE_URL } from './baseUrl';
 
 /**
  * Streaming download for a Collection export.

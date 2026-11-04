@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { authApi, type ApiKeyIdentity } from '../api/auth';
+import type { ApiKeyIdentity } from '../api/auth';
 import {
   clearCredential,
   getCredential,
@@ -29,6 +29,9 @@ export function ApiKeyAuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Root API key is required');
     }
 
+    // 解锁是一次性动作：把 axios 客户端留到这个时刻再加载，首屏就不必
+    // 为一个未登录用户还看不到的请求栈付出传输和解析成本。
+    const { authApi } = await import('../api/auth');
     const response = await authApi.currentIdentity(candidate);
     const nextIdentity = response.data;
     const isRoot =

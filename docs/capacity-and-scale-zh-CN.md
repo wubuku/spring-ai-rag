@@ -197,15 +197,34 @@ Chromium 1440×900；数据为 8000 文档 / 80k 向量（3k 与 5k 两个 Colle
 
 | 指标 | 预算 | 实测（2026-11） | 说明 |
 |------|------|-----------------|------|
-| 首屏初始资源（gzip） | ≤160 KB | 156.7 KB | index 138.8 + ui 7.1 + 其余；余量约 3.3 KB |
-| 首屏初始资源（未压缩） | ≤500 KB | 477.1 KB | 最坏传输（代理未压缩） |
-| 首屏关键资源数 | ≤8 个 | 8 个 | script + 5 modulepreload + 2 stylesheet |
-| 本地 FCP | ≤300 ms | 68–72 ms | 门禁每次重测 |
-| Slow 4G FCP（1.6 Mbps / 150 ms） | ≤3.0 s | 2.84–2.87 s | 未开 gzip；开 gzip 可显著缩短；余量约 4% |
+| 首屏初始资源（gzip） | ≤160 KB | 130.4 KB | index 115.6 + jsx 5.1 + Query 4.6 + CSS 4.1 + 其余；余量 **29.6 KB（18.5%）** |
+| 首屏初始资源（未压缩） | ≤500 KB | 403.8 KB | 最坏传输（代理未压缩）；余量 96.2 KB |
+| 首屏关键资源数 | ≤8 个 | 6 个 | script + 3 modulepreload + 1 stylesheet + runtime |
+| 本地 FCP | ≤300 ms | 40 ms | 门禁每次重测 |
+| Slow 4G FCP（1.6 Mbps / 150 ms） | ≤3.0 s | 2.44 s | 未开 gzip；余量 **560 ms（18.7%）** |
 | 文档列表就绪 | ≤1.5 s | 1.48 s（含解锁与 4 个 API） | 翻页 83 ms |
 | 搜索端到端（10 条） | ≤1.0 s | 815 ms | 其中检索 374 ms |
 | 200 条合成渲染 | ≤100 ms | 53–70 ms | 仅渲染路径，非 UI 可达上限 |
 | 导出首字节 | ≤100 ms | 12–13 ms | 流式响应 |
+
+**首屏资源构成**（由门禁脚本从 `dist/index.html` 读取，2026-11）：
+
+| 资源 | 未压缩 | gzip | 主要内容 |
+|------|--------|------|----------|
+| `index-*.js` | 358.7 KB | 115.6 KB | React DOM 约 174 KB、i18next 41 KB、react-router 38 KB、中英文语言包 JSON 约 66 KB、react-query core 约 15 KB、Layout/App/auth/设计系统约 25 KB |
+| `jsx-runtime-*.js` | 12.8 KB | 5.1 KB | React JSX runtime |
+| `QueryClientProvider-*.js` | 13.5 KB | 4.6 KB | TanStack Query 的 Provider 与共享基元 |
+| `createLucideIcon-*.js` | 0.9 KB | 0.6 KB | Lucide 图标工厂（首屏只加载用到的图标） |
+| `index-*.css` | 17.3 KB | 4.1 KB | 设计 token、全局样式、首屏组件样式 |
+| `rolldown-runtime-*.js` | 0.7 KB | 0.4 KB | chunk 加载运行时 |
+| **合计** | **403.8 KB** | **130.4 KB** | |
+
+不在首屏的资源（因此新增依赖前应先看它们是否已被延迟）：
+
+- `client-*.js` 64.6 KB（axios + retry + 认证请求栈）：解锁动作或首个页面请求时才加载；
+  首屏只保留 `src/api/baseUrl.ts` 的常量。这个拆分本轮把 gzip 从 156.7 KB 降到 130.4 KB。
+- `useChartTheme-*.js` 350.5 KB（recharts）：只有指标 / ABTest 页面请求时才加载。
+- 其余页面与 `Unlock` 都是路由级 `lazy` chunk；`Unlock` 本轮从首屏静态导入改为懒加载。
 
 这些指标不再是人工记录：`npm run check:performance-budget` 会先跑
 [`performance-budget-self-test.mjs`](../spring-ai-rag-webui/scripts/test-support/performance-budget-self-test.mjs)，
@@ -214,10 +233,56 @@ Chromium 1440×900；数据为 8000 文档 / 80k 向量（3k 与 5k 两个 Colle
 Playwright Chromium 在本地静态服务器上测本地与 Slow 4G FCP（3 次取中位数）。CI 的
 无后端 job 直接执行该命令，任一指标超限即失败；预算值维护在
 [`performance-budget.json`](../spring-ai-rag-webui/scripts/testdata/performance-budget.json)。
-当前 gzip 只剩约 3.3 KB 余量——新增首屏依赖应先做拆分或压缩，而不是调高预算。
+预算未放宽；本轮通过拆分首屏依赖获得余量。新增首屏依赖时应先对照上表判断是否
+必须同步进入，否则优先懒加载或拆到独立 chunk。
 
 未覆盖的边界：mock embedding/chat 不代表真实模型时延；反向代理未开 gzip；
 只测了 Chromium。
+
+### 3.9 SSE 并发连接资源边界（2026-11 实测）
+
+复现：`python3 scripts/verify-sse-concurrency.py --burst 20`（真实 PostgreSQL + 真实
+Spring Boot 进程 + mock provider，默认端口 18088/18089，有界并发，脚本拒绝 `--burst > 64`）。
+
+**上限来源（配置项，不是硬编码）**
+
+| 项 | 默认值 | 作用 |
+|----|--------|------|
+| `rag.admission.max-requests` | 64 | 单实例同时接纳的请求总数（SSE 连接在整轮生成期间占用一个名额） |
+| `rag.admission.max-requests-per-principal` | 16 | 单个 API Key / principal 的同时请求数 |
+| `rag.sse.heartbeat-interval-seconds` | 30 | SSE comment 心跳间隔 |
+| `rag.timeout.chat-stream-ms` | 180000 | 流式执行预算；本轮同时作为 `SseEmitter` 异步超时上限 |
+| `rag.timeout.read-timeout-ms` | 60000 | 非流式 RestClient 读超时；流式走 WebClient，不由它兜底 |
+
+心跳调度器是**共享的 2 个守护线程**（`RagChatController.SSE_HEARTBEAT_SCHEDULER`），
+不再每个连接创建一个调度线程。Tomcat 默认 200 线程不是本轮先触达的上限。
+
+**实测结果（单个 API Key，默认每 principal 16）**
+
+- 20 条并发 SSE：**16 条 HTTP 200 建立并持续输出**，**4 条 HTTP 429**，响应
+  `code=TOO_MANY_REQUESTS` 且带 `Retry-After: 1`；**不排队**，第 17 条起直接拒绝。
+  全局 64 的上限要换多个 API Key 才能触达，本轮只验证了单 key 的 16 条。
+- 并发峰值：`rag.admission.active{kind=request}` = **16**；16 条流全部完成/断开后
+  回落到 **0**。
+- 线程：基线 79 → 峰值 91（+12）；其中心跳线程始终 **2** 条（旧实现为 16 条，
+  每个连接一个单线程 `ScheduledExecutorService`）。其余增量来自 Tomcat NIO 线程池
+  扩展，结束后保留在池中，属于线程池语义而不是每连接泄漏。
+- 内存：进程 RSS 基线 820.6 MB → 峰值 823.6 MB（**+3.0 MB**，16 条连接合计，
+  约 <200 KB/连接，含 socket 与 async 请求状态；RSS 含 JVM 堆波动，只作量级参考）。
+  结束后回落到 779.0 MB。
+- 客户端断开（收到首个 `content` 后立即关闭 socket）：约 1.8 s 内
+  `active_request` 回到 0；心跳任务随 `onCompletion` 取消，不留残余任务。
+- 上游空闲：mock 发完 SSE 头后 9 s 不吐 token；把 `chat-stream-ms` 设为 6 s 后，
+  连接在 **6.02 s** 以 `error` 事件结束，lease 回到 0。默认 180 s 生效。
+  心跳只保证客户端连接不被代理提前关闭，不延长上游生命周期。
+
+**本轮修复的两个泄漏点**
+
+1. 每个 SSE 连接新建单线程调度器 → 改为共享 2 线程池：16 条并发从 16 个心跳线程
+   降为 2 个。
+2. `SseEmitter.onCompletion` 只取消模型订阅、不取消心跳任务 → 补上 `heartbeat.stop()`；
+   同时把 emitter 超时从 `0`（永不超时）改为 `rag.timeout.chat-stream-ms`，避免上游
+   静默时连接、上游 socket 与 admission 名额被无限占用。
 
 ## 4. 容量边界
 
@@ -228,7 +293,8 @@ Playwright Chromium 在本地静态服务器上测本地与 Slow 4G FCP（3 次�
 | 索引构建 | 31k 向量 4.7 s | 100k 向量预计约 16 s；启动等待上限 60 s，接近时需调大或异步预热 |
 | 检索 | p50 约 50–90 ms | 主要成本是 embedding 调用；SQL 部分已近常数。候选池上限 1000，过期向量过多时召回可能不足 |
 | 列表 | 页面固定 ≤20 行 | 已消除随数据量增长的 N+1；处理摘要每页 4 次批量查询 |
-| WebUI 首屏 | 初始资源 gzip 157 KB、未压缩 477 KB；Slow 4G FCP 2.84 s | 预算与门禁见 §3.8；代理开启 gzip 可显著缩短 |
+| WebUI 首屏 | 初始资源 gzip 130.4 KB、未压缩 403.8 KB；Slow 4G FCP 2.44 s | 预算与门禁见 §3.8；gzip 余量 29.6 KB、Slow 4G 余量 18.7%；axios 与 recharts 已移出首屏 |
+| SSE 并发 | 单 key 16 条、全局 64 条；16 条峰值 RSS +3.0 MB、心跳线程固定 2 条 | 上限见 §3.9；第 17 条（单 key）起 HTTP 429 `TOO_MANY_REQUESTS`，不排队；emitter 超时 = `chat-stream-ms`（默认 180 s） |
 | WebUI 列表 | 每页 20 行，DOM 510 节点、heap 9.5 MB | 文档/Collection/评估历史均已可分页；200 条合成渲染 53–70 ms |
 | WebUI 导出 | Collection 卡片内置；fetch + ReadableStream 边收边写，支持进度与取消；5k 文档 2.73 MB、首字节 12–13 ms | 无写盘 API 的浏览器退回 Blob（平台边界）；50k 文档约 27 MB |
 | 导出 | 流式，单批 200 行，响应头给出批次数 | 内存不随行数线性增长；受网络与客户端消费速度限制。超大 Collection 建议在低峰导出 |

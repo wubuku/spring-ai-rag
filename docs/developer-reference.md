@@ -121,6 +121,7 @@ idempotency / backup and restore / API compatibility / build reproducibility:
 ./scripts/verify-clean-clone.sh           # clean clone in a temp dir; mock provider exercises the full pipeline
 ./scripts/verify-flyway-schema-paths.sh   # empty vs V30 incremental schema equality + rerun preserves data
 ./scripts/verify-concurrency-idempotency.py  # five concurrency/idempotency races on real PostgreSQL
+./scripts/verify-sse-concurrency.py --burst 20  # SSE concurrency limit/threads/RSS/disconnect/idle reclamation
 ./scripts/verify-backup-restore-drill.py  # full backup → fresh restore → counts/fingerprint/search checks
 node scripts/verify-openapi-breaking-change.mjs --self-test  # contract-breaking rule self-test
 ./mvnw -v                                 # Maven Wrapper pinned to 3.9.14

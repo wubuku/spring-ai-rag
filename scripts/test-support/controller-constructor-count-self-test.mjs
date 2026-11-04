@@ -434,7 +434,9 @@ test('the real tree still has the injection surface the header describes', () =>
   }
   assert.equal(controllers, 6, 'the header says six controllers use setter injection');
   assert.deepEqual(totals, {
-    sites: 12, collaborators: 13, optionalCollaborators: 12, requiredCollaborators: 1,
+    // RagChatController 本轮新增 RagTimeoutProperties（流式 emitter 超时上限），
+    // 使 setter 注入总数 +1。
+    sites: 13, collaborators: 14, optionalCollaborators: 13, requiredCollaborators: 1,
   });
 });
 

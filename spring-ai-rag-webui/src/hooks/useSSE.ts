@@ -13,7 +13,7 @@ import type {
   ChatSource,
   CollectionScopeMode,
 } from '../types/api';
-import { BASE_URL } from '../api/client';
+import { BASE_URL } from '../api/baseUrl';
 
 export interface ChatToolStartEvent {
   tool: string;

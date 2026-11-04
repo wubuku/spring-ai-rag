@@ -12,7 +12,8 @@ import java.util.function.Consumer;
  *
  * <p>Provides reusable patterns for SSE lifecycle management:
  * <ul>
- *   <li>No-timeout emitters (client disconnection detected via IOException)</li>
+ *   <li>Bounded stream lifetime (emitter timeout) so a silent upstream cannot
+ *       hold a request-admission slot forever</li>
  *   <li>Progress event sending with best-effort error handling</li>
  *   <li>Standardized done/error completion</li>
  *   <li>Heartbeat comments to keep connections alive through proxies</li>
@@ -26,12 +27,28 @@ public final class SseEmitters {
 
     /**
      * Creates a no-timeout SSE emitter.
-     * Use when the client disconnect should be detected asynchronously via IOException in callbacks.
+     * Use only for snapshots that complete immediately; live streams should use
+     * {@link #create(long)} so a stalled upstream is reclaimed.
      *
      * @return a new SseEmitter with no timeout
      */
     public static SseEmitter create() {
         return new SseEmitter(0L);
+    }
+
+    /**
+     * Creates an SSE emitter with an explicit async timeout.
+     *
+     * <p>Spring MVC's async timeout is the backstop for a stream whose upstream
+     * never sends another event. Without it the client connection, the upstream
+     * socket and the request-admission lease stay held even though the chat
+     * execution budget has already expired.
+     *
+     * @param timeoutMs maximum lifetime in milliseconds; {@code 0} means no timeout
+     * @return a new SseEmitter
+     */
+    public static SseEmitter create(long timeoutMs) {
+        return new SseEmitter(timeoutMs);
     }
 
     /**

@@ -115,6 +115,7 @@ open spring-ai-rag-core/target/site/jacoco/index.html
 ./scripts/verify-clean-clone.sh           # 临时目录干净 clone，mock provider 跑通全链路
 ./scripts/verify-flyway-schema-paths.sh   # 空库与 V30 增量升级 schema 一致 + 重跑不丢数据
 ./scripts/verify-concurrency-idempotency.py  # 真实 PostgreSQL 五类并发/幂等竞态
+./scripts/verify-sse-concurrency.py --burst 20  # SSE 并发上限/线程/内存/断开/空闲回收
 ./scripts/verify-backup-restore-drill.py  # 全量备份 → 新库恢复 → 计数/指纹/检索校验
 node scripts/verify-openapi-breaking-change.mjs --self-test  # 契约破坏规则自检
 ./mvnw -v                                 # Maven Wrapper 钉住 3.9.14

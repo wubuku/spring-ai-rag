@@ -14,6 +14,9 @@
  *   MOCK_DELAY_MS    - Simulated response delay in ms (default: 100)
  *   MOCK_ERROR_RATE  - Probability of returning an error 0.0-1.0 (default: 0)
  *   MOCK_MODEL       - Model name to respond with (default: mock-gpt-4)
+ *   MOCK_STREAM_DELAY_MS      - Delay between stream chunks in ms (default: 20)
+ *   MOCK_STREAM_CHUNKS        - Number of chunks to emit (default: words in the message)
+ *   MOCK_STREAM_FIRST_DELAY_MS - Delay after SSE headers before the first chunk (default: 0)
  */
 
 const http = require('http');
@@ -22,6 +25,10 @@ const PORT = parseInt(process.env.MOCK_PORT || '8086', 10);
 const DELAY_MS = parseInt(process.env.MOCK_DELAY_MS || '100', 10);
 const ERROR_RATE = parseFloat(process.env.MOCK_ERROR_RATE || '0');
 const MODEL = process.env.MOCK_MODEL || 'mock-gpt-4';
+const STREAM_DELAY_MS = parseInt(process.env.MOCK_STREAM_DELAY_MS || '20', 10);
+const STREAM_CHUNKS = parseInt(process.env.MOCK_STREAM_CHUNKS || '0', 10);
+const STREAM_FIRST_DELAY_MS = parseInt(
+  process.env.MOCK_STREAM_FIRST_DELAY_MS || '0', 10);
 
 // ---------- utilities ----------
 
@@ -136,7 +143,12 @@ async function handleChatCompletions(req, res, body) {
       'Access-Control-Allow-Origin': '*',
     });
 
-    const chunks = mockContent.split(' ');
+    const chunks = STREAM_CHUNKS > 0
+      ? Array.from({ length: STREAM_CHUNKS }, (_, i) => `tok${i}`)
+      : mockContent.split(' ');
+    if (STREAM_FIRST_DELAY_MS > 0) {
+      await new Promise((r) => setTimeout(r, STREAM_FIRST_DELAY_MS));
+    }
     for (let i = 0; i < chunks.length; i++) {
       const data = {
         id: `mockchat-${Date.now()}`,
@@ -154,7 +166,7 @@ async function handleChatCompletions(req, res, body) {
         ],
       };
       res.write(`data: ${JSON.stringify(data)}\n\n`);
-      await new Promise((r) => setTimeout(r, 20));
+      await new Promise((r) => setTimeout(r, STREAM_DELAY_MS));
     }
     res.write('data: [DONE]\n\n');
     res.end();

@@ -25,10 +25,14 @@
  *
  * How the base is found
  * ---------------------
- * By reading `src/api/client.ts`, never by carrying a copy of the string here.
+ * By reading `src/api/baseUrl.ts`, never by carrying a copy of the string here.
  * A gate that holds its own copy of the value it enforces is a machine number
  * nothing recomputes, which is the exact rot this repository has already paid
  * for in a dozen other places. Change the base and this gate follows.
+ *
+ * The declaration used to live in `src/api/client.ts`. It moved to its own
+ * module so the first-screen graph could read the constant without importing
+ * the axios client; the gate follows the value rather than the old filename.
  *
  * Known limits, stated rather than discovered later
  * -------------------------------------------------
@@ -53,17 +57,17 @@ import { isMainModule } from './lib/is-main-module.mjs';
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const SRC_DIR = join(projectRoot, 'src');
-const CLIENT = join(SRC_DIR, 'api', 'client.ts');
+const CLIENT = join(SRC_DIR, 'api', 'baseUrl.ts');
 
 /** Where the base is declared. Everything else imports it from here. */
-export const BASE_DECLARATION = 'src/api/client.ts';
+export const BASE_DECLARATION = 'src/api/baseUrl.ts';
 
 export const VIOLATION_KINDS = Object.freeze({
   BASE_PATH_LITERAL: 'api-base-path-literal',
 });
 
 /**
- * Reads the base path out of the client module.
+ * Reads the base path out of the base-url module.
  *
  * Throws rather than returning a default when the declaration is missing: a gate
  * that cannot find the value it is enforcing has no opinion, and reporting "no

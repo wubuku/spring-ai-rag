@@ -1522,11 +1522,11 @@ class OpenApiContractTest {
         }
 
         private String readBaseUrl(Path apiDir) throws IOException {
-            String client = Files.readString(apiDir.resolve("client.ts"));
+            String baseUrlModule = Files.readString(apiDir.resolve("baseUrl.ts"));
             java.util.regex.Matcher matcher =
-                    BASE_URL_PATTERN.matcher(client);
+                    BASE_URL_PATTERN.matcher(baseUrlModule);
             assertThat(matcher.find())
-                    .as("client.ts must declare BASE_URL; the scan composes paths from it "
+                    .as("baseUrl.ts must declare BASE_URL; the scan composes paths from it "
                             + "rather than hardcoding a prefix that could drift")
                     .isTrue();
             return matcher.group(1);

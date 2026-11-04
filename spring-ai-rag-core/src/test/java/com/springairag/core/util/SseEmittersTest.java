@@ -29,6 +29,15 @@ class SseEmittersTest {
     }
 
     @Test
+    @DisplayName("create(timeout) keeps an explicit bounded lifetime")
+    void createWithTimeout_keepsTimeout() {
+        SseEmitter emitter = SseEmitters.create(1_500L);
+        assertEquals(1_500L, emitter.getTimeout(),
+                "live SSE streams must be bounded by chat-stream-ms, "
+                        + "otherwise a silent upstream holds the admission slot forever");
+    }
+
+    @Test
     @DisplayName("sendProgress does not throw with connected client")
     void sendProgress_noThrow() {
         SseEmitter emitter = SseEmitters.create();

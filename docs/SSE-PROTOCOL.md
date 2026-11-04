@@ -85,6 +85,19 @@ data:{"sequence":1,"choices":[{"delta":{"content":"..."}}]}
 断线重连带回的终态保持原语义：服务端已判定 `incomplete` 时，续传补发的 `done` 仍是
 `incomplete`，不会因为重连升级为 `complete`；`complete` 也不会被重复发送两次。
 
+### 1.2 并发连接与资源上限
+
+一条 SSE 流在整轮生成期间占用一个 admission 名额。默认上限来自配置：
+
+- `rag.admission.max-requests-per-principal`：**16**（同一个 API Key / principal）
+- `rag.admission.max-requests`：**64**（单实例总数）
+- `rag.timeout.chat-stream-ms`：**180000**，同时作为 `SseEmitter` 异步超时
+
+超过单 principal 上限时**不排队**：请求在建立 SSE 前返回 HTTP 429、`Retry-After: 1`，
+错误码 `TOO_MANY_REQUESTS`。断开或终态后名额立即归还；心跳由服务端共享的 2 个守护线程
+统一发送，不按连接创建线程。实测数字与复现脚本见
+[容量与规模退化说明](capacity-and-scale-zh-CN.md#39-sse-并发连接资源边界2026-11-实测)。
+
 ## 2. 事件格式
 
 ### 2.1 `content`

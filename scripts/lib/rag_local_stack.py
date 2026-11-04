@@ -149,11 +149,15 @@ class LocalStack:
         })
         return env
 
-    def start_mock(self, delay_ms: int = 0) -> None:
+    def start_mock(self, delay_ms: int = 0, stream_delay_ms: int = 20,
+                   stream_chunks: int = 0, stream_first_delay_ms: int = 0) -> None:
         log = (self.log_dir / "mock.log").open("w")
         self.mock_process = subprocess.Popen(
             [str(MOCK_SCRIPT), "--port", str(self.mock_port),
-             "--delay", str(delay_ms)],
+             "--delay", str(delay_ms),
+             "--stream-delay", str(stream_delay_ms),
+             "--stream-chunks", str(stream_chunks),
+             "--stream-first-delay", str(stream_first_delay_ms)],
             cwd=str(PROJECT_DIR), stdout=log, stderr=subprocess.STDOUT,
             env=dict(os.environ),
         )
@@ -204,8 +208,11 @@ class LocalStack:
             raise RuntimeError(
                 f"根模块构建失败，见 {self.log_dir / 'maven-install.log'}")
         demo_log = (self.log_dir / "maven-package.log").open("w")
+        # 必须 clean：demo 自身的 class 没变时 jar:jar 会认为产物已是最新，
+        # spring-boot:repackage 随后复用旧的 .original，导致嵌套的 core jar
+        # 仍是上一版——压测会跑在旧代码上却看不出来。
         demo_result = subprocess.run(
-            ["mvn", "-B", "-DskipTests", "package"],
+            ["mvn", "-B", "-DskipTests", "clean", "package"],
             cwd=str(DEMO_DIR), stdout=demo_log, stderr=subprocess.STDOUT,
             env=dict(os.environ),
         )

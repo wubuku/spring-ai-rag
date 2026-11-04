@@ -9,6 +9,7 @@ import com.springairag.api.enums.ChatMode;
 import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.properties.RagSseProperties;
+import com.springairag.core.properties.RagTimeoutProperties;
 import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
 import com.springairag.core.diagnostics.RetrievalTraceSession;
 import com.springairag.core.retrieval.RetrievalFilters;
@@ -110,6 +111,7 @@ public class RagChatController {
     private ChatTurnOperationService turnOperationService;
     private ChatCommandMapper chatCommandMapper;
     private ChatExecutionService chatExecutionService;
+    private RagTimeoutProperties timeoutProperties;
     private ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired
@@ -156,6 +158,21 @@ public class RagChatController {
         if (objectMapper != null) {
             this.objectMapper = objectMapper;
         }
+    }
+
+    @Autowired(required = false)
+    void configureTimeoutProperties(RagTimeoutProperties timeoutProperties) {
+        this.timeoutProperties = timeoutProperties;
+    }
+
+    /**
+     * 流式响应的硬上限与 chat 执行预算一致：预算已经过期后再让客户端
+     * 挂着连接没有意义，只会占住 admission 的名额。
+     */
+    long streamTimeoutMs() {
+        return timeoutProperties != null
+                ? Math.max(1_000, timeoutProperties.getChatStreamMs())
+                : 180_000L;
     }
 
     /**
@@ -276,12 +293,26 @@ public class RagChatController {
     }
 
     /**
+     * 心跳共享调度器。
+     *
+     * <p>此前每个 SSE 连接都新建一个单线程 {@link ScheduledExecutorService}：
+     * 16 条并发流就是 16 个常驻线程，连接数上限先被线程数而不是 admission
+     * 限制卡住。心跳只是每 N 秒写一行注释，所有连接共用 2 个守护线程即可；
+     * 单条连接停止时只取消自己的 {@link ScheduledFuture}，不关闭共享池。
+     */
+    private static final ScheduledExecutorService SSE_HEARTBEAT_SCHEDULER =
+            Executors.newScheduledThreadPool(2, runnable -> {
+                Thread thread = new Thread(runnable, "sse-heartbeat");
+                thread.setDaemon(true);
+                return thread;
+            });
+
+    /**
      * Holds heartbeat scheduler resources.
      */
-    private record HeartbeatHandles(ScheduledFuture<?> task, ScheduledExecutorService scheduler) {
+    private record HeartbeatHandles(ScheduledFuture<?> task) {
         void stop() {
             if (task != null) task.cancel(false);
-            if (scheduler != null) scheduler.shutdown();
         }
     }
 
@@ -290,19 +321,14 @@ public class RagChatController {
      */
     private HeartbeatHandles startHeartbeat(SseEmitter emitter) {
         if (sseProperties == null || !sseProperties.isHeartbeatEnabled()) {
-            return new HeartbeatHandles(null, null);
+            return new HeartbeatHandles(null);
         }
         int interval = sseProperties.getHeartbeatIntervalSeconds();
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "sse-heartbeat");
-            t.setDaemon(true);
-            return t;
-        });
-        ScheduledFuture<?> task = scheduler.scheduleAtFixedRate(
+        ScheduledFuture<?> task = SSE_HEARTBEAT_SCHEDULER.scheduleAtFixedRate(
                 () -> SseEmitters.sendHeartbeat(emitter),
                 interval, interval, TimeUnit.SECONDS);
         log.debug("SSE heartbeat enabled: {}s interval", interval);
-        return new HeartbeatHandles(task, scheduler);
+        return new HeartbeatHandles(task);
     }
 
     /**
@@ -391,7 +417,7 @@ public class RagChatController {
             httpResponse.setHeader(
                     RetrievalTraceHeaders.TRACE_ID, session.traceId().toString());
         }
-        SseEmitter emitter = SseEmitters.create();
+        SseEmitter emitter = SseEmitters.create(streamTimeoutMs());
         String traceId = MDC.get(RequestTraceFilter.TRACE_ID_KEY);
         HeartbeatHandles heartbeat = startHeartbeat(emitter);
         AtomicBoolean terminal = new AtomicBoolean();
@@ -403,7 +429,13 @@ public class RagChatController {
                 disposable.dispose();
             }
         };
-        emitter.onCompletion(cancelSubscription);
+        emitter.onCompletion(() -> {
+            cancelSubscription.run();
+            // 正常完成路径走 terminal + heartbeat.stop；客户端断开时不一定有
+            // onError/onTimeout，若这里不取消，任务会留在共享调度器里对已完成
+            // 的 emitter 反复写入。
+            heartbeat.stop();
+        });
         emitter.onTimeout(() -> {
             cancelSubscription.run();
             heartbeat.stop();
