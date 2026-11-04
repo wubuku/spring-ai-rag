@@ -123,6 +123,10 @@ mvn -o -pl spring-ai-rag-core -am \
 - 每个 chunk 携带 `documentId`、连续 `chunkIndex`、非空 `title`；命中块必须
   能定位回目标文档。
 
+已知边界：抽取器把“恰好两个 x 起始簇”判为双栏（这是双栏 PDF 的重排条件），
+因此两列表格在纯文字坐标上仍可能与两栏版式混淆；门禁语料固定为三列表格，
+覆盖当前承诺的按行合并行为。
+
 确定性与幂等：
 
 - 同一语料连续两次索引，抽取文本、chunk 列表与 `ChunkDiagnostics` 逐项相等。

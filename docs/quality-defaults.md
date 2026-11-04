@@ -138,6 +138,12 @@ Chunk-quality assertions (any failure turns red):
 - Every chunk carries `documentId`, contiguous `chunkIndex`, and a nonblank
   `title`; a hit must locate back to its target document.
 
+Known boundary: the extractor treats "exactly two x-start clusters" as a
+two-column layout (that is the reordering trigger for two-column PDFs), so a
+two-column table can still be confused with a two-column layout from text
+coordinates alone. The gate corpus therefore fixes a three-column table, which
+covers the row-merging behavior currently promised.
+
 Determinism and idempotency:
 
 - Indexing the same corpus twice produces identical extracted text, chunk list,
