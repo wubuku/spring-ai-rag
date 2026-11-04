@@ -197,6 +197,17 @@ export const GATES = [
     selfTest: 'scripts/test-support/endpoint-behavior-matrix-self-test.mjs',
   },
 
+  // 写端点幂等语义登记。端点矩阵回答"端点存在吗"，这里回答"重复提交会怎样"：
+  // 每个 POST/PUT/PATCH/DELETE 都必须登记分类（Idempotency-Key / 唯一约束 / CAS /
+  // 状态机 / 只读 / 调用方责任）、冲突语义、重复提交是否可能多建一行或重复计费，
+  // 以及可核对的源码证据。未登记的新写端点、登记过期的端点、证据 token 消失、
+  // 或声明了 Idempotency-Key 却登记为只读，都会失败。
+  {
+    gate: 'scripts/verify-write-endpoint-idempotency.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/write-endpoint-idempotency-self-test.mjs',
+  },
+
   // Batch 923. A script that selects Flyway's latest version and compares it
   // against a literal stops being true the moment someone adds a migration,
   // and then fails as if the product were broken.
@@ -522,6 +533,21 @@ export const GATES = [
     gate: 'spring-ai-rag-webui/scripts/check-time-formatting.mjs',
     kind: 'gate',
     selfTest: 'spring-ai-rag-webui/scripts/__tests__/time-formatting.test.mjs',
+  },
+
+  // The first-paint budget used to be a number a human wrote into §3.8 after
+  // running a browser once. Nothing stopped it from regressing: a new first-paint
+  // dependency could grow the bundle by 20 KB and every test would stay green.
+  // The gate rebuilds, reads `dist/index.html`, and measures local + Slow 4G FCP
+  // against a local static server — no backend. Budgets live in
+  // `spring-ai-rag-webui/scripts/testdata/performance-budget.json`; the measured
+  // values and their headroom are recorded in `docs/capacity-and-scale-zh-CN.md` §3.8.
+  // CI reaches it through the npm script in ci.yml's webui job (package.json is a
+  // runner root); `npm run check:performance-budget` runs the Node self-test first.
+  {
+    gate: 'spring-ai-rag-webui/scripts/check-performance-budget.mjs',
+    kind: 'gate',
+    selfTest: 'spring-ai-rag-webui/scripts/test-support/performance-budget-self-test.mjs',
   },
 
   // Batch 939. The rule is "`navigator.clipboard` is reached through one function", and

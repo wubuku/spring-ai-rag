@@ -1,0 +1,2015 @@
+{
+  "description": "写端点幂等语义登记表。每个 controller 的 POST/PUT/PATCH/DELETE 都必须在此登记 classification、conflict、duplicateRecordRisk、duplicateProviderCalls 与可核对证据；scripts/verify-write-endpoint-idempotency.mjs 会从源码提取端点并逐项校验，未登记或证据失效直接失败。",
+  "classifications": {
+    "header-key": "支持 Idempotency-Key：同 key 同请求重放结果，同 key 不同请求 409",
+    "unique-key": "依赖业务唯一约束或幂等 upsert，重复提交收敛到一行",
+    "cas": "依赖 expectedRevision/version 条件写入，并发重复提交落后者 409",
+    "state-guard": "依赖状态机或终态守卫，重复提交返回当前状态或冲突，不重复副作用",
+    "read-only": "不写业务记录；重复提交最多重复读取或模型计费",
+    "caller-responsibility": "非幂等；重复提交可能产生重复记录或重复计费，由调用方负责去重"
+  },
+  "endpoints": [
+    {
+      "controller": "AbTestController",
+      "method": "createExperiment",
+      "http": "POST",
+      "path": "/api/v1/rag/ab/experiments",
+      "classification": "unique-key",
+      "conflict": "同名实验再次提交返回 400；并发竞态由 experiment_name 唯一约束兜底，最多一行。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V6__add_ab_testing.sql",
+          "token": "experiment_name"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/AbTestServiceImpl.java",
+          "token": "existsByExperimentName"
+        }
+      ]
+    },
+    {
+      "controller": "AbTestController",
+      "method": "pauseExperiment",
+      "http": "POST",
+      "path": "/api/v1/rag/ab/experiments/{id}/pause",
+      "classification": "state-guard",
+      "conflict": "只有 RUNNING 可暂停；重复暂停在非 RUNNING 状态返回冲突，不新增记录。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/AbTestServiceImpl.java",
+          "token": "setStatus(\"PAUSED\")"
+        }
+      ]
+    },
+    {
+      "controller": "AbTestController",
+      "method": "recordResult",
+      "http": "POST",
+      "path": "/api/v1/rag/ab/experiments/{id}/results",
+      "classification": "caller-responsibility",
+      "conflict": "每次调用插入一条实验结果；重复提交会产生重复样本，调用方负责只记录一次并自行处理重试。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "none",
+      "reason": "实验结果按事件追加，服务端不提供去重键；重复提交会污染样本量，调用方必须在重试前去重。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/AbTestServiceImpl.java",
+          "token": "recordResult"
+        }
+      ]
+    },
+    {
+      "controller": "AbTestController",
+      "method": "startExperiment",
+      "http": "POST",
+      "path": "/api/v1/rag/ab/experiments/{id}/start",
+      "classification": "state-guard",
+      "conflict": "只有 DRAFT/PAUSED 可启动；重复启动在 RUNNING 状态返回冲突，不会产生第二行记录。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/AbTestServiceImpl.java",
+          "token": "Can only start DRAFT or PAUSED experiments"
+        }
+      ]
+    },
+    {
+      "controller": "AbTestController",
+      "method": "stopExperiment",
+      "http": "POST",
+      "path": "/api/v1/rag/ab/experiments/{id}/stop",
+      "classification": "state-guard",
+      "conflict": "重复停止由状态机吸收；非法状态返回冲突，不产生第二条终止记录。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/AbTestServiceImpl.java",
+          "token": "\"COMPLETED\""
+        }
+      ]
+    },
+    {
+      "controller": "AbTestController",
+      "method": "updateExperiment",
+      "http": "PUT",
+      "path": "/api/v1/rag/ab/experiments/{id}",
+      "classification": "caller-responsibility",
+      "conflict": "相同内容重复 PUT 收敛为同一状态；RUNNING 更新返回状态冲突；并发不同内容 last-write-wins，调用方负责串行化。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "reason": "原地更新同一实验行，不新增记录；并发不同内容采用最后写入胜出，调用方需避免并发改写。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/AbTestServiceImpl.java",
+          "token": "Cannot update a running experiment"
+        }
+      ]
+    },
+    {
+      "controller": "AlertController",
+      "method": "createSilenceSchedule",
+      "http": "POST",
+      "path": "/api/v1/rag/alerts/silence-schedules",
+      "classification": "unique-key",
+      "conflict": "同名静默计划第二次提交返回冲突；name 唯一约束保证最多一行。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V12__add_silence_schedules.sql",
+          "token": "name VARCHAR(100) NOT NULL UNIQUE"
+        }
+      ]
+    },
+    {
+      "controller": "AlertController",
+      "method": "createSloConfig",
+      "http": "POST",
+      "path": "/api/v1/rag/alerts/slos",
+      "classification": "unique-key",
+      "conflict": "同名 SLO 配置再次创建返回空结果/冲突；slo_name 唯一约束保证最多一行。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V7__add_alerts.sql",
+          "token": "slo_name"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/AlertServiceImpl.java",
+          "token": "findBySloName"
+        }
+      ]
+    },
+    {
+      "controller": "AlertController",
+      "method": "deleteSilenceSchedule",
+      "http": "DELETE",
+      "path": "/api/v1/rag/alerts/silence-schedules/{name}",
+      "classification": "state-guard",
+      "conflict": "重复删除同一计划第二次返回未找到，不新增记录。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/AlertServiceImpl.java",
+          "token": "deleteSilenceSchedule"
+        }
+      ]
+    },
+    {
+      "controller": "AlertController",
+      "method": "deleteSloConfig",
+      "http": "DELETE",
+      "path": "/api/v1/rag/alerts/slos/configs/{sloName}",
+      "classification": "state-guard",
+      "conflict": "重复删除同名配置第二次返回 not found/no-op，不会产生第二条删除记录。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/AlertServiceImpl.java",
+          "token": "sloConfigRepository.delete"
+        }
+      ]
+    },
+    {
+      "controller": "AlertController",
+      "method": "fireAlert",
+      "http": "POST",
+      "path": "/api/v1/rag/alerts/fire",
+      "classification": "caller-responsibility",
+      "conflict": "每次调用创建一条告警事件记录；重复提交会产生多条告警，调用方负责去重。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "none",
+      "reason": "告警是事件流语义，同一条件重复上报会追加多条告警；调用方应在上报前做条件抑制。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/AlertServiceImpl.java",
+          "token": "alertRepository.save"
+        }
+      ]
+    },
+    {
+      "controller": "AlertController",
+      "method": "resolveAlert",
+      "http": "POST",
+      "path": "/api/v1/rag/alerts/{alertId}/resolve",
+      "classification": "state-guard",
+      "conflict": "重复 resolve 仍收敛为 RESOLVED 并刷新 resolvedAt；告警只有一行，不会新增记录。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/AlertServiceImpl.java",
+          "token": "setStatus(\"RESOLVED\")"
+        }
+      ]
+    },
+    {
+      "controller": "AlertController",
+      "method": "silenceAlert",
+      "http": "POST",
+      "path": "/api/v1/rag/alerts/silence",
+      "classification": "state-guard",
+      "conflict": "同一 alertKey 的静默窗口覆盖写，重复提交收敛为同一个内存条目。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/AlertServiceImpl.java",
+          "token": "silencedAlerts.put"
+        }
+      ]
+    },
+    {
+      "controller": "AlertController",
+      "method": "unsilenceAlert",
+      "http": "DELETE",
+      "path": "/api/v1/rag/alerts/silence/{alertKey}",
+      "classification": "state-guard",
+      "conflict": "重复解除同一静默键第二次返回未找到，不产生记录。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/AlertServiceImpl.java",
+          "token": "silencedAlerts.remove"
+        }
+      ]
+    },
+    {
+      "controller": "AlertController",
+      "method": "updateSilenceSchedule",
+      "http": "PUT",
+      "path": "/api/v1/rag/alerts/silence-schedules/{name}",
+      "classification": "caller-responsibility",
+      "conflict": "同名计划原地更新，重复相同内容收敛；并发不同内容 last-write-wins，调用方负责顺序。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "reason": "只更新既有静默计划行，不新增记录；无版本条件，并发覆盖由调用方负责避免。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/AlertServiceImpl.java",
+          "token": "updateSilenceSchedule"
+        }
+      ]
+    },
+    {
+      "controller": "AlertController",
+      "method": "updateSloConfig",
+      "http": "PUT",
+      "path": "/api/v1/rag/alerts/slos/configs/{sloName}",
+      "classification": "caller-responsibility",
+      "conflict": "同名配置原地更新，重复相同内容收敛；并发不同内容 last-write-wins，调用方负责顺序。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "reason": "只更新既有 SLO 行，不会新增记录；没有版本条件，并发覆盖由调用方负责避免。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/AlertServiceImpl.java",
+          "token": "setTargetValue"
+        }
+      ]
+    },
+    {
+      "controller": "AlertNotificationDeliveryController",
+      "method": "retry",
+      "http": "POST",
+      "path": "/api/v1/rag/alerts/notification-deliveries/{deliveryId}/retry",
+      "classification": "state-guard",
+      "conflict": "处理中重试直接返回当前状态；非 FAILED 返回 409；条件更新保证同一条投递只重试一次。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/alertdelivery/AlertNotificationDeliveryService.java",
+          "token": "cannot be retried"
+        }
+      ]
+    },
+    {
+      "controller": "ApiKeyController",
+      "method": "cancelRotation",
+      "http": "POST",
+      "path": "/api/v1/rag/api-keys/rotations/{rotationId}/cancel",
+      "classification": "state-guard",
+      "conflict": "已取消轮换重复 cancel 返回状态冲突；不会二次取消或二次吊销。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java",
+          "token": "cancelRotation"
+        }
+      ]
+    },
+    {
+      "controller": "ApiKeyController",
+      "method": "completeRotation",
+      "http": "POST",
+      "path": "/api/v1/rag/api-keys/rotations/{rotationId}/complete",
+      "classification": "state-guard",
+      "conflict": "轮换完成后重复 complete 返回状态冲突/no-op，不会重复提交 credential。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java",
+          "token": "completeRotation"
+        }
+      ]
+    },
+    {
+      "controller": "ApiKeyController",
+      "method": "createKey",
+      "http": "POST",
+      "path": "/api/v1/rag/api-keys",
+      "classification": "header-key",
+      "idempotencyKeyRequired": false,
+      "conflict": "带 Idempotency-Key 时同请求重放 200、同 key 不同请求 409；未带 key 时名称唯一约束保证最多一行。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java",
+          "token": "idempotencyKeyHash"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V50__api_key_provisioning_idempotency.sql",
+          "token": "UNIQUE (owner_id, idempotency_key_hash)"
+        }
+      ]
+    },
+    {
+      "controller": "ApiKeyController",
+      "method": "prepareRotation",
+      "http": "POST",
+      "path": "/api/v1/rag/api-keys/{keyId}/rotations",
+      "classification": "header-key",
+      "idempotencyKeyRequired": true,
+      "conflict": "同一 owner/key/请求重放同一 rotation；同 key 不同请求 409；唯一约束防双写。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "deduped",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V55__bounded_api_credential_rotation.sql",
+          "token": "uk_rag_api_key_rotation_principal_idempotency"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java",
+          "token": "prepareRotation"
+        }
+      ]
+    },
+    {
+      "controller": "ApiKeyController",
+      "method": "revokeKey",
+      "http": "DELETE",
+      "path": "/api/v1/rag/api-keys/{keyId}",
+      "classification": "state-guard",
+      "conflict": "重复吊销第二次成为条件更新 no-op 或返回未找到，不会产生第二条吊销记录。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java",
+          "token": "revokeManagedKey"
+        }
+      ]
+    },
+    {
+      "controller": "ApiKeyController",
+      "method": "rotateKey",
+      "http": "POST",
+      "path": "/api/v1/rag/api-keys/{keyId}/rotate",
+      "classification": "caller-responsibility",
+      "conflict": "每次调用执行完整轮换并创建新 credential；重复提交会连续轮换、旧 Key 立即失效，调用方负责只发一次。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "none",
+      "reason": "立即轮换每次都会生成新的 credential 行并吊销旧 credential；重复提交会让先返回的 Key 失效，调用方责任。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java",
+          "token": "rotateManagedKey"
+        }
+      ]
+    },
+    {
+      "controller": "ApiKeyController",
+      "method": "updatePolicy",
+      "http": "PUT",
+      "path": "/api/v1/rag/api-keys/principals/{principalId}/policy",
+      "classification": "caller-responsibility",
+      "conflict": "同内容重复 PUT 收敛；并发不同策略 last-write-wins，调用方负责串行化。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "reason": "原地更新既有 principal 策略，不新增记录；没有版本条件，并发覆盖由调用方负责避免。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java",
+          "token": "updatePolicy"
+        }
+      ]
+    },
+    {
+      "controller": "CacheMetricsController",
+      "method": "invalidateCache",
+      "http": "DELETE",
+      "path": "/api/v1/rag/cache/invalidate",
+      "classification": "read-only",
+      "conflict": "重复清空只多一条审计记录，不产生业务数据；唯一后果是重复回源。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "reason": "清空进程内缓存并写审计日志，不写业务表；重复调用只会重复回源，幂等键无必要。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/CacheMetricsController.java",
+          "token": "invalidateCache"
+        }
+      ]
+    },
+    {
+      "controller": "ClientErrorController",
+      "method": "reportError",
+      "http": "POST",
+      "path": "/api/v1/rag/client-errors",
+      "classification": "caller-responsibility",
+      "conflict": "每次上报插入一条客户端错误记录；重复上报会产生重复记录，调用方负责只上报一次。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "none",
+      "reason": "客户端错误按事件追加，用于诊断；重复上报会放大计数与告警信号，调用方应去重。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/ClientErrorServiceImpl.java",
+          "token": "clientErrorRepository.save"
+        }
+      ]
+    },
+    {
+      "controller": "ComponentLevelController",
+      "method": "chat",
+      "http": "POST",
+      "path": "/demo/component/chat",
+      "classification": "caller-responsibility",
+      "conflict": "重复提交会再次调用模型并产生第二次计费；该演示端点不写数据库，调用方负责只调用一次。直接调用 ChatClient，不写业务表。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "演示端点是同步模型调用：不带幂等键时每次提交都会重新请求 Provider，可能重复计费；直接调用 ChatClient，不写业务表。",
+      "evidence": [
+        {
+          "file": "demos/demo-component-level/src/main/java/com/springairag/demo/component/ComponentLevelController.java",
+          "token": "ragChatClientWithMemory"
+        }
+      ]
+    },
+    {
+      "controller": "ComponentLevelController",
+      "method": "compareMemory",
+      "http": "POST",
+      "path": "/demo/component/compare-memory",
+      "classification": "caller-responsibility",
+      "conflict": "重复提交会再次调用模型并产生第二次计费；该演示端点不写数据库，调用方负责只调用一次。一次请求会调用三次模型，重复提交成本更高。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "演示端点是同步模型调用：不带幂等键时每次提交都会重新请求 Provider，可能重复计费；一次请求会调用三次模型，重复提交成本更高。",
+      "evidence": [
+        {
+          "file": "demos/demo-component-level/src/main/java/com/springairag/demo/component/ComponentLevelController.java",
+          "token": "ragChatClientWithMemory"
+        }
+      ]
+    },
+    {
+      "controller": "DataGovernanceController",
+      "method": "applyErasure",
+      "http": "POST",
+      "path": "/api/v1/rag/data-governance/erasures/{operationId}/apply",
+      "classification": "state-guard",
+      "conflict": "operation 状态与 version 条件写入保证重复 apply 返回冲突；删除只执行一次。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DataErasureService.java",
+          "token": "PREVIEWED"
+        }
+      ]
+    },
+    {
+      "controller": "DataGovernanceController",
+      "method": "previewErasure",
+      "http": "POST",
+      "path": "/api/v1/rag/data-governance/erasures/preview",
+      "classification": "caller-responsibility",
+      "conflict": "每次 preview 插入独立预览操作并发放 token；重复提交会产生多份预览，但不删除数据，调用方负责只 apply 一次。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "none",
+      "reason": "预览会写擦除操作行，重复提交只是多一份预览；真正删除必须凭一次 token apply，调用方负责只 apply 一次。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DataErasureService.java",
+          "token": "confirmation_token_hash"
+        }
+      ]
+    },
+    {
+      "controller": "DemoController",
+      "method": "fullChat",
+      "http": "POST",
+      "path": "/demo/chat",
+      "classification": "caller-responsibility",
+      "conflict": "不带 Idempotency-Key 时重复提交会再次落库并再次调用模型；调用方负责重试幂等，重复提交以调用方传入的业务键或先行查询规避。RagChatService 会写入会话历史。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "possible",
+      "reason": "演示端点是同步模型调用：不带幂等键时每次提交都会重新请求 Provider，可能重复计费；RagChatService 会写入会话历史。",
+      "evidence": [
+        {
+          "file": "demos/demo-basic-rag/src/main/java/com/springairag/demo/DemoController.java",
+          "token": "ragChatService.chat"
+        }
+      ]
+    },
+    {
+      "controller": "DerivationRepairController",
+      "method": "apply",
+      "http": "POST",
+      "path": "/api/v1/rag/collections/derivation-repairs/apply",
+      "classification": "state-guard",
+      "conflict": "同一 repairId 的 apply 受状态与 version 条件写入保护；重复提交返回冲突或已完成结果。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DerivationRepairService.java",
+          "token": "repairId"
+        }
+      ]
+    },
+    {
+      "controller": "DerivationRepairController",
+      "method": "preview",
+      "http": "POST",
+      "path": "/api/v1/rag/collections/derivation-repairs/preview",
+      "classification": "caller-responsibility",
+      "conflict": "每次 preview 生成新的 repairId 与 token；重复提交会产生多份预览，不删除数据，调用方负责只应用一次。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "none",
+      "reason": "预览会写修复计划行，重复提交只是多一份计划；apply 必须凭 token，调用方负责只应用最近一份。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DerivationRepairService.java",
+          "token": "UUID.randomUUID()"
+        }
+      ]
+    },
+    {
+      "controller": "DocumentProcessingRunController",
+      "method": "cancel",
+      "http": "POST",
+      "path": "/api/v1/rag/document-processing-runs/{runId}/cancel",
+      "classification": "state-guard",
+      "conflict": "同一 run 重复 cancel 由状态机与 CAS 吸收；终态返回 409，不重复派发。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/documentprocessing/DocumentProcessingRunService.java",
+          "token": "cancel"
+        }
+      ]
+    },
+    {
+      "controller": "DocumentProcessingRunController",
+      "method": "retry",
+      "http": "POST",
+      "path": "/api/v1/rag/document-processing-runs/{runId}/retry",
+      "classification": "state-guard",
+      "conflict": "同一 run 重复 retry 由状态机与 CAS 吸收；非法状态返回 409，不创建第二个 attempt。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/documentprocessing/DocumentProcessingRunService.java",
+          "token": "retry"
+        }
+      ]
+    },
+    {
+      "controller": "DocumentSyncRunController",
+      "method": "abort",
+      "http": "POST",
+      "path": "/api/v1/rag/document-sync-runs/{runId}/abort",
+      "classification": "state-guard",
+      "conflict": "终态条件写入；重复 abort 返回冲突或已终止状态，不会二次终止。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentSyncRunService.java",
+          "token": "abort"
+        }
+      ]
+    },
+    {
+      "controller": "DocumentSyncRunController",
+      "method": "batchUpsert",
+      "http": "POST",
+      "path": "/api/v1/rag/document-sync-runs/{runId}/batch-upsert",
+      "classification": "unique-key",
+      "conflict": "批次按外部标识幂等 upsert；重复批次收敛到同一文档，不会新增第二行。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V40__document_lifecycle_expand.sql",
+          "token": "uk_rag_doc_external_identity_v2"
+        }
+      ]
+    },
+    {
+      "controller": "DocumentSyncRunController",
+      "method": "begin",
+      "http": "POST",
+      "path": "/api/v1/rag/document-sync-runs",
+      "classification": "unique-key",
+      "conflict": "同一 collection+namespace+clientRunId 第二次 begin 返回 409 SYNC_RUN_LEASE_CONFLICT；唯一约束保证只有一次运行。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V42__document_sync_runs.sql",
+          "token": "uk_rag_sync_run_client"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentSyncRunService.java",
+          "token": "clientRunId is already bound"
+        }
+      ]
+    },
+    {
+      "controller": "DocumentSyncRunController",
+      "method": "complete",
+      "http": "POST",
+      "path": "/api/v1/rag/document-sync-runs/{runId}/complete",
+      "classification": "state-guard",
+      "conflict": "终态条件写入；重复 complete 返回冲突或当前终态，不会二次提交。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentSyncRunService.java",
+          "token": "complete"
+        }
+      ]
+    },
+    {
+      "controller": "DocumentSyncRunController",
+      "method": "preview",
+      "http": "POST",
+      "path": "/api/v1/rag/document-sync-runs/{runId}/preview-missing",
+      "classification": "read-only",
+      "conflict": "只统计缺失项，不写入任何文档或运行记录。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "reason": "preview-missing 只读查询运行状态与文档集合，不持久化结果，重复调用无副作用。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/DocumentSyncRunController.java",
+          "token": "preview"
+        }
+      ]
+    },
+    {
+      "controller": "EmbeddingJobController",
+      "method": "cancel",
+      "http": "POST",
+      "path": "/api/v1/rag/embedding-jobs/{id}/cancel",
+      "classification": "state-guard",
+      "conflict": "终态任务重复 cancel 返回 409；条件更新保证只取消一次。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/embeddingjob/EmbeddingJobService.java",
+          "token": "cancel"
+        }
+      ]
+    },
+    {
+      "controller": "EmbeddingJobController",
+      "method": "create",
+      "http": "POST",
+      "path": "/api/v1/rag/embedding-jobs",
+      "classification": "unique-key",
+      "conflict": "同文档+内容+切分+Profile 的活动任务由唯一索引 coalesce；重复提交返回同一活动任务，不重复计费。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "deduped",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V40__document_lifecycle_expand.sql",
+          "token": "uq_rag_embedding_job_active_generation"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/embeddingjob/EmbeddingJobService.java",
+          "token": "createOrCoalesce"
+        }
+      ]
+    },
+    {
+      "controller": "EmbeddingJobController",
+      "method": "retry",
+      "http": "POST",
+      "path": "/api/v1/rag/embedding-jobs/{id}/retry",
+      "classification": "state-guard",
+      "conflict": "仅失败任务可重试；重复 retry 第二次返回 409 或当前状态，不重复派发。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/embeddingjob/EmbeddingJobService.java",
+          "token": "retry"
+        }
+      ]
+    },
+    {
+      "controller": "EmbeddingProfileOperationController",
+      "method": "create",
+      "http": "POST",
+      "path": "/api/v1/rag/collections/by-key/embedding-profile/operations",
+      "classification": "header-key",
+      "idempotencyKeyRequired": true,
+      "conflict": "同一 owner/key/请求重放同一 operation；同 key 不同请求 409 IDEMPOTENCY_KEY_REUSED；唯一约束防双写。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "deduped",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagCollectionController.java",
+          "token": "Idempotency-Key"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V67__durable_operations_and_embedding_profiles.sql",
+          "token": "uq_rag_long_running_operation_idempotency"
+        }
+      ]
+    },
+    {
+      "controller": "EvaluationController",
+      "method": "batchEvaluate",
+      "http": "POST",
+      "path": "/api/v1/rag/evaluation/batch",
+      "classification": "caller-responsibility",
+      "conflict": "每个条目各插入一条评估记录；重复提交会产生重复评估行，调用方负责只调用一次。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "none",
+      "reason": "批量评估逐条追加保存，没有幂等键；重复提交会污染评估历史，调用方应去重。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/RetrievalEvaluationServiceImpl.java",
+          "token": "evaluationRepository.save"
+        }
+      ]
+    },
+    {
+      "controller": "EvaluationController",
+      "method": "evaluate",
+      "http": "POST",
+      "path": "/api/v1/rag/evaluation/evaluate",
+      "classification": "caller-responsibility",
+      "conflict": "每次 evaluate 插入一条评估记录；重复提交会产生重复评估行，调用方负责只调用一次。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "none",
+      "reason": "评估结果按调用追加保存，没有幂等键；重复提交会污染评估历史，调用方应去重。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/RetrievalEvaluationServiceImpl.java",
+          "token": "evaluationRepository.save"
+        }
+      ]
+    },
+    {
+      "controller": "EvaluationController",
+      "method": "evaluateAnswerQuality",
+      "http": "POST",
+      "path": "/api/v1/rag/evaluation/answer-quality",
+      "classification": "read-only",
+      "conflict": "只调用模型打分并返回，不写数据库；重复提交会重复模型调用与计费。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "回答质量评估是纯计算，无持久化；重复提交只重复计费，调用方负责按需调用。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/EvaluationController.java",
+          "token": "evaluateAnswerQuality"
+        }
+      ]
+    },
+    {
+      "controller": "EvaluationController",
+      "method": "semantic",
+      "http": "POST",
+      "path": "/api/v1/rag/evaluation/semantic",
+      "classification": "read-only",
+      "conflict": "语义评估只调用模型并返回分数，不持久化；重复提交会重复计费。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "语义评估无持久化副作用；重复提交只重复模型调用，调用方负责去重。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/EvaluationController.java",
+          "token": "semanticEvaluationService.evaluate"
+        }
+      ]
+    },
+    {
+      "controller": "EvaluationController",
+      "method": "semanticBatch",
+      "http": "POST",
+      "path": "/api/v1/rag/evaluation/semantic/batch",
+      "classification": "read-only",
+      "conflict": "批量语义评估只调用模型并返回分数，不持久化；重复提交会重复计费。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "批量语义评估无持久化副作用；重复提交只重复模型调用，调用方负责去重。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/EvaluationController.java",
+          "token": "semanticEvaluationService.evaluateBatch"
+        }
+      ]
+    },
+    {
+      "controller": "EvaluationController",
+      "method": "submitFeedback",
+      "http": "POST",
+      "path": "/api/v1/rag/evaluation/feedback",
+      "classification": "caller-responsibility",
+      "conflict": "每次提交插入一条反馈记录；重复提交会产生重复反馈，调用方负责去重。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "none",
+      "reason": "反馈按事件追加，无幂等键；重复提交会放大满意度统计，调用方应避免重试重复提交。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/UserFeedbackServiceImpl.java",
+          "token": "submitFeedback"
+        }
+      ]
+    },
+    {
+      "controller": "EvaluationSuiteController",
+      "method": "createRun",
+      "http": "POST",
+      "path": "/api/v1/rag/evaluation/runs",
+      "classification": "state-guard",
+      "conflict": "并发/重复创建 run 由活动槽位与并发上限保护；超出返回 429/409，不会创建两个活动 run。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V39__replace_pessimistic_coordination_with_cas.sql",
+          "token": "uq_rag_evaluation_active_owner_slot"
+        }
+      ]
+    },
+    {
+      "controller": "EvaluationSuiteController",
+      "method": "createSuite",
+      "http": "POST",
+      "path": "/api/v1/rag/evaluation/suites",
+      "classification": "unique-key",
+      "conflict": "同一 owner 下 suiteKey 第二次创建返回 409；唯一约束保证一行。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V38__add_managed_evaluation_suites.sql",
+          "token": "UNIQUE (owner_principal_id, suite_key)"
+        }
+      ]
+    },
+    {
+      "controller": "EvaluationSuiteController",
+      "method": "createVersion",
+      "http": "POST",
+      "path": "/api/v1/rag/evaluation/suites/{suiteKey}/versions",
+      "classification": "unique-key",
+      "conflict": "同一 suite 的 version/definition hash 唯一；重复创建返回 409 且不新增版本。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V38__add_managed_evaluation_suites.sql",
+          "token": "UNIQUE (suite_id, version)"
+        }
+      ]
+    },
+    {
+      "controller": "EvaluationSuiteController",
+      "method": "diagnose",
+      "http": "POST",
+      "path": "/api/v1/rag/evaluation/suites/{suiteKey}/versions/{version}/diagnose",
+      "classification": "read-only",
+      "conflict": "诊断只运行评测并返回结果，不写入 suite 版本或运行记录；重复提交会重复模型调用。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "诊断结果不持久化；重复提交只会重复付费模型调用，调用方负责按需触发。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/evaluation/EvaluationSuiteService.java",
+          "token": "diagnose"
+        }
+      ]
+    },
+    {
+      "controller": "LongRunningOperationController",
+      "method": "cancel",
+      "http": "POST",
+      "path": "/api/v1/rag/operations/{operationId}/cancel",
+      "classification": "state-guard",
+      "conflict": "终态操作重复 cancel 返回 409；条件更新保证只转一次。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/LongRunningOperationService.java",
+          "token": "cancel"
+        }
+      ]
+    },
+    {
+      "controller": "LongRunningOperationController",
+      "method": "retry",
+      "http": "POST",
+      "path": "/api/v1/rag/operations/{operationId}/retry",
+      "classification": "state-guard",
+      "conflict": "仅可恢复状态可 retry；重复提交返回 409 或当前状态，不重复派发。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/LongRunningOperationService.java",
+          "token": "retry"
+        }
+      ]
+    },
+    {
+      "controller": "MedicalRagController",
+      "method": "consult",
+      "http": "POST",
+      "path": "/api/v1/medical/consult",
+      "classification": "caller-responsibility",
+      "conflict": "不带 Idempotency-Key 时重复提交会再次落库并再次调用模型；调用方负责重试幂等，重复提交以调用方传入的业务键或先行查询规避。RagChatService 会写入会话历史。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "possible",
+      "reason": "演示端点是同步模型调用：不带幂等键时每次提交都会重新请求 Provider，可能重复计费；RagChatService 会写入会话历史。",
+      "evidence": [
+        {
+          "file": "demos/demo-domain-extension/src/main/java/com/springairag/demo/medical/MedicalRagController.java",
+          "token": "ragChatService.chat"
+        }
+      ]
+    },
+    {
+      "controller": "MedicalRagController",
+      "method": "generalAsk",
+      "http": "POST",
+      "path": "/api/v1/medical/general",
+      "classification": "caller-responsibility",
+      "conflict": "不带 Idempotency-Key 时重复提交会再次落库并再次调用模型；调用方负责重试幂等，重复提交以调用方传入的业务键或先行查询规避。RagChatService 会写入会话历史。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "possible",
+      "reason": "演示端点是同步模型调用：不带幂等键时每次提交都会重新请求 Provider，可能重复计费；RagChatService 会写入会话历史。",
+      "evidence": [
+        {
+          "file": "demos/demo-domain-extension/src/main/java/com/springairag/demo/medical/MedicalRagController.java",
+          "token": "ragChatService.chat"
+        }
+      ]
+    },
+    {
+      "controller": "ModelController",
+      "method": "compareModels",
+      "http": "POST",
+      "path": "/api/v1/rag/models/compare",
+      "classification": "read-only",
+      "conflict": "只调用多个模型并返回比较结果，不写数据库；重复提交会重复模型调用与计费。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "模型比较无持久化副作用；重复提交只重复计费，调用方负责去重。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/ModelController.java",
+          "token": "compareModels"
+        }
+      ]
+    },
+    {
+      "controller": "MultiModelController",
+      "method": "chatWithProvider",
+      "http": "POST",
+      "path": "/demo/chat",
+      "classification": "caller-responsibility",
+      "conflict": "重复提交会再次调用模型并产生第二次计费；该演示端点不写数据库，调用方负责只调用一次。只做模型对比，不写业务表。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "演示端点是同步模型调用：不带幂等键时每次提交都会重新请求 Provider，可能重复计费；只做模型对比，不写业务表。",
+      "evidence": [
+        {
+          "file": "demos/demo-multi-model/src/main/java/com/springairag/demo/multimodel/MultiModelController.java",
+          "token": "modelComparisonService.compareProviders"
+        }
+      ]
+    },
+    {
+      "controller": "MultiModelController",
+      "method": "compareModels",
+      "http": "POST",
+      "path": "/demo/compare",
+      "classification": "caller-responsibility",
+      "conflict": "重复提交会再次调用模型并产生第二次计费；该演示端点不写数据库，调用方负责只调用一次。一次对比会并发调用多个 Provider。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "演示端点是同步模型调用：不带幂等键时每次提交都会重新请求 Provider，可能重复计费；一次对比会并发调用多个 Provider。",
+      "evidence": [
+        {
+          "file": "demos/demo-multi-model/src/main/java/com/springairag/demo/multimodel/MultiModelController.java",
+          "token": "modelComparisonService.compareProviders"
+        }
+      ]
+    },
+    {
+      "controller": "OpenAiCompatibilityController",
+      "method": "chatCompletions",
+      "http": "POST",
+      "path": "/v1/chat/completions",
+      "classification": "header-key",
+      "idempotencyKeyRequired": false,
+      "conflict": "带 Idempotency-Key 时同请求重放同一回答；未带 key 时重复提交会重复模型调用与计费。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "OpenAI 兼容端点允许不传幂等键；未带 key 的重复提交会重复模型调用，调用方责任。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/OpenAiCompatibilityController.java",
+          "token": "Idempotency-Key"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/chat/ChatTurnOperationService.java",
+          "token": "Idempotency-Key was already used"
+        }
+      ]
+    },
+    {
+      "controller": "PdfImportController",
+      "method": "importPdf",
+      "http": "POST",
+      "path": "/api/v1/rag/files/pdf",
+      "classification": "caller-responsibility",
+      "conflict": "每次上传生成新的 UUID 目录与文件批次；重复提交会产生两份导入记录，调用方负责去重。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "none",
+      "reason": "导入以新批次追加，没有幂等键；重复上传会产生两份虚拟目录与文件记录，调用方责任。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/PdfImportService.java",
+          "token": "UUID.randomUUID()"
+        }
+      ]
+    },
+    {
+      "controller": "PdfImportController",
+      "method": "importPdfToRagAsync",
+      "http": "POST",
+      "path": "/api/v1/rag/files/pdf-to-rag",
+      "classification": "caller-responsibility",
+      "conflict": "每次调用创建独立文件批次与文档；重复提交会产生重复文档，调用方负责只调用一次。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "possible",
+      "reason": "PDF 转 RAG 按新批次创建文档并可能触发 embedding；重复提交会重复建文档与计费，调用方责任。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/PdfImportService.java",
+          "token": "fsImportBatchRepository.save"
+        }
+      ]
+    },
+    {
+      "controller": "PdfImportController",
+      "method": "importPdfToRagWithEmbedding",
+      "http": "POST",
+      "path": "/api/v1/rag/files/pdf-to-rag",
+      "classification": "caller-responsibility",
+      "conflict": "每次调用创建独立文件批次与文档；重复提交会产生重复文档并重复 embedding，调用方负责只调用一次。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "possible",
+      "reason": "带 embedding 的 PDF 转 RAG 会新建文档并触发模型调用；没有幂等键，重复提交由调用方负责去重。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/PdfImportService.java",
+          "token": "fsImportBatchRepository.save"
+        }
+      ]
+    },
+    {
+      "controller": "PdfImportController",
+      "method": "importPdfToRagWithEmbeddingDefault",
+      "http": "POST",
+      "path": "/api/v1/rag/files/pdf-to-rag",
+      "classification": "caller-responsibility",
+      "conflict": "默认策略下每次调用创建独立文件批次与文档；重复提交会产生重复文档并重复 embedding，调用方负责只调用一次。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "possible",
+      "reason": "默认分支同样按新批次创建文档并触发 embedding；调用方必须在重试前确认是否已受理。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/PdfImportService.java",
+          "token": "fsImportBatchRepository.save"
+        }
+      ]
+    },
+    {
+      "controller": "PdfImportController",
+      "method": "importPdfToRagWithoutEmbedding",
+      "http": "POST",
+      "path": "/api/v1/rag/files/pdf-to-rag",
+      "classification": "caller-responsibility",
+      "conflict": "每次调用创建独立文件批次与文档；重复提交会产生重复文档，调用方负责只调用一次。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "none",
+      "reason": "不 embedding 的分支仍会新建文件批次与文档行；没有幂等键，重复提交由调用方负责去重。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/PdfImportService.java",
+          "token": "fsImportBatchRepository.save"
+        }
+      ]
+    },
+    {
+      "controller": "PdfImportController",
+      "method": "triggerEmbeddingAsync",
+      "http": "POST",
+      "path": "/api/v1/rag/files/{uuid}/embed",
+      "classification": "state-guard",
+      "conflict": "重复触发会重复调用 embedding Provider，但 chunk 按 (document, generation, index) 唯一 upsert，不会产生重复行。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "同一文件的重复嵌入可能重复计费；数据库唯一约束保证不会多出行，调用方负责避免无意义重试。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V43__decouple_keyword_chunks_from_embeddings.sql",
+          "token": "uq_rag_document_chunk_generation_index"
+        }
+      ]
+    },
+    {
+      "controller": "PdfImportController",
+      "method": "triggerEmbeddingSse",
+      "http": "POST",
+      "path": "/api/v1/rag/files/{uuid}/embed",
+      "classification": "state-guard",
+      "conflict": "SSE 重复触发会重复模型调用，但 chunk 唯一约束保证不会产生重复行。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "SSE 嵌入的重复触发只重复计费，不会多写 chunk；调用方负责避免并发重复触发。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V43__decouple_keyword_chunks_from_embeddings.sql",
+          "token": "uq_rag_document_chunk_generation_index"
+        }
+      ]
+    },
+    {
+      "controller": "PdfImportController",
+      "method": "triggerEmbeddingSseDefault",
+      "http": "POST",
+      "path": "/api/v1/rag/files/{uuid}/embed",
+      "classification": "state-guard",
+      "conflict": "默认 SSE 分支重复触发会重复模型调用，但 chunk 唯一约束保证不会产生重复行。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "默认 SSE 分支的重复触发只重复计费，不会多写 chunk；调用方负责避免并发重复触发。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V43__decouple_keyword_chunks_from_embeddings.sql",
+          "token": "uq_rag_document_chunk_generation_index"
+        }
+      ]
+    },
+    {
+      "controller": "PdfImportController",
+      "method": "triggerEmbeddingSync",
+      "http": "POST",
+      "path": "/api/v1/rag/files/{uuid}/embed",
+      "classification": "state-guard",
+      "conflict": "同步嵌入重复触发会重复模型调用，但 chunk 唯一约束保证不会产生重复行。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "同步嵌入重复触发只重复计费，不会多写 chunk；调用方负责避免并发重复触发。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V43__decouple_keyword_chunks_from_embeddings.sql",
+          "token": "uq_rag_document_chunk_generation_index"
+        }
+      ]
+    },
+    {
+      "controller": "RagChatController",
+      "method": "ask",
+      "http": "POST",
+      "path": "/api/v1/rag/chat/ask",
+      "classification": "header-key",
+      "idempotencyKeyRequired": false,
+      "conflict": "带 Idempotency-Key 时同请求重放已完成回答；同 key 不同请求 409；未带 key 时重复提交会重复模型调用与计费。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "幂等键可选；未带 key 的重复提交会重复调用模型，调用方负责在重试时复用同一个 key。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/chat/ChatTurnOperationService.java",
+          "token": "Idempotency-Key was already used"
+        }
+      ]
+    },
+    {
+      "controller": "RagChatController",
+      "method": "chat",
+      "http": "POST",
+      "path": "/api/v1/rag/chat",
+      "classification": "header-key",
+      "idempotencyKeyRequired": false,
+      "conflict": "带 Idempotency-Key 时同请求重放已完成回答；未带 key 时重复提交会重复模型调用与计费。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "幂等键可选；未带 key 的重复提交会重复调用模型，调用方负责在重试时复用同一个 key。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/chat/ChatTurnOperationService.java",
+          "token": "Idempotency-Key was already used"
+        }
+      ]
+    },
+    {
+      "controller": "RagChatController",
+      "method": "clearHistory",
+      "http": "DELETE",
+      "path": "/api/v1/rag/chat/history/{sessionId}",
+      "classification": "state-guard",
+      "conflict": "删除不存在的会话返回 404；重复删除第二次不会产生第二条删除记录。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagChatController.java",
+          "token": "clearHistory"
+        }
+      ]
+    },
+    {
+      "controller": "RagChatController",
+      "method": "stream",
+      "http": "POST",
+      "path": "/api/v1/rag/chat/stream",
+      "classification": "header-key",
+      "idempotencyKeyRequired": false,
+      "conflict": "带 Idempotency-Key 时同请求重放已完成回答；未带 key 时重复提交会重复模型调用与计费。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "流式回答的幂等键可选；未带 key 的重连/重试会重复模型调用，调用方应复用 key 或携带 Last-Event-ID。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/chat/ChatTurnOperationService.java",
+          "token": "Idempotency-Key was already used"
+        }
+      ]
+    },
+    {
+      "controller": "RagCollectionController",
+      "method": "addDocument",
+      "http": "POST",
+      "path": "/api/v1/rag/collections/{id}/documents",
+      "classification": "cas",
+      "conflict": "必须提供 expectedDocumentRevision；并发/重复提交中落后者返回 409 修订冲突，不会重复加入。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagCollectionController.java",
+          "token": "expectedDocumentRevision is required"
+        }
+      ]
+    },
+    {
+      "controller": "RagCollectionController",
+      "method": "addDocumentByKey",
+      "http": "POST",
+      "path": "/api/v1/rag/collections/by-key/documents",
+      "classification": "cas",
+      "conflict": "必须提供 expectedDocumentRevision；并发/重复提交中落后者返回 409 修订冲突，不会重复加入。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagCollectionController.java",
+          "token": "expectedDocumentRevision is required"
+        }
+      ]
+    },
+    {
+      "controller": "RagCollectionController",
+      "method": "applyAsyncPurge",
+      "http": "POST",
+      "path": "/api/v1/rag/collections/by-key/purge/async",
+      "classification": "header-key",
+      "idempotencyKeyRequired": true,
+      "conflict": "相同 owner/key/请求重放同一 operation；同 key 不同请求 409；唯一约束保证一次清理。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "deduped",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagCollectionController.java",
+          "token": "Idempotency-Key"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V67__durable_operations_and_embedding_profiles.sql",
+          "token": "uq_rag_long_running_operation_idempotency"
+        }
+      ]
+    },
+    {
+      "controller": "RagCollectionController",
+      "method": "applyPurge",
+      "http": "POST",
+      "path": "/api/v1/rag/collections/by-key/purge",
+      "classification": "state-guard",
+      "conflict": "预览 token 一次性消费且受状态/条件写入保护；重复 apply 返回冲突，不重复删除。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionPurgeService.java",
+          "token": "confirmation_token"
+        }
+      ]
+    },
+    {
+      "controller": "RagCollectionController",
+      "method": "cloneCollectionById",
+      "http": "POST",
+      "path": "/api/v1/rag/collections/{id}/clone",
+      "classification": "unique-key",
+      "conflict": "目标 collectionKey 唯一；重复克隆第二次返回 409，不产生第二个集合。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V27__add_collection_key_expand.sql",
+          "token": "uk_rag_collection_collection_key"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/RagCollectionService.java",
+          "token": "Collection key already exists"
+        }
+      ]
+    },
+    {
+      "controller": "RagCollectionController",
+      "method": "cloneCollectionByKey",
+      "http": "POST",
+      "path": "/api/v1/rag/collections/clone",
+      "classification": "unique-key",
+      "conflict": "目标 collectionKey 唯一；重复克隆第二次返回 409，不产生第二个集合。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V27__add_collection_key_expand.sql",
+          "token": "uk_rag_collection_collection_key"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/RagCollectionService.java",
+          "token": "Collection key already exists"
+        }
+      ]
+    },
+    {
+      "controller": "RagCollectionController",
+      "method": "create",
+      "http": "POST",
+      "path": "/api/v1/rag/collections",
+      "classification": "header-key",
+      "idempotencyKeyRequired": false,
+      "conflict": "带 key 时同请求重放；不带 key 时 collectionKey 唯一约束兜底，重复返回 409。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionProvisioningService.java",
+          "token": "The Idempotency-Key was already used for a different request"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V52__collection_provisioning_idempotency.sql",
+          "token": "uk_rag_collection_provisioning_owner_key"
+        }
+      ]
+    },
+    {
+      "controller": "RagCollectionController",
+      "method": "delete",
+      "http": "DELETE",
+      "path": "/api/v1/rag/collections/{id}",
+      "classification": "state-guard",
+      "conflict": "软删除重复调用第二次返回未找到/已删除，不产生第二条删除记录。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/RagCollectionService.java",
+          "token": "deleteCollection"
+        }
+      ]
+    },
+    {
+      "controller": "RagCollectionController",
+      "method": "deleteByKey",
+      "http": "DELETE",
+      "path": "/api/v1/rag/collections/by-key",
+      "classification": "state-guard",
+      "conflict": "软删除重复调用第二次返回未找到/已删除，不产生第二条删除记录。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/RagCollectionService.java",
+          "token": "deleteCollection"
+        }
+      ]
+    },
+    {
+      "controller": "RagCollectionController",
+      "method": "importCollection",
+      "http": "POST",
+      "path": "/api/v1/rag/collections/import",
+      "classification": "unique-key",
+      "conflict": "目标 collectionKey 已存在时返回 409；重复导入不会创建第二个集合或第二批文档。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V27__add_collection_key_expand.sql",
+          "token": "uk_rag_collection_collection_key"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/RagCollectionService.java",
+          "token": "Collection key already exists"
+        }
+      ]
+    },
+    {
+      "controller": "RagCollectionController",
+      "method": "previewAsyncPurge",
+      "http": "POST",
+      "path": "/api/v1/rag/collections/by-key/purge/async/preview",
+      "classification": "state-guard",
+      "conflict": "同一 owner 的活动异步预览受 admission lease 限制，第二次返回 409；不会并发扫描两次。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionPurgeService.java",
+          "token": "This owner already has an async Collection purge preview scan"
+        }
+      ]
+    },
+    {
+      "controller": "RagCollectionController",
+      "method": "previewPurge",
+      "http": "POST",
+      "path": "/api/v1/rag/collections/by-key/purge/preview",
+      "classification": "caller-responsibility",
+      "conflict": "每次 preview 插入一条预览记录并发放 token；重复提交会产生多份预览，但不删除数据，调用方负责只 apply 一次。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "none",
+      "reason": "清理预览会写预览行，重复提交只是多一份预览并占用容量；apply 必须凭 token，调用方负责只应用一次。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionPurgeService.java",
+          "token": "INSERT INTO rag_collection_purge_preview"
+        }
+      ]
+    },
+    {
+      "controller": "RagCollectionController",
+      "method": "restore",
+      "http": "POST",
+      "path": "/api/v1/rag/collections/{id}/restore",
+      "classification": "state-guard",
+      "conflict": "重复恢复已活动集合返回冲突/UNCHANGED，不新增记录。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/RagCollectionService.java",
+          "token": "restoreCollection"
+        }
+      ]
+    },
+    {
+      "controller": "RagCollectionController",
+      "method": "restoreByKey",
+      "http": "POST",
+      "path": "/api/v1/rag/collections/by-key/restore",
+      "classification": "state-guard",
+      "conflict": "重复恢复已活动集合返回冲突/UNCHANGED，不新增记录。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/RagCollectionService.java",
+          "token": "restoreCollection"
+        }
+      ]
+    },
+    {
+      "controller": "RagCollectionController",
+      "method": "update",
+      "http": "PUT",
+      "path": "/api/v1/rag/collections/{id}",
+      "classification": "caller-responsibility",
+      "conflict": "相同内容重复 PUT 收敛；并发不同内容 last-write-wins，调用方负责串行化。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "reason": "原地更新既有集合行，不新增记录；没有版本条件，并发覆盖由调用方负责避免。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/RagCollectionService.java",
+          "token": "updateCollection"
+        }
+      ]
+    },
+    {
+      "controller": "RagCollectionController",
+      "method": "updateByKey",
+      "http": "PUT",
+      "path": "/api/v1/rag/collections/by-key",
+      "classification": "caller-responsibility",
+      "conflict": "相同内容重复 PUT 收敛；并发不同内容 last-write-wins，调用方负责串行化。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "reason": "原地更新既有集合行，不新增记录；没有版本条件，并发覆盖由调用方负责避免。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/RagCollectionService.java",
+          "token": "updateCollection"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "batchCreateAndEmbed",
+      "http": "POST",
+      "path": "/api/v1/rag/documents/batch/create-and-embed",
+      "classification": "caller-responsibility",
+      "conflict": "兼容端点不传递 Idempotency-Key；重复提交会重复建文档并重复 embedding 调用，调用方负责去重。",
+      "duplicateRecordRisk": "possible",
+      "duplicateProviderCalls": "possible",
+      "reason": "该兼容批量端点没有幂等键透传；重复提交会新增文档并触发嵌入，调用方必须避免重试重复提交。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagDocumentController.java",
+          "token": "batchCreateAndEmbed"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "batchCreateDocuments",
+      "http": "POST",
+      "path": "/api/v1/rag/documents/batch",
+      "classification": "header-key",
+      "idempotencyKeyRequired": false,
+      "conflict": "带 Idempotency-Key 时按 item 前缀幂等；并发重复提交可能因 Collection 写入位 CAS 返回 409（重试后重放）；不带 key 时重复提交会重复建文档或按内容唯一约束被拒绝。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/BatchDocumentService.java",
+          "token": "itemIdempotencyKey"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentMutationService.java",
+          "token": "Idempotency-Key"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "batchDeleteDocuments",
+      "http": "DELETE",
+      "path": "/api/v1/rag/documents/batch",
+      "classification": "state-guard",
+      "conflict": "批次逐条按状态删除；重复提交第二次逐条返回未找到，不会重复删除。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/BatchDocumentService.java",
+          "token": "batchDeleteDocuments"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "batchEmbedDocuments",
+      "http": "POST",
+      "path": "/api/v1/rag/documents/batch/embed",
+      "classification": "state-guard",
+      "conflict": "批次逐条嵌入；重复批次会重复模型调用，但 chunk 唯一约束阻止重复行。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "重复批次可能重复计费；唯一索引保证不会多出 chunk，调用方负责避免重复提交。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V43__decouple_keyword_chunks_from_embeddings.sql",
+          "token": "uq_rag_document_chunk_generation_index"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "batchEmbedDocumentsStream",
+      "http": "POST",
+      "path": "/api/v1/rag/documents/batch/embed/stream",
+      "classification": "state-guard",
+      "conflict": "批次流式嵌入重复提交会重复模型调用，但 chunk 唯一约束阻止重复行。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "批次流式嵌入重复提交可能重复计费；唯一索引保证不会多出 chunk，调用方负责避免重复触发。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V43__decouple_keyword_chunks_from_embeddings.sql",
+          "token": "uq_rag_document_chunk_generation_index"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "batchUpsertExternalDocuments",
+      "http": "POST",
+      "path": "/api/v1/rag/documents/batch-upsert",
+      "classification": "unique-key",
+      "conflict": "批次逐项按外部标识幂等 upsert；重复批次收敛到同一行，不会新增第二份文档。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V40__document_lifecycle_expand.sql",
+          "token": "uk_rag_doc_external_identity_v2"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "createDocument",
+      "http": "POST",
+      "path": "/api/v1/rag/documents",
+      "classification": "header-key",
+      "idempotencyKeyRequired": false,
+      "conflict": "带 key 时同请求重放；并发重复提交可能返回 409（Collection 写入位版本 CAS 落败 CONCURRENT_MODIFICATION，或同 key 首个仍在处理 DOCUMENT_REVISION_CONFLICT），用同一 key 重试即重放；不带 key 时依赖内容去重与唯一约束，重复提交最多一行或返回重复冲突。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentMutationService.java",
+          "token": "Idempotency-Key"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V40__document_lifecycle_expand.sql",
+          "token": "uk_rag_document_idempotency"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "deleteDocument",
+      "http": "DELETE",
+      "path": "/api/v1/rag/documents/{id}",
+      "classification": "cas",
+      "conflict": "必须携带 expectedDocumentRevision；重复/并发删除中落后者返回 409 修订冲突。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentMutationService.java",
+          "token": "expectedDocumentRevision"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "deleteExternalDocument",
+      "http": "DELETE",
+      "path": "/api/v1/rag/documents/by-external-id",
+      "classification": "state-guard",
+      "conflict": "按外部标识删除；重复删除第二次返回已删除/404，不会产生第二条删除记录。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentMutationService.java",
+          "token": "ON CONFLICT ("
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "disableDocument",
+      "http": "POST",
+      "path": "/api/v1/rag/documents/{id}/disable",
+      "classification": "cas",
+      "conflict": "必须携带 expectedDocumentRevision；重复禁用已禁用文档返回 UNCHANGED，并发落后者 409。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentMutationService.java",
+          "token": "requireRevision(document, request.getExpectedDocumentRevision())"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "embedDocument",
+      "http": "POST",
+      "path": "/api/v1/rag/documents/{id}/embed",
+      "classification": "state-guard",
+      "conflict": "重复提交会重复调用 embedding Provider，但 chunk 按 (document, generation, index) 唯一 upsert，不会产生重复行。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "重复嵌入可能重复计费；唯一索引保证不会多出 chunk，调用方负责避免无意义重试。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V43__decouple_keyword_chunks_from_embeddings.sql",
+          "token": "uq_rag_document_chunk_generation_index"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "embedDocumentStream",
+      "http": "POST",
+      "path": "/api/v1/rag/documents/{id}/embed/stream",
+      "classification": "state-guard",
+      "conflict": "SSE 重复提交会重复模型调用，但 chunk 唯一约束保证不会产生重复行。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "SSE 重连或重复触发可能重复计费；唯一索引保证不会多出 chunk，调用方负责复用同一请求。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V43__decouple_keyword_chunks_from_embeddings.sql",
+          "token": "uq_rag_document_chunk_generation_index"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "reembedMissing",
+      "http": "POST",
+      "path": "/api/v1/rag/documents/embed-vector-reembed",
+      "classification": "state-guard",
+      "conflict": "重复调用只处理仍缺失的 chunk；已有 embedding 的唯一索引阻止重复写入。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "缺失重嵌入按缺口扫描，重复调用只可能重复计费，不会多写 embedding 行；调用方负责控制重试频率。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V43__decouple_keyword_chunks_from_embeddings.sql",
+          "token": "uq_rag_document_chunk_generation_index"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "relocateExternalDocument",
+      "http": "POST",
+      "path": "/api/v1/rag/documents/relocate",
+      "classification": "header-key",
+      "idempotencyKeyRequired": true,
+      "conflict": "必须带 Idempotency-Key；同 key 同请求重放同一迁移结果，同 key 不同请求 409。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "deduped",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagDocumentController.java",
+          "token": "Idempotency-Key"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V44__document_relocation_idempotency.sql",
+          "token": "uk_rag_relocated_address_active"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "restoreDocument",
+      "http": "POST",
+      "path": "/api/v1/rag/documents/{id}/restore",
+      "classification": "cas",
+      "conflict": "必须携带 expectedDocumentRevision；重复恢复已启用文档返回 UNCHANGED，并发落后者 409。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentMutationService.java",
+          "token": "requireRevision(document, request.getExpectedDocumentRevision())"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "restoreVersion",
+      "http": "POST",
+      "path": "/api/v1/rag/documents/{id}/versions/{versionNumber}/restore",
+      "classification": "cas",
+      "conflict": "携带 expectedDocumentRevision 与版本号；重复恢复同一版本收敛，并发落后者 409。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentMutationService.java",
+          "token": "expectedDocumentRevision"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "updateDocument",
+      "http": "PATCH",
+      "path": "/api/v1/rag/documents/{id}",
+      "classification": "cas",
+      "conflict": "必须携带 expectedDocumentRevision；重复/并发更新中落后者返回 409 修订冲突。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentMutationService.java",
+          "token": "expectedDocumentRevision"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "uploadAndEmbed",
+      "http": "POST",
+      "path": "/api/v1/rag/documents/upload",
+      "classification": "header-key",
+      "idempotencyKeyRequired": false,
+      "conflict": "带 key 时上传幂等重放；并发重复提交可能因 Collection 写入位 CAS 返回 409（重试后重放）；不带 key 时重复上传会产生新文档/新批次记录。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "上传幂等键可选；未带 key 的重复上传会新建文档并可能重复嵌入，调用方责任。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentMutationService.java",
+          "token": "Idempotency-Key"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V40__document_lifecycle_expand.sql",
+          "token": "uk_rag_document_idempotency"
+        }
+      ]
+    },
+    {
+      "controller": "RagDocumentController",
+      "method": "upsertExternalDocument",
+      "http": "POST",
+      "path": "/api/v1/rag/documents/upsert",
+      "classification": "unique-key",
+      "conflict": "同一外部标识重复 upsert 收敛到一行；revision 落后的重复写入返回 409。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V40__document_lifecycle_expand.sql",
+          "token": "uk_rag_doc_external_identity_v2"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentMutationService.java",
+          "token": "ON CONFLICT ("
+        }
+      ]
+    },
+    {
+      "controller": "RagJsonRecordController",
+      "method": "batchUpsert",
+      "http": "POST",
+      "path": "/api/v1/rag/json-records/batch-upsert",
+      "classification": "unique-key",
+      "conflict": "批次逐项按外部标识幂等 upsert；重复批次收敛到同一记录/版本。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V29__add_jsonb_structured_records.sql",
+          "token": "uk_rag_doc_structured_identity"
+        }
+      ]
+    },
+    {
+      "controller": "RagJsonRecordController",
+      "method": "search",
+      "http": "POST",
+      "path": "/api/v1/rag/json-records/search",
+      "classification": "read-only",
+      "conflict": "检索只读，不写记录；重复提交会重复 embedding 调用，调用方负责去重。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "结构化检索没有持久化副作用；重复提交只重复查询与 embedding 费用，调用方负责按需调用。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagJsonRecordController.java",
+          "token": "search"
+        }
+      ]
+    },
+    {
+      "controller": "RagJsonRecordController",
+      "method": "sourceDelete",
+      "http": "DELETE",
+      "path": "/api/v1/rag/json-records/by-external-id",
+      "classification": "cas",
+      "conflict": "删除按 sourceRevision 与 expectedSourceRevision 条件写入；重复提交第二次按状态返回已删除/404，不会产生第二条删除记录。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagJsonRecordController.java",
+          "token": "sourceDelete"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/JsonRecordService.java",
+          "token": "expectedSourceRevision"
+        },
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentMutationService.java",
+          "token": "tombstoneExternal"
+        }
+      ]
+    },
+    {
+      "controller": "RagJsonRecordController",
+      "method": "upsert",
+      "http": "POST",
+      "path": "/api/v1/rag/json-records/upsert",
+      "classification": "unique-key",
+      "conflict": "外部标识唯一 + revision CAS；重复提交收敛到同一记录/版本，不会新增第二行。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/resources/db/migration/V29__add_jsonb_structured_records.sql",
+          "token": "uk_rag_doc_structured_identity"
+        }
+      ]
+    },
+    {
+      "controller": "RagMetricsController",
+      "method": "clearSlowQueryHistory",
+      "http": "DELETE",
+      "path": "/api/v1/rag/metrics/slow-queries",
+      "classification": "read-only",
+      "conflict": "只清空进程内慢查询环形缓冲，不触碰数据库；重复调用无副作用。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "none",
+      "reason": "慢查询历史保存在进程内，清空操作不写业务表；重复调用只是再次清空，无需幂等键。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagMetricsController.java",
+          "token": "clearSlowQueryHistory"
+        }
+      ]
+    },
+    {
+      "controller": "RagSearchController",
+      "method": "searchWithConfig",
+      "http": "POST",
+      "path": "/api/v1/rag/search",
+      "classification": "read-only",
+      "conflict": "检索只读，不写记录；重复提交会重复 embedding 调用，调用方负责去重。",
+      "duplicateRecordRisk": "prevented",
+      "duplicateProviderCalls": "possible",
+      "reason": "检索没有持久化副作用；重复提交只重复查询与 embedding 费用，调用方负责按需调用。",
+      "evidence": [
+        {
+          "file": "spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagSearchController.java",
+          "token": "searchWithConfig"
+        }
+      ]
+    }
+  ]
+}

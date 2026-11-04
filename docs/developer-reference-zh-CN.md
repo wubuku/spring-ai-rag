@@ -570,6 +570,8 @@ npm run lint
 npm run test:run
 npm run test:design-system
 npm run build
+# 首屏性能预算（gzip/未压缩大小、关键资源数、本地与 Slow 4G FCP）；不需要后端
+npm run check:performance-budget
 ```
 
 ### 6.1 设计 token 与设计系统门禁

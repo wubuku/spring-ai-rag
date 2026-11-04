@@ -193,18 +193,28 @@ Chromium 1440×900；数据为 8000 文档 / 80k 向量（3k 与 5k 两个 Colle
   2.73 MB、首字节 12–13 ms、总耗时 75–78 ms。Mock E2E 用 8 MB 分块流验证
   进度在流结束前递增，并验证取消后没有下载落盘。
 
-前端性能预算与实测：
+前端性能预算与实测（2026-11 由门禁脚本重新测量）：
 
 | 指标 | 预算 | 实测（2026-11） | 说明 |
 |------|------|-----------------|------|
-| 首屏初始资源（gzip） | ≤160 KB | 148.8 KB | index 114.5 + ui 23.9 + 其余 |
-| 首屏初始资源（未压缩） | ≤500 KB | 471 KB | 最坏传输（代理未压缩） |
-| 本地 FCP | ≤300 ms | 80 ms | — |
-| Slow 4G FCP（1.6 Mbps / 150 ms） | ≤3.0 s | 2.72 s | 开 gzip 推算约 1.2–1.5 s |
+| 首屏初始资源（gzip） | ≤160 KB | 156.7 KB | index 138.8 + ui 7.1 + 其余；余量约 3.3 KB |
+| 首屏初始资源（未压缩） | ≤500 KB | 477.1 KB | 最坏传输（代理未压缩） |
+| 首屏关键资源数 | ≤8 个 | 8 个 | script + 5 modulepreload + 2 stylesheet |
+| 本地 FCP | ≤300 ms | 68–72 ms | 门禁每次重测 |
+| Slow 4G FCP（1.6 Mbps / 150 ms） | ≤3.0 s | 2.84–2.87 s | 未开 gzip；开 gzip 可显著缩短；余量约 4% |
 | 文档列表就绪 | ≤1.5 s | 1.48 s（含解锁与 4 个 API） | 翻页 83 ms |
 | 搜索端到端（10 条） | ≤1.0 s | 815 ms | 其中检索 374 ms |
 | 200 条合成渲染 | ≤100 ms | 53–70 ms | 仅渲染路径，非 UI 可达上限 |
 | 导出首字节 | ≤100 ms | 12–13 ms | 流式响应 |
+
+这些指标不再是人工记录：`npm run check:performance-budget` 会先跑
+[`performance-budget-self-test.mjs`](../spring-ai-rag-webui/scripts/test-support/performance-budget-self-test.mjs)，
+再由 [`check-performance-budget.mjs`](../spring-ai-rag-webui/scripts/check-performance-budget.mjs)
+重新构建、读取 `dist/index.html` 的首屏资源并计算 gzip/未压缩大小与资源数，然后用
+Playwright Chromium 在本地静态服务器上测本地与 Slow 4G FCP（3 次取中位数）。CI 的
+无后端 job 直接执行该命令，任一指标超限即失败；预算值维护在
+[`performance-budget.json`](../spring-ai-rag-webui/scripts/testdata/performance-budget.json)。
+当前 gzip 只剩约 3.3 KB 余量——新增首屏依赖应先做拆分或压缩，而不是调高预算。
 
 未覆盖的边界：mock embedding/chat 不代表真实模型时延；反向代理未开 gzip；
 只测了 Chromium。
@@ -218,7 +228,7 @@ Chromium 1440×900；数据为 8000 文档 / 80k 向量（3k 与 5k 两个 Colle
 | 索引构建 | 31k 向量 4.7 s | 100k 向量预计约 16 s；启动等待上限 60 s，接近时需调大或异步预热 |
 | 检索 | p50 约 50–90 ms | 主要成本是 embedding 调用；SQL 部分已近常数。候选池上限 1000，过期向量过多时召回可能不足 |
 | 列表 | 页面固定 ≤20 行 | 已消除随数据量增长的 N+1；处理摘要每页 4 次批量查询 |
-| WebUI 首屏 | 初始资源 gzip 149 KB、未压缩 471 KB；Slow 4G FCP 2.72 s | 预算见 §3.8；代理开启 gzip 可显著缩短 |
+| WebUI 首屏 | 初始资源 gzip 157 KB、未压缩 477 KB；Slow 4G FCP 2.84 s | 预算与门禁见 §3.8；代理开启 gzip 可显著缩短 |
 | WebUI 列表 | 每页 20 行，DOM 510 节点、heap 9.5 MB | 文档/Collection/评估历史均已可分页；200 条合成渲染 53–70 ms |
 | WebUI 导出 | Collection 卡片内置；fetch + ReadableStream 边收边写，支持进度与取消；5k 文档 2.73 MB、首字节 12–13 ms | 无写盘 API 的浏览器退回 Blob（平台边界）；50k 文档约 27 MB |
 | 导出 | 流式，单批 200 行，响应头给出批次数 | 内存不随行数线性增长；受网络与客户端消费速度限制。超大 Collection 建议在低峰导出 |

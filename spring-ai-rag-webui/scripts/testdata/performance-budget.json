@@ -1,0 +1,14 @@
+{
+  "description": "WebUI 首屏性能预算。scripts/check-performance-budget.mjs 会构建并测量生产产物，任一指标超限即失败；预算下调需要同时更新 docs/capacity-and-scale-zh-CN.md 与英文版。",
+  "initialGzipBytes": 163840,
+  "initialUncompressedBytes": 512000,
+  "initialResourceCount": 8,
+  "localFcpMs": 300,
+  "slow4gFcpMs": 3000,
+  "slow4g": {
+    "downloadBytesPerSecond": 200000,
+    "uploadBytesPerSecond": 750000,
+    "latencyMs": 150
+  },
+  "runs": 3
+}

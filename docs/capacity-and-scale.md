@@ -222,18 +222,30 @@ history rows; search and chat used mock embedding / mock chat.
   an 8 MB chunked stream and asserts progress grows before the stream ends and
   that cancelling produces no download.
 
-Frontend performance budget vs measured:
+Frontend performance budget vs measured (re-measured by the gate in 2026-11):
 
 | Metric | Budget | Measured (2026-11) | Notes |
 |--------|--------|--------------------|-------|
-| Initial resources (gzip) | ≤160 KB | 148.8 KB | index 114.5 + ui 23.9 + rest |
-| Initial resources (uncompressed) | ≤500 KB | 471 KB | worst case, proxy without gzip |
-| Local FCP | ≤300 ms | 80 ms | — |
-| Slow 4G FCP (1.6 Mbps / 150 ms) | ≤3.0 s | 2.72 s | ~1.2–1.5 s projected with gzip |
+| Initial resources (gzip) | ≤160 KB | 156.7 KB | index 138.8 + ui 7.1 + rest; ~3.3 KB headroom |
+| Initial resources (uncompressed) | ≤500 KB | 477.1 KB | worst case, proxy without gzip |
+| Critical resource count | ≤8 | 8 | script + 5 modulepreloads + 2 stylesheets |
+| Local FCP | ≤300 ms | 68–72 ms | re-measured by the gate |
+| Slow 4G FCP (1.6 Mbps / 150 ms) | ≤3.0 s | 2.84–2.87 s | no gzip; gzip shortens it substantially; ~4% headroom |
 | Document list ready | ≤1.5 s | 1.48 s (unlock + 4 APIs) | page turn 83 ms |
 | Search end to end (10 rows) | ≤1.0 s | 815 ms | retrieval 374 ms |
 | 200 synthetic rows render | ≤100 ms | 53–70 ms | render path only, not a UI-reachable cap |
 | Export first byte | ≤100 ms | 12–13 ms | streamed response |
+
+These numbers are no longer hand-recorded: `npm run check:performance-budget`
+runs [`performance-budget-self-test.mjs`](../spring-ai-rag-webui/scripts/test-support/performance-budget-self-test.mjs),
+then [`check-performance-budget.mjs`](../spring-ai-rag-webui/scripts/check-performance-budget.mjs)
+rebuilds the app, reads the initial resources from `dist/index.html`, computes
+gzip/uncompressed size and resource count, then measures local and Slow 4G FCP
+with Playwright Chromium against a local static server (median of 3 runs). The
+backend-free CI job runs this command and fails on any overage; budgets live in
+[`performance-budget.json`](../spring-ai-rag-webui/scripts/testdata/performance-budget.json).
+Only ~3.3 KB of gzip headroom remains — split or compress before adding a new
+first-paint dependency rather than raising the budget.
 
 Not covered: mock embedding/chat does not represent real model latency; the proxy
 did not enable gzip; only Chromium was measured.
@@ -247,7 +259,7 @@ did not enable gzip; only Chromium was measured.
 | Index build | 4.7 s for 31k vectors | ~16 s projected for 100k; startup wait cap is 60 s, tune it or pre-warm asynchronously |
 | Retrieval | p50 ~50–90 ms | Dominated by the embedding call; SQL is near-constant. Candidate pool caps at 1000, so heavy staleness can reduce recall |
 | Lists | Fixed ≤20 rows per page | N+1 growth removed; processing summaries use 4 batched queries per page |
-| WebUI first paint | 149 KB gzip / 471 KB uncompressed; Slow 4G FCP 2.72 s | Budget in §3.8; enabling gzip on the proxy shortens it substantially |
+| WebUI first paint | 157 KB gzip / 477 KB uncompressed; Slow 4G FCP 2.84 s | Budget and gate in §3.8; enabling gzip on the proxy shortens it substantially |
 | WebUI lists | 20 rows per page, 510 DOM nodes, 9.5 MB heap | Documents, collections and evaluation history are paginated; 200 synthetic rows render in 53–70 ms |
 | WebUI export | Built into Collection cards; fetch + ReadableStream writes as it reads, with progress and cancel; 2.73 MB / 12–13 ms first byte at 5k docs | Browsers without a write API fall back to a Blob (platform boundary); ~27 MB at 50k docs |
 | Export | Streaming, 200 rows per batch, batch count in response headers | Memory does not grow with row count; limited by network and client consumption. Export very large collections off-peak |

@@ -93,6 +93,42 @@ evidence in [`scripts/testdata/list-endpoints.json`](../scripts/testdata/list-en
 `scripts/verify-list-endpoint-pagination.mjs` re-checks controller sources and
 fails on an unregistered endpoint or missing evidence.
 
+### Write-endpoint idempotency registry
+
+Every **POST / PUT / PATCH / DELETE** endpoint—including read-only search POSTs—is
+registered in [`scripts/testdata/write-endpoints.json`](../scripts/testdata/write-endpoints.json)
+with its duplicate-submission semantics. This is executable, not documentation-only:
+`scripts/verify-write-endpoint-idempotency.mjs` extracts 116 write endpoints (including
+the demo chat endpoints under `demos/`) from controller sources and checks each entry's
+classification, conflict semantics, duplicate outcome, and source evidence. A new
+unregistered write endpoint, a stale entry, a vanished evidence token, or a source that
+declares `Idempotency-Key` but is registered as read-only fails the gate.
+
+| Classification | Count | Duplicate-submission semantics |
+|---|---|---|
+| `header-key` | 13 | Supports `Idempotency-Key`; same key + same request replays, same key + different request `409 IDEMPOTENCY_KEY_REUSED`; a concurrent duplicate may get `409` (Collection write-slot CAS or same-key in progress) and replays on retry with the same key |
+| `unique-key` | 15 | Business unique constraint or idempotent upsert converges to one row |
+| `cas` | 8 | `expectedDocumentRevision` / `sourceRevision` conditional write; loser gets `409` |
+| `state-guard` | 41 | State machine / terminal guard returns current state or `409`; no repeated side effect |
+| `read-only` | 10 | No business row; at most repeated reads or model billing |
+| `caller-responsibility` | 29 | Non-idempotent; may create a row or bill twice; the contract assigns dedupe to the caller |
+
+Of these, 19 endpoints **may** create duplicate records (imports, evaluation history,
+experiment results, alert events, feedback, immediate rotation, chat history, etc.),
+and 32 **may**
+call the model/embedding provider twice (search, compare, evaluation, PDF-to-RAG,
+embedding, chat, etc.); those entries must state the caller responsibility. `Idempotency-Key`
+is **optional** on chat, document create, batch create, upload, and collection create:
+with a key the request replays; a concurrent duplicate may get `409` (Collection
+write-slot CAS or same-key in progress) and replays on retry with the same key;
+without one, a duplicate submission calls the model again.
+
+Real PostgreSQL concurrency is verified by
+[`scripts/verify-concurrency-idempotency.py`](../scripts/verify-concurrency-idempotency.py),
+covering concurrent same-key Collection creation, same-key Document creation, and
+same-external-identity JSON upserts—not just source inspection. See the
+[concurrency and idempotency acceptance guide](testing-guide.md).
+
 ### API route policy and default denial
 
 Protected `/api/*` and `/v1/*` routes build a route-policy registry from the real Spring MVC

@@ -226,6 +226,21 @@ pass "Endpoint-behavior-matrix self-test"
 node scripts/verify-endpoint-behavior-matrix.mjs
 pass "Endpoint behavior matrix"
 
+# 写端点幂等语义：每个 POST/PUT/PATCH/DELETE 都必须在
+# `scripts/testdata/write-endpoints.json` 登记分类、冲突语义、重复提交后果与证据。
+# 未登记的新写端点、登记过期的端点、证据失效或"声明了 Idempotency-Key 却登记只读"
+# 都会失败。真实 PostgreSQL 并发重复提交由
+# `scripts/verify-concurrency-idempotency.py` 另外验证。
+node scripts/test-support/write-endpoint-idempotency-self-test.mjs >/dev/null || {
+  echo "Write-endpoint-idempotency self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/write-endpoint-idempotency-self-test.mjs >&2 || true
+  exit 1
+}
+pass "Write-endpoint idempotency self-test"
+
+node scripts/verify-write-endpoint-idempotency.mjs
+pass "Write-endpoint idempotency census"
+
 # A collaborator injected with @Autowired(required = false) claims it may be
 # absent. For all twelve of them the bean is an unconditional @Service, so the
 # null branch is unreachable in a running application — while seven genuinely

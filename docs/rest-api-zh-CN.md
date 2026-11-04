@@ -80,6 +80,35 @@ X-API-Key: your-api-key
 登记分页模式与排序证据；`scripts/verify-list-endpoint-pagination.mjs` 会从 controller
 源码逐项核对，未登记或证据缺失直接失败。
 
+### 写端点幂等语义登记
+
+所有 **POST / PUT / PATCH / DELETE** 端点——包括只读检索型 POST——都在
+[`scripts/testdata/write-endpoints.json`](../scripts/testdata/write-endpoints.json)
+登记重复提交语义。这不是文档附件：`scripts/verify-write-endpoint-idempotency.mjs`
+从 controller 源码提取 116 个写端点（含 `demos/` 下的演示聊天端点），逐项核对分类、冲突语义、重复提交后果与源码证据；
+新增写端点未登记、登记条目已过期、证据 token 消失、或源码声明了 `Idempotency-Key`
+却登记为只读，都会直接失败。
+
+| 分类 | 数量 | 重复提交的语义 |
+|---|---|---|
+| `header-key` | 13 | 支持 `Idempotency-Key`；同 key 同请求重放，同 key 不同请求 `409 IDEMPOTENCY_KEY_REUSED`；并发重复提交可能返回 409（Collection 写入位 CAS 或同 key 处理中），用同一 key 重试即重放 |
+| `unique-key` | 15 | 业务唯一约束或幂等 upsert，重复提交收敛到一行 |
+| `cas` | 8 | `expectedDocumentRevision` / `sourceRevision` 条件写入，落后者 `409` |
+| `state-guard` | 41 | 状态机/终态守卫，重复提交返回当前状态或 `409`，不重复副作用 |
+| `read-only` | 10 | 不写业务记录，最多重复读取或模型计费 |
+| `caller-responsibility` | 29 | 非幂等；可能多建一行或重复计费，契约明确由调用方去重 |
+
+其中 19 个端点重复提交**可能**多建记录（导入、评估历史、实验结果、告警事件、
+反馈、立即轮换、会话历史等），32 个**可能**重复调用模型/embedding Provider（搜索、比较、
+评估、PDF 转 RAG、嵌入、聊天等）；这些条目必须写明调用方责任。聊天、文档创建、
+批量创建、上传、集合创建等端点的 `Idempotency-Key` 是**可选**的：带 key 时重放，
+同 key 并发且首个仍在处理中返回 `409`（Collection 写入位 CAS 也可能返回 409；用同一 key 重试即重放），不带 key 时重复提交会重复模型调用。
+
+真实 PostgreSQL 并发重复提交由
+[`scripts/verify-concurrency-idempotency.py`](../scripts/verify-concurrency-idempotency.py)
+验证，覆盖同 key 并发建 Collection、同 key 并发建 Document、同外部标识并发 JSON
+upsert 等竞态；不只读代码。完整契约见[并发与幂等验收](testing-guide-zh-CN.md)。
+
 ### API route policy 与未声明默认拒绝
 
 受保护的 `/api/*` 与 `/v1/*` route 会在 Servlet 应用启动时从真实 Spring MVC

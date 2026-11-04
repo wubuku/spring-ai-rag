@@ -23,6 +23,7 @@
     "check:double-submit": "node scripts/check-double-submit.mjs",
     "check:destructive": "node scripts/check-destructive-confirm.mjs",
     "check:query-errors": "node scripts/check-query-errors.mjs",
+    "check:performance-budget": "node scripts/test-support/performance-budget-self-test.mjs && npm run build && node scripts/check-performance-budget.mjs",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",

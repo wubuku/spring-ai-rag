@@ -635,6 +635,9 @@ npm run lint
 npm run test:run
 npm run test:design-system
 npm run build
+# First-paint performance budget (gzip/uncompressed size, critical resource count,
+# local and Slow 4G FCP); no backend required
+npm run check:performance-budget
 ```
 
 ### 6.1 Design tokens and the design-system gate

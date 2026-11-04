@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """真实 PostgreSQL 并发/幂等验收。
 
-覆盖五类平时不会碰的竞态：
+覆盖平时不会碰的竞态：
   1. 同一 collectionKey 并发创建
   2. 同一外部文档并发幂等同步
   3. 同一文件并发上传（同一 Idempotency-Key）
   4. 同一文档并发 reindex（force re-embed）
   5. 同一 principal 并发配额扣减（PostgreSQL 共享固定窗口）
+  6. 同一 Idempotency-Key 并发建 Collection
+  7. 同一 Idempotency-Key 并发建 Document
+  8. 同一外部标识并发 JSON record upsert
 
 断言：不产生重复行、不丢更新、除业务冲突（409）与限流（429）外不出现 5xx，
 计数与数据库一致；并验证实现依赖唯一约束/条件写入而不是悲观锁。
+这些场景与 `scripts/testdata/write-endpoints.json` 的登记口径对应。
 
 用法：
   ./scripts/verify-concurrency-idempotency.py
@@ -94,6 +98,7 @@ def main() -> int:
             return 1
 
         run_scenarios(stack, base_url, base_key)
+        run_provisioning_idempotency_scenarios(stack, base_url, base_key)
 
         # 配额场景需要低阈值，单独重启，避免前四类请求互相消耗窗口。
         run_quota_scenario(stack, base_url)
@@ -261,6 +266,136 @@ def run_scenarios(stack: LocalStack, base_url: str, base_key: str) -> None:
         f"SELECT document_revision FROM rag_documents WHERE id = {document_id}")
     check(revision.isdigit() and int(revision) >= 1,
           f"文档 revision 未丢失（revision={revision}）")
+
+
+def run_provisioning_idempotency_scenarios(stack: LocalStack, base_url: str, base_key: str) -> None:
+    """登记表里标为 header-key 的写端点：真实 PostgreSQL 并发重复提交。
+
+    这些断言对应 scripts/testdata/write-endpoints.json 的 header-key 条目：
+    同一个 Idempotency-Key 的并发重复请求必须收敛到同一资源，而不是两行。
+    """
+    collection_id = stack.sql(
+        f"SELECT id FROM rag_collection WHERE collection_key = '{base_key}'")
+
+    # ---------- 6. 同一 Idempotency-Key 并发创建 collection ----------
+    info("场景 6：同一 Idempotency-Key 并发创建 collection")
+    collection_key = "conc-idem-collection"
+
+    def create_with_key(_: int) -> tuple[int, str]:
+        return json_request(
+            "POST", f"{base_url}/api/v1/rag/collections",
+            {"collectionKey": collection_key, "name": "Idempotent Collection",
+             "embeddingModel": "BAAI/bge-m3", "dimensions": 1024},
+            extra_headers={"Idempotency-Key": "conc-collection-key"})
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(create_with_key, range(8)))
+    statuses = [status_of(r) for r in results]
+    check(all(code in (200, 201) for code in statuses),
+          f"同 key 并发建 collection 全部重放 2xx（实际 {sorted(set(statuses))}）")
+    rows = stack.sql(
+        f"SELECT count(*) FROM rag_collection WHERE collection_key = '{collection_key}'")
+    check(rows == "1", f"同 key 并发建 collection 只有一行（实际 {rows}）")
+
+    # ---------- 7. 同一 Idempotency-Key 并发创建 document ----------
+    info("场景 7：同一 Idempotency-Key 并发创建 document")
+    title = "Concurrent Idempotent Document"
+    content = ("Idempotency key race: eight concurrent creates must converge "
+               "on one document row.\n\n") * 6
+
+    def create_document_with_key(_: int) -> tuple[int, str]:
+        return json_request(
+            "POST", f"{base_url}/api/v1/rag/documents",
+            {"title": title, "content": content, "collectionKey": base_key},
+            extra_headers={"Idempotency-Key": "conc-document-key"})
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(create_document_with_key, range(8)))
+    statuses = [status_of(r) for r in results]
+    # 文档创建有两层并发保护：Collection 写入位用版本 CAS，同 key 用幂等表。
+    # 并发重复提交因此只会出现两种 409：CAS 落败（CONCURRENT_MODIFICATION）
+    # 或同 key 首个仍在处理（DOCUMENT_REVISION_CONFLICT）；两者都是“用同一
+    # key 重试即可重放”，不会多建记录。下面的重试把这一点直接验证一遍。
+    conflict_codes = set()
+    for status, body in results:
+        if status not in (200, 201):
+            payload = json.loads(body)
+            conflict_codes.add(payload.get("error"))
+    check(all(code in (200, 201, 409) for code in statuses),
+          f"同 key 并发建 document 只出现 2xx/409（实际 {sorted(set(statuses))}）")
+    check(conflict_codes <= {"CONCURRENT_MODIFICATION",
+                             "DOCUMENT_REVISION_CONFLICT"},
+          f"409 语义在契约内（实际 {sorted(conflict_codes)}）")
+    check(any(code in (200, 201) for code in statuses),
+          f"同 key 并发建 document 至少一个成功（实际 {sorted(set(statuses))}）")
+    retried = [json_request(
+        "POST", f"{base_url}/api/v1/rag/documents",
+        {"title": title, "content": content, "collectionKey": base_key},
+        extra_headers={"Idempotency-Key": "conc-document-key"})
+        for status in statuses if status not in (200, 201)]
+    check(all(status_of(r) in (200, 201) for r in retried),
+          f"同一 key 重试后全部重放 2xx（实际 {sorted({status_of(r) for r in retried})}）")
+    ids = set()
+    for status, body in results:
+        if status in (200, 201):
+            ids.add(json.loads(body).get("id"))
+    for status, body in retried:
+        if status in (200, 201):
+            ids.add(json.loads(body).get("id"))
+    check(len(ids) == 1, f"同 key 并发建 document 收敛到同一个 id（实际 {sorted(ids)}）")
+    rows = stack.sql(
+        f"SELECT count(*) FROM rag_documents WHERE collection_id = {collection_id} "
+        f"AND title = '{title}'")
+    check(rows == "1", f"同 key 并发建 document 只有一行（实际 {rows}）")
+    embedding_rows = stack.sql(
+        "SELECT count(*) FROM rag_embeddings e JOIN rag_documents d "
+        f"ON d.id = e.document_id WHERE d.collection_id = {collection_id} "
+        f"AND d.title = '{title}'")
+    check(embedding_rows == "0",
+          f"并发重复提交没有触发重复嵌入（实际 {embedding_rows} 行）")
+    operation_status = stack.sql(
+        "SELECT status FROM rag_document_idempotency_operations "
+        "WHERE operation_type = 'LOCAL_CREATE' "
+        "AND idempotency_key_hash = encode(sha256('conc-document-key'::bytea), 'hex')")
+    operation_count = stack.sql(
+        "SELECT count(*) FROM rag_document_idempotency_operations "
+        "WHERE operation_type = 'LOCAL_CREATE' "
+        "AND idempotency_key_hash = encode(sha256('conc-document-key'::bytea), 'hex')")
+    check(operation_status == "SUCCEEDED" and operation_count == "1",
+          f"同 key 只留一条 SUCCEEDED 幂等记录"
+          f"（实际 status={operation_status}, count={operation_count}）")
+
+    # ---------- 8. 同一外部标识并发 JSON record upsert ----------
+    info("场景 8：同一外部标识并发 JSON record upsert")
+    payload = {
+        "collectionKey": base_key,
+        "sourceNamespace": "jsonrace",
+        "externalId": "json-race-1",
+        "sourceRevision": "rev-1",
+        "title": "JSON Record Race",
+        "retrievalText": "Structured record used for the JSON upsert concurrency race.",
+        "jsonbPayload": {"race": "json", "revision": 1},
+        "embed": False,
+    }
+
+    def json_upsert(_: int) -> tuple[int, str]:
+        return json_request(
+            "POST", f"{base_url}/api/v1/rag/json-records/upsert", payload)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(json_upsert, range(8)))
+    statuses = [status_of(r) for r in results]
+    check(all(code in (200, 409) for code in statuses),
+          f"JSON record 并发 upsert 只出现 200/409（实际 {sorted(set(statuses))}）")
+    rows = stack.sql(
+        "SELECT count(*) FROM rag_documents "
+        f"WHERE collection_id = {collection_id} AND source_namespace = 'jsonrace' "
+        "AND external_id = 'json-race-1'")
+    check(rows == "1", f"JSON 外部身份只有一行（实际 {rows}）")
+    revisions = stack.sql(
+        "SELECT count(*) FROM rag_document_versions v JOIN rag_documents d "
+        "ON d.id = v.document_id WHERE d.external_id = 'json-race-1'")
+    check(revisions == "1", f"JSON 记录只产生一个历史版本（实际 {revisions}）")
 
 
 def run_quota_scenario(stack: LocalStack, base_url: str) -> None:
