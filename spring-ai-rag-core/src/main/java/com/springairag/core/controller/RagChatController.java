@@ -8,7 +8,7 @@ import com.springairag.api.dto.ClearHistoryResponse;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.core.config.RagChatService;
-import com.springairag.core.config.RagSseProperties;
+import com.springairag.core.properties.RagSseProperties;
 import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
 import com.springairag.core.diagnostics.RetrievalTraceSession;
 import com.springairag.core.retrieval.RetrievalFilters;
@@ -319,6 +319,11 @@ public class RagChatController {
     public SseEmitter stream(@Valid @RequestBody ChatRequest request,
                                HttpServletRequest httpRequest,
                                HttpServletResponse httpResponse) {
+        // 续传游标由调用方显式带回；缺失或非法都按"没有断点"降级为整轮重放。
+        String lastEventId = httpRequest != null
+                ? httpRequest.getHeader("Last-Event-ID")
+                : null;
+
         validateCollectionCoverageMode(request);
         ChatTurnOperationService.Prepared prepared =
                 prepareTurn(request, httpRequest);
@@ -330,7 +335,8 @@ public class RagChatController {
             return replayNativeSse(
                     turnOperationService.replay(existing),
                     existing,
-                    httpResponse);
+                    httpResponse,
+                    lastEventId);
         }
         if (prepared != null && prepared.keyed()) {
             ChatCommandMapper mapper = requireIdempotentMapper();
@@ -356,7 +362,8 @@ public class RagChatController {
                 return replayNativeSse(
                         turnOperationService.replay(claim),
                         claim,
-                        httpResponse);
+                        httpResponse,
+                        lastEventId);
             }
             command = turnOperationService.commandForClaim(command, claim);
             keyedScope = command.retrievalScope();
@@ -480,7 +487,8 @@ public class RagChatController {
                     claim,
                     false,
                     httpResponse,
-                    session);
+                    session,
+                    0L);
         } catch (RuntimeException error) {
             turnOperationService.fail(claim, error);
             throw error;
@@ -494,9 +502,28 @@ public class RagChatController {
     private SseEmitter replayNativeSse(
             ChatResponse response,
             ChatTurnOperationService.Claim claim,
-            HttpServletResponse httpResponse) {
+            HttpServletResponse httpResponse,
+            String lastEventId) {
         return nativeSnapshotEmitter(
-                response, claim, true, httpResponse, null);
+                response, claim, true, httpResponse, null, parseEventId(lastEventId));
+    }
+
+    /**
+     * Parses {@code Last-Event-ID}.
+     *
+     * <p>Malformed values are treated as absent: replaying the whole turn is the
+     * safe outcome, whereas rejecting the reconnect would turn a recoverable
+     * network blip into a failed answer.
+     */
+    private static long parseEventId(String lastEventId) {
+        if (lastEventId == null || lastEventId.isBlank()) {
+            return 0L;
+        }
+        try {
+            return Math.max(0L, Long.parseLong(lastEventId.trim()));
+        } catch (NumberFormatException ignored) {
+            return 0L;
+        }
     }
 
     private SseEmitter nativeSnapshotEmitter(
@@ -504,7 +531,8 @@ public class RagChatController {
             ChatTurnOperationService.Claim claim,
             boolean replay,
             HttpServletResponse httpResponse,
-            RetrievalTraceSession traceSession) {
+            RetrievalTraceSession traceSession,
+            long resumeAfterEventId) {
         if (httpResponse != null && claim != null && claim.keyed()) {
             httpResponse.setHeader(
                     "X-RAG-Turn-Id",
@@ -526,12 +554,15 @@ public class RagChatController {
                 Map<String, Object> content = new LinkedHashMap<>();
                 content.put("choices", List.of(Map.of(
                         "delta", Map.of("content", response.getAnswer()))));
-                putSequence(content, sequence);
-                SseEmitters.sendProgress(
-                        emitter,
-                        "content",
-                        content,
-                        "chat content");
+                int contentId = putSequence(content, sequence);
+                if (contentId > resumeAfterEventId) {
+                    SseEmitters.sendProgress(
+                            emitter,
+                            "content",
+                            content,
+                            "chat content",
+                            (long) contentId);
+                }
             }
             if (response.getSources() != null
                     && !response.getSources().isEmpty()) {
@@ -539,12 +570,15 @@ public class RagChatController {
                 sources.put("sessionId", response.getSessionId());
                 sources.put("sources", response.getSources());
                 putCitationRegistry(sources, response.getMetadata());
-                putSequence(sources, sequence);
-                SseEmitters.sendProgress(
-                        emitter,
-                        "sources",
-                        sources,
-                        "chat sources");
+                int sourcesId = putSequence(sources, sequence);
+                if (sourcesId > resumeAfterEventId) {
+                    SseEmitters.sendProgress(
+                            emitter,
+                            "sources",
+                            sources,
+                            "chat sources",
+                            (long) sourcesId);
+                }
             }
             Map<String, Object> done = new LinkedHashMap<>();
             putIfPresent(done, "traceId", response.getTraceId());
@@ -563,8 +597,10 @@ public class RagChatController {
                             : response.getTurnId());
             done.put("idempotentReplay", replay);
             done.put("status", terminalStatus(response.getMetadata()));
-            putSequence(done, sequence);
-            SseEmitters.sendProgress(emitter, "done", done, "chat done");
+            int doneId = putSequence(done, sequence);
+            if (doneId > resumeAfterEventId) {
+                SseEmitters.sendProgress(emitter, "done", done, "chat done", (long) doneId);
+            }
             emitter.complete();
         } catch (RuntimeException error) {
             emitter.completeWithError(error);
@@ -700,12 +736,21 @@ public class RagChatController {
                 : FailureClass.from(code.getHttpStatus(), code.getCode());
     }
 
-    private void putSequence(
+    /**
+     * Attaches a dense, per-turn sequence number and returns it.
+     *
+     * <p>The same number is also written as the SSE {@code id}, so a reconnect
+     * with {@code Last-Event-ID} can skip exactly the events already delivered.
+     */
+    private int putSequence(
             Map<String, Object> payload,
             EventSequence sequence) {
-        if (sequence != null) {
-            payload.put("sequence", sequence.next());
+        if (sequence == null) {
+            return 0;
         }
+        int value = sequence.next();
+        payload.put("sequence", value);
+        return value;
     }
 
     private void putCitationRegistry(

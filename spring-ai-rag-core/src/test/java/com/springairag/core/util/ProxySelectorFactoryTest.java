@@ -1,7 +1,7 @@
 package com.springairag.core.util;
 
 import com.springairag.core.config.ProxySelectorFactory;
-import com.springairag.core.config.RagProxyProperties;
+import com.springairag.core.properties.RagProxyProperties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

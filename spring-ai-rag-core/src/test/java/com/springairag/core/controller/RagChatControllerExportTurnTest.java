@@ -3,7 +3,7 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.ChatTurnStatusResponse;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.chat.ChatTurnOperationService;
-import com.springairag.core.config.RagSseProperties;
+import com.springairag.core.properties.RagSseProperties;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.service.AuditLogService;

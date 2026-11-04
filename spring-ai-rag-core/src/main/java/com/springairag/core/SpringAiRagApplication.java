@@ -14,7 +14,10 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
                 "org.springframework.ai.model.minimax.autoconfigure.MiniMaxChatAutoConfiguration"
         }
 )
-@ConfigurationPropertiesScan("com.springairag.core.config")
+@ConfigurationPropertiesScan({
+        "com.springairag.core.config",
+        "com.springairag.core.properties"
+})
 public class SpringAiRagApplication {
 
     public static void main(String[] args) {

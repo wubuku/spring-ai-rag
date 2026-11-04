@@ -25,7 +25,7 @@ HTTP、ACL、正文、documentRevision、JSON_RECORD 语义不变。
 | [ChunkingUpgradeService](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/ChunkingUpgradeService.java) | 单 worker、30 秒扫描两篇、120 秒 lease/30 秒 heartbeat；provider 在事务外，短事务 CAS/fence/两索引切换 |
 | [V62](../../../spring-ai-rag-core/src/main/resources/db/migration/V62__automatic_chunking_upgrade.sql) | 私有 serving identity；主键 document/Profile；四状态、attempt 1–3 |
 | [EmbeddingBatchService](../../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/EmbeddingBatchService.java) | batch→逐项 fallback；结果保留旧 error；增加内部分类，不改成功/fallback 契约 |
-| [RagChunkProperties](../../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChunkProperties.java) | v3 和自动升级默认开启；新增嵌套恢复配置并 validate |
+| [RagChunkProperties](../../../spring-ai-rag-core/src/main/java/com/springairag/core/properties/RagChunkProperties.java) | v3 和自动升级默认开启；新增嵌套恢复配置并 validate |
 | [PG 集成测试](../../../spring-ai-rag-core/src/test/java/com/springairag/core/integration/ChunkingUpgradePostgresIntegrationTest.java) | 16 个既有迁移、CAS、lease、回滚、inactive Profile 用例；直接扩展 |
 | [Embedding 单测](../../../spring-ai-rag-core/src/test/java/com/springairag/core/retrieval/EmbeddingBatchServiceTest.java) | batch/fallback/熔断/结果兼容；增加分类透传、JSON 不扩张 |
 | [配置参考](../../configuration-zh-CN.md#文档分块配置) | 更新恢复语义与边界，英文同步 |

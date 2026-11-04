@@ -29,7 +29,7 @@
 | [DocumentChunkingService](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentChunkingService.java) `prepare` | 本地关键词与 Embedding 共用的唯一协调入口；JSON_RECORD 保持 single chunk；没有 provider 调用 |
 | [HierarchicalTextChunker](../../../spring-ai-rag-documents/src/main/java/com/springairag/documents/chunk/HierarchicalTextChunker.java) `split` | 已有标题、表格、句子、固定长度分支和 overlap；应增强它，不平行再造一条处理链 |
 | [TextChunk](../../../spring-ai-rag-documents/src/main/java/com/springairag/documents/chunk/TextChunk.java) | 当前记录 text/startPos/endPos，位置契约为原文字符区间，endPos exclusive |
-| [RagChunkProperties](../../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChunkProperties.java) | 默认 size=1000、min=100、overlap=100；目前不是完整的策略 Profile |
+| [RagChunkProperties](../../../spring-ai-rag-core/src/main/java/com/springairag/core/properties/RagChunkProperties.java) | 默认 size=1000、min=100、overlap=100；目前不是完整的策略 Profile |
 | [DocumentDerivationDescriptorProvider](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentDerivationDescriptorProvider.java) | 当前文本派生版本 `hierarchical-v2:size:min:overlap`；JSON_RECORD 为 `json-record-v1:single` |
 | [现有 chunker 测试](../../../spring-ai-rag-documents/src/test/java/com/springairag/documents/chunk/HierarchicalTextChunkerTest.java) | 已覆盖基础场景，但“长句回退”只验证非空与局部位置范围，没有证明尺寸上限及完整覆盖 |
 

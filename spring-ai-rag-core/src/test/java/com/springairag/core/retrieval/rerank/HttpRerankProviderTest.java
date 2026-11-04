@@ -1,7 +1,7 @@
 package com.springairag.core.retrieval.rerank;
 
 import com.springairag.api.dto.RetrievalResult;
-import com.springairag.core.config.RagRerankProperties;
+import com.springairag.core.properties.RagRerankProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.test.web.client.MockRestServiceServer;

@@ -3,7 +3,7 @@ package com.springairag.core.chat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.api.enums.ErrorCode;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.chat.RetrievalOptions;

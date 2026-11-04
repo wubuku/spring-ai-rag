@@ -104,6 +104,8 @@ export interface UseChatSSEReturn {
 type ParsedSseEvent = {
   type: string;
   data: string;
+  /** SSE 的 `id:` 字段，用于断线后 Last-Event-ID 续传。 */
+  id?: string;
 };
 
 /**
@@ -200,6 +202,8 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
       let terminalEvent = false;
       let completed = false;
       let lastSequence = 0;
+      // 服务端每条事件都带 `id:`；断线重试时用它发 Last-Event-ID，只补发缺失事件。
+      let lastEventId: string | undefined;
       let lastError: unknown = new Error('Chat connection failed');
 
       try {
@@ -216,6 +220,7 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
               headers: {
                 'Content-Type': 'application/json',
                 'Idempotency-Key': idempotencyKey,
+                ...(lastEventId ? { 'Last-Event-ID': lastEventId } : {}),
                 ...getCredentialHeaders(),
               },
               body: JSON.stringify(body),
@@ -387,6 +392,9 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
             return false;
           }
           lastSequence = sequenceState.value;
+        }
+        if (event.id) {
+          lastEventId = event.id;
         }
         if (event.type === 'content' || event.type === 'chunk') {
           const content = extractContent(payload);
@@ -576,16 +584,21 @@ function drainSseBlocks(buffer: string): {
 function parseSseBlock(block: string): ParsedSseEvent | null {
   if (!block.trim()) return null;
   let type = 'content';
+  let id: string | undefined;
   const dataLines: string[] = [];
   for (const line of block.split(/\r?\n/)) {
     if (line.startsWith(':')) continue;
-    if (line.startsWith('event:')) {
+    if (line.startsWith('id:')) {
+      id = line.slice('id:'.length).trim() || undefined;
+    } else if (line.startsWith('event:')) {
       type = line.slice('event:'.length).trim();
     } else if (line.startsWith('data:')) {
       dataLines.push(line.slice('data:'.length).replace(/^ /, ''));
     }
   }
-  return dataLines.length > 0 ? { type, data: dataLines.join('\n') } : null;
+  return dataLines.length > 0
+    ? { type, id, data: dataLines.join('\n') }
+    : null;
 }
 
 function parseJson(value: string): any {

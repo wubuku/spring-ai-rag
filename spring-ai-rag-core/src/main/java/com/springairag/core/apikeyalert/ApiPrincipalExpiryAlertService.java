@@ -3,7 +3,7 @@ package com.springairag.core.apikeyalert;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.core.alertdelivery.AlertNotificationOutboxService;
-import com.springairag.core.config.RagApiKeyExpiryAlertProperties;
+import com.springairag.core.properties.RagApiKeyExpiryAlertProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.service.AlertService;
 import com.springairag.core.service.NotificationService;

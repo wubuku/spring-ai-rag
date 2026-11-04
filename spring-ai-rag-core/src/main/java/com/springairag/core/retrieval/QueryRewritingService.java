@@ -1,7 +1,7 @@
 package com.springairag.core.retrieval;
 
 import com.springairag.core.config.RagProperties;
-import com.springairag.core.config.RagQueryRewriteProperties;
+import com.springairag.core.properties.RagQueryRewriteProperties;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

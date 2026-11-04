@@ -1,5 +1,6 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.RagChatProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 

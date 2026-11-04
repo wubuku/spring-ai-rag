@@ -1,6 +1,8 @@
 package com.springairag.core.config;
 
-import com.springairag.core.config.MultiModelProperties.ModelCapabilities;
+import com.springairag.core.properties.MultiModelProperties;
+
+import com.springairag.core.properties.MultiModelProperties.ModelCapabilities;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;

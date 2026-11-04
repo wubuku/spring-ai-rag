@@ -20,7 +20,7 @@ import com.springairag.api.enums.DocumentSyncMissingPolicy;
 import com.springairag.api.enums.DocumentSyncRunStatus;
 import com.springairag.api.enums.DocumentSyncSnapshotMode;
 import com.springairag.api.enums.ErrorCode;
-import com.springairag.core.config.RagDocumentLifecycleProperties;
+import com.springairag.core.properties.RagDocumentLifecycleProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.exception.RagException;

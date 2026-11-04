@@ -2,7 +2,7 @@ package com.springairag.core.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.springairag.core.config.RagPdfProperties;
+import com.springairag.core.properties.RagPdfProperties;
 import com.springairag.core.controller.PdfImportController;
 import com.springairag.core.entity.FsFile;
 import com.springairag.core.entity.FsImportBatch;

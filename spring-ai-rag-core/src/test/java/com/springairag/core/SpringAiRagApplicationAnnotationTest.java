@@ -57,7 +57,12 @@ class SpringAiRagApplicationAnnotationTest {
         String[] packages = scan.value().length > 0
                 ? scan.value()
                 : scan.basePackages();
-        assertEquals(1, packages.length);
-        assertEquals("com.springairag.core.config", packages[0]);
+        // 只读配置属性类已下沉到 properties 包，扫描必须同时覆盖两个包，
+        // 否则 @ConfigurationProperties 不会注册成 bean。
+        assertEquals(2, packages.length);
+        assertEquals(java.util.Set.of(
+                        "com.springairag.core.config",
+                        "com.springairag.core.properties"),
+                java.util.Set.of(packages[0], packages[1]));
     }
 }

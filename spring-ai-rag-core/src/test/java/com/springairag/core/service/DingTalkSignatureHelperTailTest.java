@@ -1,6 +1,6 @@
 package com.springairag.core.service;
 
-import com.springairag.core.config.NotificationConfig;
+import com.springairag.core.properties.NotificationConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.web.client.RestTemplateBuilder;

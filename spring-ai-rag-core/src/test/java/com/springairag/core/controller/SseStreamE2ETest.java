@@ -4,7 +4,7 @@ import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.core.chat.ChatEvent;
 import com.springairag.core.config.RagChatService;
-import com.springairag.core.config.RagSseProperties;
+import com.springairag.core.properties.RagSseProperties;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.service.AuditLogService;

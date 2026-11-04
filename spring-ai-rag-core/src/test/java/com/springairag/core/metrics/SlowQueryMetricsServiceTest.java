@@ -1,7 +1,7 @@
 package com.springairag.core.metrics;
 
 import com.springairag.core.config.RagProperties;
-import com.springairag.core.config.RagSlowQueryProperties;
+import com.springairag.core.properties.RagSlowQueryProperties;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

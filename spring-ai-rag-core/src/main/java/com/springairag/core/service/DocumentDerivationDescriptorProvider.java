@@ -24,7 +24,7 @@ public class DocumentDerivationDescriptorProvider {
 
     public Descriptor textDescriptor() {
         if (properties.getChunk().getProfile()
-                == com.springairag.core.config.RagChunkProperties.Profile.BOUNDED_V3) {
+                == com.springairag.core.properties.RagChunkProperties.Profile.BOUNDED_V3) {
             return new Descriptor("TEXT", "bounded-v3:"
                     + properties.getChunk().getDefaultChunkSize() + ":"
                     + properties.getChunk().getMinChunkSize() + ":"

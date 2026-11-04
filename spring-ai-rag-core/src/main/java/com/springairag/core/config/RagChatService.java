@@ -1,5 +1,7 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.RagChatProperties;
+import com.springairag.core.properties.MultiModelProperties;
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.dto.ChatSource;
 import com.springairag.api.dto.ChatResponse;
@@ -52,7 +54,6 @@ import org.springframework.core.Ordered;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
-
 import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.function.Supplier;

@@ -10,7 +10,7 @@ import com.springairag.api.dto.LongRunningOperationResponse;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.chat.IdempotencyKeyValidator;
-import com.springairag.core.config.RagCollectionPurgeProperties;
+import com.springairag.core.properties.RagCollectionPurgeProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.exception.RagException;

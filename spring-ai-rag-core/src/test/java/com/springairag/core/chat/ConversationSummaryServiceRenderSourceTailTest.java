@@ -51,7 +51,7 @@ class ConversationSummaryServiceRenderSourceTailTest {
         var model = mock(ChatModel.class);
         var candidate = new ChatModelRouter.ChatModelCandidate(
                 "test/model", model,
-                new com.springairag.core.config.MultiModelProperties
+                new com.springairag.core.properties.MultiModelProperties
                         .ModelCapabilities(true, false));
         when(modelRouter.resolveCandidateRequired("test/model"))
                 .thenReturn(candidate);

@@ -19,7 +19,7 @@ package com.springairag.core.metrics;
 import com.springairag.api.dto.ApiSloComplianceResponse;
 import com.springairag.api.dto.ApiSloComplianceResponse.EndpointSlo;
 import com.springairag.api.dto.ApiSloComplianceResponse.LatencyStats;
-import com.springairag.core.config.ApiSloProperties;
+import com.springairag.core.properties.ApiSloProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

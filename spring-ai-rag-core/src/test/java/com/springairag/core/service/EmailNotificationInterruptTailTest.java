@@ -1,6 +1,6 @@
 package com.springairag.core.service;
 
-import com.springairag.core.config.NotificationConfig;
+import com.springairag.core.properties.NotificationConfig;
 import jakarta.mail.MessagingException;
 import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;

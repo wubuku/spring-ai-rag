@@ -6,7 +6,7 @@ import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.chat.RetrievalTraceCollector;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.RagProperties;
-import com.springairag.core.config.RagRerankProperties;
+import com.springairag.core.properties.RagRerankProperties;
 import com.springairag.core.rag.RetrievalDocumentMapper;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.JsonbContainmentFilter;

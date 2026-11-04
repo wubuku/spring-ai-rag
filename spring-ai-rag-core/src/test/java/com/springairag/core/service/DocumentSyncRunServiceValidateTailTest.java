@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.enums.DocumentSyncMissingPolicy;
 import com.springairag.api.enums.DocumentSyncSnapshotMode;
 import com.springairag.api.enums.ErrorCode;
-import com.springairag.core.config.RagDocumentLifecycleProperties;
+import com.springairag.core.properties.RagDocumentLifecycleProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import org.junit.jupiter.api.BeforeEach;

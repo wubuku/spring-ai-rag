@@ -2,7 +2,7 @@ package com.springairag.core.controller;
 
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.ModelRegistry;
-import com.springairag.core.config.RagCorsProperties;
+import com.springairag.core.properties.RagCorsProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.service.ModelComparisonService;
 import com.springairag.core.service.ModelComparisonService.ModelComparisonResult;

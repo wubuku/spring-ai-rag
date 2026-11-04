@@ -43,7 +43,7 @@ class AlertServiceImplSloResolveTailTest {
                 mock(RagRetrievalEvaluationRepository.class),
                 mock(RagSilenceScheduleRepository.class),
                 List.of(),
-                new com.springairag.core.config.RagAlertProperties(),
+                new com.springairag.core.properties.RagAlertProperties(),
                 outboxService);
     }
 

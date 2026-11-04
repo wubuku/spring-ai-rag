@@ -2,7 +2,7 @@ package com.springairag.core.chat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.ChatResponse;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.repository.ChatTurnOperationRepository;
 import org.junit.jupiter.api.BeforeEach;

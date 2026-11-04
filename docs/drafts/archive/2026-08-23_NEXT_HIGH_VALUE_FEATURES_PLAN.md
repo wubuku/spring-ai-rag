@@ -285,7 +285,7 @@ query cache，避免不同 tool-level 数量互相泄漏或被先前的小请求
 
 ### 5.1 允许修改的生产文件
 
-1. `spring-ai-rag-core/src/main/java/com/springairag/core/config/RagRerankProperties.java`
+1. `spring-ai-rag-core/src/main/java/com/springairag/core/properties/RagRerankProperties.java`
    - 增加 `candidateLimit`、默认值和 `1..100` 有界 setter。
 2. `spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/HybridRetrieverService.java`
    - 注入/读取 rerank 配置；

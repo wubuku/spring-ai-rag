@@ -1,5 +1,7 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.MultiModelProperties;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.ai.chat.model.ChatModel;

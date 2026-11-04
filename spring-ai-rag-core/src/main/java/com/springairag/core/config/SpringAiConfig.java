@@ -1,5 +1,8 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.RagTimeoutProperties;
+import com.springairag.core.properties.RagPdfProperties;
+import com.springairag.core.properties.RagMemoryProperties;
 import com.springairag.core.adapter.ApiAdapterFactory;
 import com.springairag.core.adapter.ApiCompatibilityAdapter;
 import jakarta.annotation.PostConstruct;
@@ -28,7 +31,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
-
 import java.net.Proxy;
 import java.net.ProxySelector;
 import java.util.List;

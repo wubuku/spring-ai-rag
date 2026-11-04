@@ -2,7 +2,7 @@ package com.springairag.core.http;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.skill.RuntimeSkill;
 import com.springairag.core.skill.RuntimeSkillCatalog;
 import com.springairag.core.skill.RuntimeSkillLoadSession;

@@ -2,7 +2,7 @@ package com.springairag.core.retrieval;
 
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.config.RagProperties;
-import com.springairag.core.config.RagRerankProperties;
+import com.springairag.core.properties.RagRerankProperties;
 import com.springairag.core.retrieval.rerank.HeuristicRerankProvider;
 import com.springairag.core.retrieval.rerank.RerankProvider;
 import com.springairag.core.retrieval.rerank.RerankProviderFactory;

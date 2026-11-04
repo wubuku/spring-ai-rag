@@ -1,6 +1,6 @@
 package com.springairag.core.service;
 
-import com.springairag.core.config.NotificationConfig;
+import com.springairag.core.properties.NotificationConfig;
 import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.support.AopUtils;

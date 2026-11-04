@@ -1,5 +1,7 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.RagChatProperties;
+
 import com.springairag.core.chat.ChatTurnOperationMaintenance;
 import com.springairag.core.repository.ChatTurnOperationRepository;
 import com.springairag.core.ratelimit.PostgresRateLimitStore;

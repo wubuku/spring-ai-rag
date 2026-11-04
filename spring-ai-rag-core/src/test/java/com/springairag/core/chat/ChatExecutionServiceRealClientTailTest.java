@@ -111,7 +111,7 @@ class ChatExecutionServiceRealClientTailTest {
         when(model.getDefaultOptions()).thenReturn(null);
         return new ChatModelRouter.ChatModelCandidate(
                 ref, model,
-                new com.springairag.core.config.MultiModelProperties
+                new com.springairag.core.properties.MultiModelProperties
                         .ModelCapabilities(true, false));
     }
 

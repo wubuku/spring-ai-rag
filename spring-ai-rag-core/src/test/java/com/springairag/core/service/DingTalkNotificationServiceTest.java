@@ -3,7 +3,7 @@ package com.springairag.core.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.core.alertdelivery.AlertNotificationAttemptResult;
 import com.springairag.core.alertdelivery.AlertNotificationPayload;
-import com.springairag.core.config.NotificationConfig;
+import com.springairag.core.properties.NotificationConfig;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

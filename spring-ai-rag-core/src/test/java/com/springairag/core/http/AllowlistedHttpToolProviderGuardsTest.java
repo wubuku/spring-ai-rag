@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.api.service.RagChatToolPolicy;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.skill.RuntimeSkill;
 import com.springairag.core.skill.RuntimeSkillCatalog;
 import org.junit.jupiter.api.Test;

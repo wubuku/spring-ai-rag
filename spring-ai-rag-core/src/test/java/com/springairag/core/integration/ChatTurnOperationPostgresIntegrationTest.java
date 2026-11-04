@@ -13,7 +13,7 @@ import com.springairag.core.chat.ChatRequestFingerprint;
 import com.springairag.core.chat.ChatTurnOperation;
 import com.springairag.core.chat.ChatTurnOperationService;
 import com.springairag.core.chat.IdempotencyKeyValidator;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.repository.ChatTurnOperationRepository;
 import org.flywaydb.core.Flyway;

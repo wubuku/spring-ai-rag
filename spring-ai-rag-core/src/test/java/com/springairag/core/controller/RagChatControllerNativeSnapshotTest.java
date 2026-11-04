@@ -120,15 +120,27 @@ class RagChatControllerNativeSnapshotTest {
     }
 
     private MvcResult replayStream() throws Exception {
-        return mockMvc.perform(post("/rag/chat/stream")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"message\":\"问题\",\"sessionId\":\"session-1\"}"))
+        return replayStream(null);
+    }
+
+    private MvcResult replayStream(String lastEventId) throws Exception {
+        var request = post("/rag/chat/stream")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"message\":\"问题\",\"sessionId\":\"session-1\"}");
+        if (lastEventId != null) {
+            request.header("Last-Event-ID", lastEventId);
+        }
+        return mockMvc.perform(request)
                 .andExpect(request().asyncStarted())
                 .andReturn();
     }
 
     private String replayBody() throws Exception {
-        MvcResult started = replayStream();
+        return replayBody(null);
+    }
+
+    private String replayBody(String lastEventId) throws Exception {
+        MvcResult started = replayStream(lastEventId);
         // 先等异步结果就绪再 dispatch，否则撞 MockMvc 的 timeToWait=0。
         started.getAsyncResult(10_000);
         MvcResult completed = mockMvc.perform(asyncDispatch(started)).andReturn();
@@ -171,6 +183,60 @@ class RagChatControllerNativeSnapshotTest {
                 () -> "done 帧没标出这是重放:\n" + body);
         assertTrue(body.contains(TURN_ID.toString()),
                 () -> "done 帧的 turnId 应取自 claim 的 operation:\n" + body);
+    }
+
+    @Test
+    void replayEmitsSseIdForEveryEvent() throws Exception {
+        stubReplay(true, "answer text", List.of(mock(ChatSource.class)));
+
+        String body = replayBody();
+
+        // id 与 sequence 同值，且稳定可复现：content=1、sources=2、done=3。
+        // 这是 Last-Event-ID 续传能精确跳过已收事件的前提。
+        assertTrue(body.contains("id:1"), () -> "content 帧缺少 SSE id:\n" + body);
+        assertTrue(body.contains("id:2"), () -> "sources 帧缺少 SSE id:\n" + body);
+        assertTrue(body.contains("id:3"), () -> "done 帧缺少 SSE id:\n" + body);
+    }
+
+    @Test
+    void replayWithLastEventIdSkipsDeliveredEvents() throws Exception {
+        stubReplay(true, "answer text", List.of(mock(ChatSource.class)));
+
+        String body = replayBody("1");
+
+        // 客户端已收到 content(id=1)：只补 sources(2) 与 done(3)，不得重复 content。
+        assertFalse(body.contains("event:content"),
+                () -> "Last-Event-ID=1 仍重发了 content:\n" + body);
+        assertTrue(body.contains("event:sources"),
+                () -> "Last-Event-ID=1 漏掉了 sources:\n" + body);
+        assertTrue(body.contains("event:done"),
+                () -> "Last-Event-ID=1 漏掉了 done:\n" + body);
+        assertTrue(body.contains("id:2") && body.contains("id:3"),
+                () -> "补发事件的 id 不稳定:\n" + body);
+        assertFalse(body.contains("answer text"),
+                () -> "已收事件的内容不应再次出现:\n" + body);
+    }
+
+    @Test
+    void replayWithLastEventIdAtDoneEmitsNothing() throws Exception {
+        stubReplay(true, "answer text", List.of(mock(ChatSource.class)));
+
+        String body = replayBody("3");
+
+        assertEquals("", body,
+                () -> "已收到 done 后重连不应再发任何事件:\n" + body);
+    }
+
+    @Test
+    void malformedLastEventIdFallsBackToFullReplay() throws Exception {
+        stubReplay(true, "answer text", List.of(mock(ChatSource.class)));
+
+        String body = replayBody("not-a-number");
+
+        // 重放整轮是安全降级；直接 400 会把一次网络抖动变成回答失败。
+        assertEmitted(body, "content");
+        assertEmitted(body, "sources");
+        assertEmitted(body, "done");
     }
 
     @Test

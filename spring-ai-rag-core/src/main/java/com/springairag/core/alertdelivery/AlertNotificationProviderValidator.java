@@ -1,6 +1,6 @@
 package com.springairag.core.alertdelivery;
 
-import com.springairag.core.config.NotificationConfig;
+import com.springairag.core.properties.NotificationConfig;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 

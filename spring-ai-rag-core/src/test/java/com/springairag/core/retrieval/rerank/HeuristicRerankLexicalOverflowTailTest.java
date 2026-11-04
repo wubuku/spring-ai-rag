@@ -1,6 +1,6 @@
 package com.springairag.core.retrieval.rerank;
 
-import com.springairag.core.config.RagRerankProperties;
+import com.springairag.core.properties.RagRerankProperties;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

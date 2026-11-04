@@ -5,7 +5,7 @@ import com.springairag.api.dto.IntegrationCapabilitiesResponse;
 import com.springairag.api.enums.CollectionAccessMode;
 import com.springairag.api.enums.FailureClass;
 import com.springairag.core.config.RagProperties;
-import com.springairag.core.config.RagRetryProperties;
+import com.springairag.core.properties.RagRetryProperties;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.security.ApiCapabilitySupport;
 import com.springairag.core.security.ApiKeyCollectionAccess;

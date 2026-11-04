@@ -65,7 +65,7 @@
 - [PDF 导入](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/PdfImportService.java)
 - [Marker 转换器](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/pdf/MarkerPdfConverter.java)
 - [PDFBox 转换器](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/pdf/PdfBoxConverter.java)
-- [PDF 配置](../../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagPdfProperties.java)
+- [PDF 配置](../../../spring-ai-rag-core/src/main/java/com/springairag/core/properties/RagPdfProperties.java)
 
 ## 3. 对外/持久化契约
 

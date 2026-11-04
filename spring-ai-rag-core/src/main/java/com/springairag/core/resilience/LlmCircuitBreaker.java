@@ -1,7 +1,7 @@
 package com.springairag.core.resilience;
 
-import com.springairag.core.config.EmbeddingCircuitBreakerProperties;
-import com.springairag.core.config.RagCircuitBreakerProperties;
+import com.springairag.core.properties.EmbeddingCircuitBreakerProperties;
+import com.springairag.core.properties.RagCircuitBreakerProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

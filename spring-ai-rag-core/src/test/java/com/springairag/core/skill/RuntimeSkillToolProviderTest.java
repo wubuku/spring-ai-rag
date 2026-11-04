@@ -3,7 +3,7 @@ package com.springairag.core.skill;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.core.chat.RagChatToolRegistry;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.rag.KnowledgeSearchTool;
 import com.springairag.core.resource.ResourceCatalog;
 import org.junit.jupiter.api.Test;

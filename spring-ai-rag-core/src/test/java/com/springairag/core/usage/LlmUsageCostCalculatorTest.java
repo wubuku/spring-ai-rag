@@ -1,6 +1,6 @@
 package com.springairag.core.usage;
 
-import com.springairag.core.config.MultiModelProperties.ModelCost;
+import com.springairag.core.properties.MultiModelProperties.ModelCost;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;

@@ -1,7 +1,7 @@
 package com.springairag.core.chat;
 
 import com.springairag.api.dto.ChatResponse;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.exception.ChatTurnInProgressException;
 import org.junit.jupiter.api.Test;
 

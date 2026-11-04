@@ -10,7 +10,7 @@ import com.springairag.core.usage.LlmInvocationPurpose;
 import com.springairag.core.usage.LlmUsageEvent;
 import com.springairag.core.usage.LlmUsageRecorder;
 import com.springairag.core.usage.LlmUsageSnapshot;
-import com.springairag.core.config.MultiModelProperties;
+import com.springairag.core.properties.MultiModelProperties;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;

@@ -1,6 +1,6 @@
 package com.springairag.core.documentprocessing;
 
-import com.springairag.core.config.RagDocumentProcessingProperties;
+import com.springairag.core.properties.RagDocumentProcessingProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.embeddingjob.EmbeddingJobRepository;
 import com.springairag.core.embeddingjob.EmbeddingJob;

@@ -3,7 +3,7 @@ package com.springairag.core.chat;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.ChatModelRouter;
-import com.springairag.core.config.MultiModelProperties;
+import com.springairag.core.properties.MultiModelProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.extension.DomainExtensionRegistry;
@@ -100,7 +100,7 @@ class ChatExecutionStreamBudgetTest {
         return new ChatModelRouter.ChatModelCandidate(
                 ref,
                 model,
-                new com.springairag.core.config.MultiModelProperties
+                new com.springairag.core.properties.MultiModelProperties
                         .ModelCapabilities(true, false));
     }
 

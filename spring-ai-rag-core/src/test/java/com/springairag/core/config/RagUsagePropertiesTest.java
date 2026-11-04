@@ -1,5 +1,7 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.RagUsageProperties;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

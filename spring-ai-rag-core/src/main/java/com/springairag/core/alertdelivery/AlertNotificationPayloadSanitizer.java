@@ -2,7 +2,7 @@ package com.springairag.core.alertdelivery;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.springairag.core.config.NotificationConfig;
+import com.springairag.core.properties.NotificationConfig;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;

@@ -2,7 +2,7 @@ package com.springairag.core.chat;
 
 import com.springairag.api.enums.ChatMode;
 import com.springairag.core.config.ChatModelRouter;
-import com.springairag.core.config.MultiModelProperties;
+import com.springairag.core.properties.MultiModelProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.http.HttpToolExecutionState;
 import com.springairag.core.rag.JsonRecordSearchTool;

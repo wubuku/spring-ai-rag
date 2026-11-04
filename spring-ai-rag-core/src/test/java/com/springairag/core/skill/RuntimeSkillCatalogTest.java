@@ -1,6 +1,6 @@
 package com.springairag.core.skill;
 
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.resource.ResourceCatalog;
 import com.springairag.core.resource.ResourceEntry;
 import com.springairag.core.resource.ResourceKind;

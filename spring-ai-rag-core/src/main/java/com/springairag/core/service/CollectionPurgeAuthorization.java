@@ -1,7 +1,7 @@
 package com.springairag.core.service;
 
 import com.springairag.api.enums.ErrorCode;
-import com.springairag.core.config.RagCollectionPurgeProperties;
+import com.springairag.core.properties.RagCollectionPurgeProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.exception.RagException;

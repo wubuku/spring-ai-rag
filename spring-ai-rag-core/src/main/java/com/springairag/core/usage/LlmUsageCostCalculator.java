@@ -1,6 +1,6 @@
 package com.springairag.core.usage;
 
-import com.springairag.core.config.MultiModelProperties;
+import com.springairag.core.properties.MultiModelProperties;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

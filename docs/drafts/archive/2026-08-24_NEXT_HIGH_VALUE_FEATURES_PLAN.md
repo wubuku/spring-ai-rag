@@ -309,7 +309,7 @@ provider 已返回 4 项，因此结果数量仍为 4，且顺序与 provider �
 
 预计修改：
 
-- `spring-ai-rag-core/src/main/java/com/springairag/core/config/RagRerankProperties.java`
+- `spring-ai-rag-core/src/main/java/com/springairag/core/properties/RagRerankProperties.java`
   - 新增并 clamp `preferredMaxChunksPerDocument`；
 - `spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/ReRankingService.java`
   - 分离 provider ranking depth 与最终 limit；

@@ -1,5 +1,6 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.RagSecurityProperties;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.filter.ApiCapabilityFilter;
 import com.springairag.core.filter.FailureClassResponseHeaderFilter;

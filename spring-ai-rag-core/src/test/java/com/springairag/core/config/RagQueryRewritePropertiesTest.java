@@ -1,5 +1,7 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.RagQueryRewriteProperties;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;

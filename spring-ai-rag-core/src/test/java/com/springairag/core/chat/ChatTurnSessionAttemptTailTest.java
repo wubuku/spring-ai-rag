@@ -2,7 +2,7 @@ package com.springairag.core.chat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.enums.ChatMode;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.config.RagProperties;
 
 import com.springairag.core.diagnostics.RetrievalTraceSession;
@@ -102,7 +102,7 @@ class ChatTurnSessionAttemptTailTest {
         com.springairag.core.config.ChatModelRouter.ChatModelCandidate candidate =
                 new com.springairag.core.config.ChatModelRouter.ChatModelCandidate(
                         "acme/m1", mock(org.springframework.ai.chat.model.ChatModel.class),
-                        new com.springairag.core.config.MultiModelProperties
+                        new com.springairag.core.properties.MultiModelProperties
                                 .ModelCapabilities(true, true));
         when(attempt.retrievalContext()).thenReturn(context);
         when(context.trace()).thenReturn(collector);

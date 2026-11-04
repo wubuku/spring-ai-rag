@@ -1,6 +1,6 @@
 package com.springairag.core.resource;
 
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
@@ -27,7 +27,7 @@ class StaticKnowledgeCatalogChunkFlushTailTest {
         return (String) method.invoke(
                 new StaticKnowledgeCatalog(
                         mock(ResourceCatalog.class),
-                        new com.springairag.core.config.RagChatProperties()),
+                        new com.springairag.core.properties.RagChatProperties()),
                 value);
     }
 

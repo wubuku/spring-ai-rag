@@ -1,6 +1,6 @@
 package com.springairag.core.budget;
 
-import com.springairag.core.config.RagLlmBudgetProperties;
+import com.springairag.core.properties.RagLlmBudgetProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.usage.LlmUsageSnapshot;
 import org.springframework.dao.DataAccessException;

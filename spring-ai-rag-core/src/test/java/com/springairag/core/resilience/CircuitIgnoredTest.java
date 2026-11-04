@@ -1,6 +1,6 @@
 package com.springairag.core.resilience;
 
-import com.springairag.core.config.RagCircuitBreakerProperties;
+import com.springairag.core.properties.RagCircuitBreakerProperties;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 

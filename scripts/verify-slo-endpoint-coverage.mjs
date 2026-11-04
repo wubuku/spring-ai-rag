@@ -58,7 +58,7 @@ const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const MAIN_ROOT = join(projectRoot, 'spring-ai-rag-core', 'src', 'main', 'java');
 const PROPERTIES_FILE = join(
   projectRoot, 'spring-ai-rag-core', 'src', 'main', 'java', 'com', 'springairag',
-  'core', 'config', 'ApiSloProperties.java',
+  'core', 'properties', 'ApiSloProperties.java',
 );
 
 export const VIOLATION_KINDS = Object.freeze({

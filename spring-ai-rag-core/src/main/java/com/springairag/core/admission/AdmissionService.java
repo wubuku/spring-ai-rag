@@ -1,6 +1,6 @@
 package com.springairag.core.admission;
 
-import com.springairag.core.config.RagAdmissionProperties;
+import com.springairag.core.properties.RagAdmissionProperties;
 import com.springairag.core.config.RagProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Component;
@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Component
 public class AdmissionService {
     private final RagAdmissionProperties properties;
-    private final com.springairag.core.config.RagEvaluationProperties evaluation;
+    private final com.springairag.core.properties.RagEvaluationProperties evaluation;
     private final MeterRegistry metrics;
     private final Map<String, Pool> pools = Map.of(
             "request", new Pool(), "model", new Pool(), "background", new Pool(),

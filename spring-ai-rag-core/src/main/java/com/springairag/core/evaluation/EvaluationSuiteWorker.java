@@ -1,6 +1,6 @@
 package com.springairag.core.evaluation;
 
-import com.springairag.core.config.RagEvaluationProperties;
+import com.springairag.core.properties.RagEvaluationProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import org.slf4j.Logger;

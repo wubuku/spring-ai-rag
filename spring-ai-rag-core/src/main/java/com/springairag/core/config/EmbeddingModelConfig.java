@@ -1,5 +1,6 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.RagEmbeddingProfileProperties;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;

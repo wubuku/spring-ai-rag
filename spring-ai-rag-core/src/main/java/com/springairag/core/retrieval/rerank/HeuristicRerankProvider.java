@@ -1,7 +1,7 @@
 package com.springairag.core.retrieval.rerank;
 
 import com.springairag.api.dto.RetrievalResult;
-import com.springairag.core.config.RagRerankProperties;
+import com.springairag.core.properties.RagRerankProperties;
 import com.springairag.core.retrieval.RetrievalResultProvenance;
 
 import java.util.ArrayList;

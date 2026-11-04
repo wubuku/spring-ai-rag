@@ -1,6 +1,6 @@
 package com.springairag.core.embeddingjob;
 
-import com.springairag.core.config.RagEmbeddingJobProperties;
+import com.springairag.core.properties.RagEmbeddingJobProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.service.DocumentEmbedService;

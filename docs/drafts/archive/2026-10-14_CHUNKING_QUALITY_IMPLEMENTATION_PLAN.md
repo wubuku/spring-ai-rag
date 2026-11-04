@@ -33,7 +33,7 @@ core controller，无新增独立启动模块。
   重试处理，不建立第二套恢复状态机。
 - [文档读取 ACL](../../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
   `requireDocumentAccess` 与旧 document GET 共用；能力 filter 已把 documents GET 归为 RAG_READ。
-- [配置](../../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChunkProperties.java)
+- [配置](../../../spring-ai-rag-core/src/main/java/com/springairag/core/properties/RagChunkProperties.java)
   默认 size=1000/min=100/overlap=100；目前没有 profile/preview 限额。
 
 ## 2. 冻结设计决策

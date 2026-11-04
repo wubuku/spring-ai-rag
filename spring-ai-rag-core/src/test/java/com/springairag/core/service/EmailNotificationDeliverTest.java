@@ -2,7 +2,7 @@ package com.springairag.core.service;
 
 import com.springairag.core.alertdelivery.AlertNotificationAttemptResult;
 import com.springairag.core.alertdelivery.AlertNotificationPayload;
-import com.springairag.core.config.NotificationConfig;
+import com.springairag.core.properties.NotificationConfig;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.BeforeEach;

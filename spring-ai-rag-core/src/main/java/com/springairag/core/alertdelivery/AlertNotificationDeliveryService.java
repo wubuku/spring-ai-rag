@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.AlertNotificationDeliveryPageResponse;
 import com.springairag.api.dto.AlertNotificationDeliveryResponse;
 import com.springairag.api.enums.ErrorCode;
-import com.springairag.core.config.NotificationConfig;
+import com.springairag.core.properties.NotificationConfig;
 import com.springairag.core.exception.RagException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;

@@ -4,7 +4,7 @@ import com.springairag.api.dto.EmbedProgressEvent;
 import com.springairag.api.enums.DocumentProcessingStageName;
 import com.springairag.api.enums.DocumentProcessingStageStatus;
 import com.springairag.core.config.EmbeddingProfileProvider;
-import com.springairag.core.config.RagEmbeddingJobProperties;
+import com.springairag.core.properties.RagEmbeddingJobProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.documentprocessing.DocumentProcessingRunRepository;
 import com.springairag.core.documentprocessing.DocumentProcessingRunService;

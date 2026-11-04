@@ -1,6 +1,6 @@
 package com.springairag.core.service.pdf;
 
-import com.springairag.core.config.RagPdfProperties;
+import com.springairag.core.properties.RagPdfProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;

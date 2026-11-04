@@ -83,7 +83,7 @@ public record LlmUsageEvent(
     public static LlmUsageEvent from(
             ChatExecutionAttribution attribution,
             String modelRef,
-            com.springairag.core.config.MultiModelProperties.ModelCost price,
+            com.springairag.core.properties.MultiModelProperties.ModelCost price,
             LlmInvocationPurpose purpose,
             boolean streaming,
             LlmInvocationOutcome outcome,

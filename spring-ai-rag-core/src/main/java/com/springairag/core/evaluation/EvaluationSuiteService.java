@@ -23,7 +23,7 @@ import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.chat.MemoryMode;
 import com.springairag.core.chat.RetrievalOptions;
 import com.springairag.core.config.EmbeddingProfileProvider;
-import com.springairag.core.config.RagEvaluationProperties;
+import com.springairag.core.properties.RagEvaluationProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
 import com.springairag.core.diagnostics.RetrievalTraceSession;
@@ -70,7 +70,7 @@ public class EvaluationSuiteService {
     private final EmbeddingProfileProvider profileProvider;
     private final ObjectMapper objectMapper;
     private final RagEvaluationProperties properties;
-    private final com.springairag.core.config.RagAdmissionProperties admissionProperties;
+    private final com.springairag.core.properties.RagAdmissionProperties admissionProperties;
     private final ApiKeyManagementService apiKeyManagementService;  // Batch 853：`required = false` 已删——这个类里没有 null 守卫，它缺失时在鉴权取 principal 处抛裸 NPE
     private final ChatExecutionService chatExecutionService;
     private final SemanticEvaluationService semanticEvaluationService;

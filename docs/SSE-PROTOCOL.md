@@ -4,7 +4,7 @@
 声明契约的所有mode在校验前不发正文，摘要随原completed/final rag投影，溢出/违约返回安全说明。
 无契约旧Client流行为不变；首事件后不切模型。
 
-> 状态：**已实现** | 最近复核：2026-10-15
+> 状态：**已实现** | 最近复核：2026-11-04
 >
 > Chat HTTP 请求与非流式响应见
 > [REST API](rest-api.md#chat--rag-qa) /
@@ -53,6 +53,37 @@ comment，不是业务事件。
 携带从 `1` 开始的正整数 `sequence`，同一响应内严格递增；心跳不编号。旧服务缺少该字段时，
 客户端仍按旧协议处理。带 `Idempotency-Key` 的 keyed snapshot 重试会重复发送确定性快照，
 WebUI 在同一 turn 内按 `sequence` 忽略重复或倒退事件。
+
+### 1.1 断点续传（`id:` 与 `Last-Event-ID`）
+
+**可续传范围**：只有带 `Idempotency-Key` 的 keyed turn。服务端把整轮结果持久化为确定性
+快照（`content` → `sources` → `done`），并在每条事件上写 `id:`，值等于该事件的
+`sequence`（`content=1`、`sources=2`、`done=3`；空答案/空来源时编号会前移）。
+
+```text
+id:1
+event:content
+data:{"sequence":1,"choices":[{"delta":{"content":"..."}}]}
+```
+
+客户端断线后带 `Last-Event-ID: <最后收到的 id>` 重试同一 `Idempotency-Key`，服务端只补
+`id > Last-Event-ID` 的事件。因此：
+
+- 已投递事件不会重复推送；缺失事件不会漏发（重连成功时终态事件仍在）。
+- 非法或缺失 `Last-Event-ID`（非数字、负数）按"没有断点"处理，重放整轮，不报 400：
+  一次网络抖动不该被升级成回答失败。
+- 请求体或 `Idempotency-Key` 改变后不再属于同一 turn，续传语义不成立。
+- 客户端必须保留重试前已收到的正文与来源（服务端不会重发），只清掉不会被补发的
+  临时 UI 状态（例如"搜索中"的工具活动）。重复事件由 `sequence` 去重兜底。
+- 重连次数有界：WebUI `useSSE` 最多 2 次尝试（1 次重试），失败后进入 `error` 终态，
+  不自动自旋。
+
+**不可续传范围**：不带 `Idempotency-Key` 的实时流。它逐块发送模型增量，服务端不写
+`id:`、也不读 `Last-Event-ID`；每次重试都是新的 turn。客户端不得把它当作可续传流，
+也不得在重连后把上一轮的正文与新 turn 的正文拼接。
+
+断线重连带回的终态保持原语义：服务端已判定 `incomplete` 时，续传补发的 `done` 仍是
+`incomplete`，不会因为重连升级为 `complete`；`complete` 也不会被重复发送两次。
 
 ## 2. 事件格式
 
@@ -208,6 +239,9 @@ tool_start -> tool_result -> content* -> sources -> done
 5. EOF 前没有空行的最后一个完整事件仍应被处理。
 6. 客户端收到 `sequence <= lastSequence` 的事件时忽略；非法序号事件不视为合法终态，
    若流没有后续合法 `done`，继续既有 retry/error 处理。
+7. keyed turn 的每条事件带 `id:`（= `sequence`）。重试请求的 `Last-Event-ID` 只能取
+   已投递事件的 id；服务端只补 `id > Last-Event-ID` 的事件，不得重发已收事件。
+8. 未被服务端补发的事件必须来自客户端本地已保留的状态：正文与来源不能因为重试被清空。
 
 ## 4. 取消、超时与 fallback
 
@@ -256,6 +290,9 @@ curl --no-buffer -X POST \
 
 - 支持 `content/tool_start/tool_result/sources/done/error`；
 - 支持 CRLF、多行 `data:` 和 EOF 尾块；
+- keyed 流解析 `id:`，重试时发送 `Last-Event-ID`（仅补缺失事件）；
+- 重试前保留已收到的正文与来源，只清理不会被补发的工具活动状态；
+- 最多 2 次尝试，重连失败后进入 `error` 终态；
 - `error` 后忽略 `done`，重复 `done` 只处理一次；
 - stop/close 调用 reader `cancel()`；
 - 历史重新加载时从 history API 恢复 sources。
@@ -264,6 +301,8 @@ curl --no-buffer -X POST \
 
 - `spring-ai-rag-webui/src/hooks/useSSE.test.ts`
 - `spring-ai-rag-webui/e2e/chat.spec.ts`
+- `spring-ai-rag-webui/e2e/sse-resume.spec.ts`（Chromium + Firefox，可控断流）
+- `spring-ai-rag-core/src/test/java/com/springairag/core/controller/RagChatControllerNativeSnapshotTest.java`
 - `spring-ai-rag-core/src/test/java/com/springairag/core/integration/RagControllerIntegrationTest.java`
 - `spring-ai-rag-core/src/test/java/com/springairag/core/controller/OpenAiCompatibilityControllerWebTest.java`
 

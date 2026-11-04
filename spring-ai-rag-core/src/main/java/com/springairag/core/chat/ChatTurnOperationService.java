@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.ChatResponse;
 import com.springairag.api.dto.ChatTurnStatusResponse;
 import com.springairag.api.enums.ErrorCode;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.exception.ChatTurnInProgressException;
 import com.springairag.core.exception.RagException;

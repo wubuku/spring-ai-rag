@@ -39,7 +39,7 @@ export default defineConfig({
     // 收益低而成本高。这里用显式 testMatch，而不是静默 skip。
     {
       name: 'firefox',
-      testMatch: /(accessibility|keyboard|responsive|resilience)\.spec\.ts/,
+      testMatch: /(accessibility|keyboard|responsive|resilience|sse-resume)\.spec\.ts/,
       use: { ...devices['Desktop Firefox'] },
     },
     // WebKit 的故障形态是"单浏览器进程内的上下文堆积"：一个 project 连续跑完

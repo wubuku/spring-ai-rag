@@ -118,8 +118,8 @@ class RagControllerIntegrationTest {
             return new com.springairag.core.config.RagProperties();
         }
         @Bean
-        com.springairag.core.config.RagSseProperties ragSseProperties() {
-            return new com.springairag.core.config.RagSseProperties();
+        com.springairag.core.properties.RagSseProperties ragSseProperties() {
+            return new com.springairag.core.properties.RagSseProperties();
         }
     }
     @MockBean private RagChatService ragChatService;

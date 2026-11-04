@@ -1,5 +1,7 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.RagRetryProperties;
+
 import com.springairag.core.exception.RagException;
 import org.junit.jupiter.api.Test;
 import org.springframework.retry.context.RetryContextSupport;

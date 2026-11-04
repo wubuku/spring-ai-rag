@@ -16,6 +16,11 @@
 //   - 出现基线里没有的边（自然也包括任何新环）→ 失败；
 //   - 基线里的边已不存在 → 失败，要求显式下调基线（否则拆掉的边可以被无声加回）；
 //   - 只有 --update-package-baseline 允许改基线，且该命令拒绝新增边或扩大 SCC。
+// 纯只读配置属性包（com.springairag.core.properties）是数据 sink：它只有字段与
+// getter/setter，不出边，也不可能参与任何环。因此“引用属性包”不计入耦合棘轮
+// （统计时跳过指向它的边），这样把属性类从 config 下沉后，消费方对 config 的
+// 依赖会真实消失并体现在基线下调上；反过来，属性包一旦出现出边，仍会被判为
+// 新增边而失败。
 // 拆不动的环不硬拆：config/service/chat 等核心包互相依赖是现状，等真正重构再降基线。
 // 2026-11 已拆掉 5 条最容易的边（util→config/entity/repository、config→util、
 // metrics→resilience），util 退出 SCC；剩余难点是 config：它既装 properties，又装
@@ -216,6 +221,9 @@ const MODULE_PACKAGE_PREFIX = {
   starter: 'com.springairag.starter',
 };
 
+/** 纯数据 sink：只有属性字段、没有行为；引用它不计入耦合棘轮。 */
+const DATA_SINK_PACKAGES = new Set(['com.springairag.core.properties']);
+
 function packageOfClass(target, classToPackage) {
   if (target.endsWith('.*')) return target.slice(0, -2);
   let name = target;
@@ -302,6 +310,7 @@ export function collectPackageGraph(root) {
         if (!imp.target.startsWith(`${prefix}.`)) continue;
         const to = packageOfClass(imp.target, classToPackage);
         if (!to || to === pkg || !to.startsWith(prefix)) continue;
+        if (DATA_SINK_PACKAGES.has(to)) continue;
         const key = `${pkg}\u0000${to}`;
         if (!edgeMap.has(key)) {
           edgeMap.set(key, {

@@ -36,6 +36,32 @@ The system supports two runtime topologies:
 
 Security, rate limiting, and auto-configuration changes must verify both.
 
+### Core package layout and the `config` split (in progress)
+
+- `com.springairag.core.config`: assembly classes (`@Configuration`/`@Bean`) and infrastructure services
+  (routers, registries, validators).
+- `com.springairag.core.properties`: read-only configuration property classes (fields + getters/setters,
+  optionally `validate()`), one-to-one with configuration keys. It must not have outbound edges to other
+  core packages. The architecture gate treats it as a data sink and excludes inbound edges from the
+  coupling ratchet, so consumers' dependency on `config` genuinely drops when properties move out.
+- Step 1 (done): moved `@ConfigurationProperties` and nested property classes from `config` to
+  `properties` without changing any key, binding mode, or runtime behavior.
+  `SpringAiRagApplication.@ConfigurationPropertiesScan` now covers both packages; the package graph
+  baseline lost six `*→config` edges.
+- Step 2 (pending): move infrastructure services (`RagChatService`, `ChatModelRouter`,
+  `EmbeddingProfileRegistry`, `ModelRegistry`, `EmbeddingProfileProvider`, etc.) into domain packages.
+  Boundary and prerequisites:
+  - `RagProperties` (the aggregate) stays in `config` for now: it references `RagRateLimitProperties`,
+    `RagMultiInstanceProperties`, and `RagOpenAiCompatibilityProperties`, which depend on `filter`/`chat`
+    types. Moving them as-is would create `properties ↔ filter/chat` cycles. Step 2 first extracts those
+    behaviors (topology validation, trusted-proxy parsing, `MemoryMode` mapping) into services, leaving
+    properties as data only.
+  - `RagEmbeddingProperties` stays in `config` because it references
+    `EmbeddingProfileRegistry.DEFAULT_PROFILE_KEY`; step 2 moves the default to the properties side or
+    injects it from the caller.
+  - Acceptance: zero configuration-key changes, `mvn test` and architecture gates pass, `*→config`
+    edges keep shrinking, and no new `properties` outbound edges appear.
+
 ## 3. RAG Execution
 
 Production Chat uses an explicit mode-aware execution path:

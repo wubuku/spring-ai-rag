@@ -44,8 +44,29 @@ public final class SseEmitters {
      * @param context human-readable context for warning logs (e.g., "document 123")
      */
     public static void sendProgress(SseEmitter emitter, String eventName, Object data, String context) {
+        sendProgress(emitter, eventName, data, context, null);
+    }
+
+    /**
+     * Sends a progress event carrying an SSE {@code id} field.
+     *
+     * <p>The id makes a stream resumable: a client that reconnects can send
+     * {@code Last-Event-ID} and the server skips events it already delivered.
+     *
+     * @param emitter the SSE emitter
+     * @param eventName event name
+     * @param data the event data (will be serialized to JSON)
+     * @param context human-readable context for warning logs
+     * @param id stable event id within the turn, or {@code null} for non-resumable events
+     */
+    public static void sendProgress(
+            SseEmitter emitter, String eventName, Object data, String context, Long id) {
         try {
-            emitter.send(SseEmitter.event().name(eventName).data(data));
+            SseEmitter.SseEventBuilder event = SseEmitter.event().name(eventName);
+            if (id != null) {
+                event.id(Long.toString(id));
+            }
+            emitter.send(event.data(data));
         } catch (Exception ex) { // best-effort: client likely disconnected
             log.warn("SSE send failed for {}: {}", context, ex.getMessage());
         }

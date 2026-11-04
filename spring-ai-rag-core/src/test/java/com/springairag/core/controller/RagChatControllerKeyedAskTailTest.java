@@ -12,7 +12,7 @@ import com.springairag.core.chat.ChatSessionCoordinator;
 import com.springairag.core.chat.ChatTurnOperation;
 import com.springairag.core.chat.ChatTurnOperationService;
 import com.springairag.core.config.RagChatService;
-import com.springairag.core.config.RagSseProperties;
+import com.springairag.core.properties.RagSseProperties;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.service.AuditLogService;

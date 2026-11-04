@@ -11,8 +11,8 @@ import com.springairag.core.config.EmbeddingProfileModelResolver;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.EmbeddingVectorColumns;
 import com.springairag.core.config.RagProperties;
-import com.springairag.core.config.RagRetrievalProperties;
-import com.springairag.core.config.RagRerankProperties;
+import com.springairag.core.properties.RagRetrievalProperties;
+import com.springairag.core.properties.RagRerankProperties;
 import com.springairag.core.metrics.RagMetricsService;
 import com.springairag.core.retrieval.fulltext.FulltextSearchProvider;
 import com.springairag.core.retrieval.fulltext.FulltextSearchProviderFactory;
@@ -92,7 +92,7 @@ public class HybridRetrieverService {
         this.metricsService = metricsService;
     }
     private final int probeTimeoutMs;
-    private final com.springairag.core.config.RagAdmissionProperties admissionProperties;
+    private final com.springairag.core.properties.RagAdmissionProperties admissionProperties;
 
     private <Result> Supplier<Result> dependencyTask(Supplier<Result> task) {
         int timeout = com.springairag.core.admission.DependencyCallContext.background()

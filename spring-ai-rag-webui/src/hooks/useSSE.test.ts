@@ -244,6 +244,79 @@ describe('useChatSSE', () => {
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
+  const sseResponse = (chunks: string[]) => {
+    const normalized = chunks.map(addTurnId);
+    let index = 0;
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'X-RAG-Turn-Id': TEST_TURN_ID }),
+      body: new ReadableStream({
+        pull(controller) {
+          if (index < normalized.length) {
+            controller.enqueue(new TextEncoder().encode(normalized[index++]));
+          } else {
+            controller.close();
+          }
+        },
+      }),
+    };
+  };
+
+  it('resumes with Last-Event-ID instead of replaying delivered events', async () => {
+    // Batch 963：服务端快照流给每条事件发 `id:`（= sequence）。断线重试时
+    // 客户端必须把最后收到的 id 带回去，服务端才能只补缺失事件。
+    mockFetch
+      .mockResolvedValueOnce(sseResponse([
+        'id: 1\nevent: content\ndata: {"sequence":1,"choices":[{"delta":{"content":"Complete answer"}}]}\n\n',
+      ]))
+      .mockResolvedValueOnce(sseResponse([
+        'id: 2\nevent: sources\ndata: {"sequence":2,"sessionId":"session-1","sources":[]}\n\n',
+        'id: 3\nevent: done\ndata: {"sequence":3,"sessionId":"session-1","status":"complete"}\n\n',
+      ]));
+    const onChunk = vi.fn();
+    const onSources = vi.fn();
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onChunk, onSources, onDone }));
+
+    await act(async () => {
+      result.current.send('Resume this turn');
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    // 首次请求没有断点可续；重试请求必须精确带上已收事件的 id。
+    expect(mockFetch.mock.calls[0][1].headers['Last-Event-ID']).toBeUndefined();
+    expect(mockFetch.mock.calls[1][1].headers['Last-Event-ID']).toBe('1');
+    // 答案只在第一次尝试投递一次；续传补的是 sources 与 done。
+    expect(onChunk).toHaveBeenCalledTimes(1);
+    expect(onChunk).toHaveBeenCalledWith('Complete answer');
+    expect(onSources).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops a replayed event whose sequence was already delivered', async () => {
+    // 服务端若在续传时多发了一遍已投递事件（配置漂移 / 代理重放），
+    // 客户端必须按 sequence 去重，不能把答案追加第二遍。
+    mockFetch
+      .mockResolvedValueOnce(sseResponse([
+        'id: 1\nevent: content\ndata: {"sequence":1,"choices":[{"delta":{"content":"Complete answer"}}]}\n\n',
+      ]))
+      .mockResolvedValueOnce(sseResponse([
+        'id: 1\nevent: content\ndata: {"sequence":1,"choices":[{"delta":{"content":"Complete answer"}}]}\n\n',
+        'id: 3\nevent: done\ndata: {"sequence":3,"sessionId":"session-1","status":"complete"}\n\n',
+      ]));
+    const onChunk = vi.fn();
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onChunk, onDone }));
+
+    await act(async () => {
+      result.current.send('Deduplicate this turn');
+    });
+
+    expect(onChunk).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
   it('accepts only the first terminal event', async () => {
     setupStream([
       'event: done\ndata: {"sessionId":"session-1","status":"complete"}\n\n',

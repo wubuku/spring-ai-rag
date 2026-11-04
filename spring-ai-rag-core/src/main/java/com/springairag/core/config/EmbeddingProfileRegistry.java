@@ -1,9 +1,9 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.RagEmbeddingProfileProperties;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
-
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;

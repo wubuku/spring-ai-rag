@@ -1,6 +1,6 @@
 package com.springairag.core.service;
 
-import com.springairag.core.config.RagAlertProperties;
+import com.springairag.core.properties.RagAlertProperties;
 import com.springairag.core.entity.RagAlert;
 import com.springairag.core.entity.RagSilenceSchedule;
 import com.springairag.core.repository.AlertRepository;

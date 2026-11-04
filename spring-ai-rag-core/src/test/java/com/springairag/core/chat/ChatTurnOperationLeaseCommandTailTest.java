@@ -47,7 +47,7 @@ class ChatTurnOperationLeaseCommandTailTest {
         service = new ChatTurnOperationService(
                 repository,
                 new com.fasterxml.jackson.databind.ObjectMapper(),
-                new com.springairag.core.config.RagChatProperties(),
+                new com.springairag.core.properties.RagChatProperties(),
                 new com.springairag.core.config.RagProperties(),
                 mock(ChatAuthorizationService.class),
                 observability,

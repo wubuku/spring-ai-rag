@@ -11,7 +11,7 @@ import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
-import com.springairag.core.config.RagDocumentProcessingProperties;
+import com.springairag.core.properties.RagDocumentProcessingProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.embeddingjob.EmbeddingJob;
 import com.springairag.core.embeddingjob.EmbeddingJobRepository;

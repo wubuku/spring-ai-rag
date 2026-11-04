@@ -3,7 +3,7 @@ package com.springairag.core.rag;
 import com.springairag.core.chat.AuthorizedRetrievalContext;
 import com.springairag.core.chat.ChatExecutionBudget;
 import com.springairag.core.chat.PromptTokenEstimator;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.documents.chunk.ChunkValidator;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.Query;

@@ -90,7 +90,7 @@ class ChatExecutionServiceCandidateFailoverTailTest {
                 mock(ToolCallingChatOptions.class));
         return new ChatModelRouter.ChatModelCandidate(
                 ref, model,
-                com.springairag.core.config.MultiModelProperties
+                com.springairag.core.properties.MultiModelProperties
                         .ModelCapabilities.defaults());
     }
 

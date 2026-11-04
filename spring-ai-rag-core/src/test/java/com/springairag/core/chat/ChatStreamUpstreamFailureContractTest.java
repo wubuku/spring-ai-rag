@@ -3,7 +3,7 @@ package com.springairag.core.chat;
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagChatService;
-import com.springairag.core.config.RagSseProperties;
+import com.springairag.core.properties.RagSseProperties;
 import com.springairag.core.controller.RagChatController;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagChatHistoryRepository;

@@ -1,6 +1,6 @@
 package com.springairag.core.controller;
 
-import com.springairag.core.config.RagChunkProperties;
+import com.springairag.core.properties.RagChunkProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;

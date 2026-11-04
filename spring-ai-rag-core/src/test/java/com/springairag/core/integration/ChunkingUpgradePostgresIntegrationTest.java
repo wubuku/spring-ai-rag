@@ -3,7 +3,7 @@ package com.springairag.core.integration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
-import com.springairag.core.config.RagChunkProperties;
+import com.springairag.core.properties.RagChunkProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.observability.ChunkingUpgradeMetrics;
 import com.springairag.core.entity.RagDocument;

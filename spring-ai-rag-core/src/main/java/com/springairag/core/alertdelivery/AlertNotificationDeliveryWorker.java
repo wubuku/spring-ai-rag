@@ -1,7 +1,7 @@
 package com.springairag.core.alertdelivery;
 
-import com.springairag.core.config.NotificationConfig;
-import com.springairag.core.config.RagNotificationDeliveryProperties;
+import com.springairag.core.properties.NotificationConfig;
+import com.springairag.core.properties.RagNotificationDeliveryProperties;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

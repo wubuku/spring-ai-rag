@@ -2,7 +2,7 @@ package com.springairag.core.chat;
 
 import com.springairag.api.dto.ChatTurnStatusResponse;
 import com.springairag.api.enums.ErrorCode;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.ChatTurnOperationRepository;

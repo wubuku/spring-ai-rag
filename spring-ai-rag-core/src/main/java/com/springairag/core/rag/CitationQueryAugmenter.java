@@ -2,7 +2,7 @@ package com.springairag.core.rag;
 
 import com.springairag.core.chat.AuthorizedRetrievalContext;
 import com.springairag.core.chat.RetrievalTraceCollector;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.generation.augmentation.QueryAugmenter;

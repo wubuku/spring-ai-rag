@@ -28,7 +28,7 @@ class DocumentChunkingServiceTest {
     @Test
     void boundedProfileSharesPreparePreviewIdentityAndPreservesJsonRecord() {
         RagProperties bounded = new RagProperties();
-        bounded.getChunk().setProfile(com.springairag.core.config.RagChunkProperties.Profile.BOUNDED_V3);
+        bounded.getChunk().setProfile(com.springairag.core.properties.RagChunkProperties.Profile.BOUNDED_V3);
         bounded.getChunk().setDefaultChunkSize(100);
         bounded.getChunk().setMinChunkSize(10);
         bounded.getChunk().setDefaultChunkOverlap(10);
@@ -47,7 +47,7 @@ class DocumentChunkingServiceTest {
 
     @Test
     void legacyDiagnosticsDoNotChangeCompatibilityOutput() {
-        properties.getChunk().setProfile(com.springairag.core.config.RagChunkProperties.Profile.LEGACY_V2);
+        properties.getChunk().setProfile(com.springairag.core.properties.RagChunkProperties.Profile.LEGACY_V2);
         RagDocument text = document("text", "x".repeat(3000));
         assertEquals(service.prepare(text).chunks(), service.preview(text).chunks());
         assertTrue(service.preview(text).diagnostics().violations().contains("PAYLOAD_LIMIT"));

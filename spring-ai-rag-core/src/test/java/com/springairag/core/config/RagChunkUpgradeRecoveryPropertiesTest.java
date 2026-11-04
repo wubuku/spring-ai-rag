@@ -1,5 +1,9 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.RagChunkUpgradeRecoveryProperties;
+
+import com.springairag.core.properties.RagChunkProperties;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;

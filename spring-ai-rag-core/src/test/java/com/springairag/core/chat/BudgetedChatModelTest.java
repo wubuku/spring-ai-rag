@@ -1,7 +1,7 @@
 package com.springairag.core.chat;
 
 import com.springairag.api.enums.ChatMode;
-import com.springairag.core.config.MultiModelProperties;
+import com.springairag.core.properties.MultiModelProperties;
 import com.springairag.core.usage.LlmInvocationOutcome;
 import com.springairag.core.usage.LlmInvocationPurpose;
 import com.springairag.core.usage.LlmUsageEvent;

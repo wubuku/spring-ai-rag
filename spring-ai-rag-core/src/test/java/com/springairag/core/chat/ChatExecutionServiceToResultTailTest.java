@@ -97,7 +97,7 @@ class ChatExecutionServiceToResultTailTest {
                 mock(ChatClient.class),
                 new ChatModelRouter.ChatModelCandidate(
                         "vendor/model", mock(ChatModel.class),
-                        com.springairag.core.config.MultiModelProperties
+                        com.springairag.core.properties.MultiModelProperties
                                 .ModelCapabilities.defaults()),
                 context, memory);
     }

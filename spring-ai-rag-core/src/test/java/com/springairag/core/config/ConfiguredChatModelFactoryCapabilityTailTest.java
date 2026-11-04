@@ -1,9 +1,11 @@
 package com.springairag.core.config;
 
-import com.springairag.core.config.MultiModelProperties.ModelCapabilities;
-import com.springairag.core.config.MultiModelProperties.ModelCost;
-import com.springairag.core.config.MultiModelProperties.ModelItem;
-import com.springairag.core.config.MultiModelProperties.ProviderConfig;
+import com.springairag.core.properties.MultiModelProperties;
+
+import com.springairag.core.properties.MultiModelProperties.ModelCapabilities;
+import com.springairag.core.properties.MultiModelProperties.ModelCost;
+import com.springairag.core.properties.MultiModelProperties.ModelItem;
+import com.springairag.core.properties.MultiModelProperties.ProviderConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.openai.OpenAiChatModel;

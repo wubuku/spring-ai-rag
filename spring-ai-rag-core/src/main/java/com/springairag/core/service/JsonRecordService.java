@@ -16,7 +16,7 @@ import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.api.validation.SourceNamespaceValidator;
-import com.springairag.core.config.RagStructuredRecordProperties;
+import com.springairag.core.properties.RagStructuredRecordProperties;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
 import com.springairag.core.exception.DocumentNotFoundException;

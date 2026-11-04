@@ -5,7 +5,7 @@ import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.service.AdvisorScope;
 import com.springairag.api.service.RagAdvisorProvider;
 import com.springairag.core.config.ChatModelRouter;
-import com.springairag.core.config.MultiModelProperties;
+import com.springairag.core.properties.MultiModelProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.rag.CitationQueryAugmenter;
 import com.springairag.core.rag.CompositeChatDocumentRetriever;

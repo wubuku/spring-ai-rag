@@ -1,7 +1,7 @@
 package com.springairag.core.service;
 
 import com.springairag.core.config.RagProperties;
-import com.springairag.core.config.RagCollectionPurgeProperties;
+import com.springairag.core.properties.RagCollectionPurgeProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;

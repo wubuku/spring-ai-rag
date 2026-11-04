@@ -3,8 +3,8 @@ package com.springairag.core.chat;
 import com.springairag.api.dto.ChatHistoryResponse;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.core.config.ChatModelRouter;
-import com.springairag.core.config.MultiModelProperties;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.MultiModelProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.repository.RagChatMemorySummaryRepository;
@@ -59,7 +59,7 @@ class ConversationSummaryServiceTest {
         historyRepository = mock(RagChatHistoryRepository.class);
         modelRouter = mock(ChatModelRouter.class);
         ragProperties = new RagProperties();
-        com.springairag.core.config.RagChatProperties.ContextProperties context =
+        com.springairag.core.properties.RagChatProperties.ContextProperties context =
                 ragProperties.getChat().getContext();
         context.setCompactionEnabled(true);
         context.setCompactionTriggerTokens(1);

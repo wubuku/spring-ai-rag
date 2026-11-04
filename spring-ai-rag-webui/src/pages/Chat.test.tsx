@@ -928,7 +928,9 @@ describe('Chat SSE callbacks', () => {
     expect(screen.getByText(/chat\.toolFinished/)).toBeInTheDocument();
   });
 
-  it('onRetry clears the partial streaming content', async () => {
+  it('onRetry keeps the delivered content so resume can fill only the gap', async () => {
+    // 续传（Last-Event-ID）只补缺失事件：服务端不会再发一遍正文。
+    // 重试前清空正文会让续传成功后的回答变成空白。
     renderChatForCallbacks();
     const opts = getOptions();
     await act(async () => {
@@ -939,7 +941,7 @@ describe('Chat SSE callbacks', () => {
     await act(async () => {
       (opts.onRetry as () => void)();
     });
-    expect(screen.queryByText('partial answer')).not.toBeInTheDocument();
+    expect(screen.getByText('partial answer')).toBeInTheDocument();
   });
 
   it('onError with a conflict keeps the prompt retryable without leaking the server text', async () => {
@@ -1085,7 +1087,7 @@ describe('Chat SSE callbacks', () => {
     expect(screen.queryByText(/chat\.toolSearching/)).not.toBeInTheDocument();
   });
 
-  it('onRetry also clears sources and tool activity', async () => {
+  it('onRetry keeps delivered content and sources but clears stale tool activity', async () => {
     renderChatForCallbacks();
     const opts = getOptions();
 
@@ -1103,7 +1105,9 @@ describe('Chat SSE callbacks', () => {
       (opts.onRetry as () => void)();
     });
 
-    expect(screen.queryByText('retry-source')).not.toBeInTheDocument();
+    // 已投递的正文与来源必须留着（续传不会重发），工具活动状态则不能
+    // 永远卡在"搜索中"，因为它不会被续传补发。
+    expect(screen.getByText('retry-source')).toBeInTheDocument();
     expect(screen.queryByLabelText('chat.toolActivity')).not.toBeInTheDocument();
   });
 

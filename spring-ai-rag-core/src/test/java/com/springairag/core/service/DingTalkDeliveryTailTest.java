@@ -4,7 +4,7 @@ package com.springairag.core.service;
 import com.springairag.core.alertdelivery.AlertNotificationAttemptResult;
 import com.springairag.core.alertdelivery.AlertNotificationAttemptResult.Outcome;
 import com.springairag.core.alertdelivery.AlertNotificationPayload;
-import com.springairag.core.config.NotificationConfig;
+import com.springairag.core.properties.NotificationConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

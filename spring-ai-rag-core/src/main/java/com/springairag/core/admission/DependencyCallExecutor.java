@@ -1,6 +1,6 @@
 package com.springairag.core.admission;
 
-import com.springairag.core.config.RagAdmissionProperties;
+import com.springairag.core.properties.RagAdmissionProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.logging.MdcContext;
 import io.micrometer.core.instrument.MeterRegistry;

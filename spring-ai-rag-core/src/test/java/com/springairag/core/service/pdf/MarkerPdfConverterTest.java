@@ -1,6 +1,6 @@
 package com.springairag.core.service.pdf;
 
-import com.springairag.core.config.RagPdfProperties;
+import com.springairag.core.properties.RagPdfProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

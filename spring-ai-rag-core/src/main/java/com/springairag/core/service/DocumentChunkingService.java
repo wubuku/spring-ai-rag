@@ -7,7 +7,7 @@ import com.springairag.documents.chunk.BoundedTextChunker;
 import com.springairag.documents.chunk.ChunkingException;
 import com.springairag.documents.chunk.ChunkingResult;
 import com.springairag.documents.chunk.ChunkValidator;
-import com.springairag.core.config.RagChunkProperties;
+import com.springairag.core.properties.RagChunkProperties;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

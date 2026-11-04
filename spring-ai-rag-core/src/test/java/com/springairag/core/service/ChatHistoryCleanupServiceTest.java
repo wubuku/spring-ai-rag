@@ -1,6 +1,6 @@
 package com.springairag.core.service;
 
-import com.springairag.core.config.RagMemoryProperties;
+import com.springairag.core.properties.RagMemoryProperties;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

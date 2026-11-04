@@ -3,7 +3,7 @@ package com.springairag.core.metrics;
 import com.springairag.api.dto.ApiSloComplianceResponse;
 import com.springairag.api.dto.ApiSloComplianceResponse.EndpointSlo;
 import com.springairag.api.dto.ApiSloComplianceResponse.LatencyStats;
-import com.springairag.core.config.ApiSloProperties;
+import com.springairag.core.properties.ApiSloProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;

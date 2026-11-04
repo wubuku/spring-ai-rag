@@ -1,5 +1,13 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.RagStructuredRecordProperties;
+
+import com.springairag.core.properties.RagRetrievalDiagnosticsProperties;
+
+import com.springairag.core.properties.RagEvaluationProperties;
+
+import com.springairag.core.properties.RagDocumentLifecycleProperties;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

@@ -1,7 +1,7 @@
 package com.springairag.core.usage;
 
 import com.springairag.api.enums.ChatMode;
-import com.springairag.core.config.MultiModelProperties;
+import com.springairag.core.properties.MultiModelProperties;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;

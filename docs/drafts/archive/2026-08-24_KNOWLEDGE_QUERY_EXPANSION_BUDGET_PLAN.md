@@ -325,7 +325,7 @@ wrapper 的去重是确定性的，因此相同 LLM 输出在不同线程调度�
 
 预计修改：
 
-- `spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChatProperties.java`
+- `spring-ai-rag-core/src/main/java/com/springairag/core/properties/RagChatProperties.java`
 - `spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChatPropertiesValidator.java`
   （仅在需要增加跨字段校验时）
 - `spring-ai-rag-core/src/main/resources/application.yml`

@@ -1,8 +1,8 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.RagProxyProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Proxy;

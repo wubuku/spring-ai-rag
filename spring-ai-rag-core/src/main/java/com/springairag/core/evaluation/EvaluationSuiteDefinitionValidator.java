@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalFilterRequest;
-import com.springairag.core.config.RagEvaluationProperties;
+import com.springairag.core.properties.RagEvaluationProperties;
 import com.springairag.core.retrieval.RetrievalFilterValidator;
 import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.util.DigestUtils;

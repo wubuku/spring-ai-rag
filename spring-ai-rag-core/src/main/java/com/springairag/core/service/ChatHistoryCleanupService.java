@@ -1,7 +1,7 @@
 package com.springairag.core.service;
 
 import com.springairag.core.chat.ChatPrincipal;
-import com.springairag.core.config.RagMemoryProperties;
+import com.springairag.core.properties.RagMemoryProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.repository.RagChatMemorySummaryRepository;

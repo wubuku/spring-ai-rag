@@ -1,6 +1,6 @@
 package com.springairag.core.filter;
 
-import com.springairag.core.config.ApiSloProperties;
+import com.springairag.core.properties.ApiSloProperties;
 import com.springairag.core.metrics.ApiSloTrackerService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;

@@ -1,6 +1,6 @@
 package com.springairag.core.service;
 
-import com.springairag.core.config.RagPdfProperties;
+import com.springairag.core.properties.RagPdfProperties;
 import com.springairag.core.repository.FsFileRepository;
 import com.springairag.core.repository.FsImportBatchRepository;
 import com.springairag.core.service.pdf.PdfConverter;

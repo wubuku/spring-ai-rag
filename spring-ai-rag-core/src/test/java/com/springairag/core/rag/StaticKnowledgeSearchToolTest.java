@@ -6,7 +6,7 @@ import com.springairag.core.chat.AuthorizedRetrievalContext;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.chat.RetrievalOptions;
 import com.springairag.core.chat.RetrievalTraceCollector;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.resource.ResourceCatalog;
 import com.springairag.core.resource.StaticKnowledgeCatalog;
 import com.springairag.core.retrieval.RetrievalScope;

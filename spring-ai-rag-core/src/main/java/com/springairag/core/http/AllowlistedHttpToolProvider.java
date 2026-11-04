@@ -7,7 +7,7 @@ import com.springairag.api.service.RagChatToolContextKeys;
 import com.springairag.api.service.RagChatToolPolicy;
 import com.springairag.api.service.RagChatToolProvider;
 import com.springairag.api.service.RagChatToolRequestContext;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.skill.RuntimeSkill;
 import com.springairag.core.skill.RuntimeSkillCatalog;
 import com.springairag.core.skill.RuntimeSkillLoadSession;

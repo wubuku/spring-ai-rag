@@ -8,7 +8,7 @@ import com.springairag.api.dto.DocumentLifecycleResponse;
 import com.springairag.api.dto.DocumentMutationResponse;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.api.enums.ErrorCode;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.repository.ChatTurnOperationRepository;
 import org.junit.jupiter.api.BeforeEach;

@@ -1,6 +1,6 @@
 package com.springairag.core.alertdelivery;
 
-import com.springairag.core.config.NotificationConfig;
+import com.springairag.core.properties.NotificationConfig;
 import com.springairag.core.entity.RagAlert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

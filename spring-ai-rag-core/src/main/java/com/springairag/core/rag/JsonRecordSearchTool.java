@@ -8,7 +8,7 @@ import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.chat.AuthorizedRetrievalContext;
 import com.springairag.core.chat.RetrievalTraceCollector;
-import com.springairag.core.config.RagStructuredRecordProperties;
+import com.springairag.core.properties.RagStructuredRecordProperties;
 import com.springairag.core.service.JsonRecordService;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;

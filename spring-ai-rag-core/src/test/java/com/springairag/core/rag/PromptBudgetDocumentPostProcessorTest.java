@@ -5,7 +5,7 @@ import com.springairag.core.chat.ChatExecutionBudget;
 import com.springairag.core.chat.PromptTokenEstimator;
 import com.springairag.core.chat.RetrievalOptions;
 import com.springairag.core.chat.RetrievalTraceCollector;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.retrieval.RetrievalScope;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;

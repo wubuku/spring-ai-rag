@@ -5,7 +5,7 @@ import com.springairag.api.enums.ChatMode;
 import com.springairag.api.service.AdvisorScope;
 import com.springairag.api.service.RagAdvisorProvider;
 import com.springairag.core.config.ChatModelRouter;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.rag.CitationQueryAugmenter;
 import com.springairag.core.rag.BoundedMultiQueryExpander;

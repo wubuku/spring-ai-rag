@@ -1,7 +1,7 @@
 package com.springairag.core.chat;
 
 import com.springairag.api.dto.RetrievalConfig;
-import com.springairag.core.config.RagRetrievalProperties;
+import com.springairag.core.properties.RagRetrievalProperties;
 
 /**
  * Immutable effective retrieval options for one chat attempt.

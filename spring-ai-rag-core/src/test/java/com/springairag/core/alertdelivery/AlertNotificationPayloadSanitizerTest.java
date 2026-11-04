@@ -1,7 +1,7 @@
 package com.springairag.core.alertdelivery;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.springairag.core.config.NotificationConfig;
+import com.springairag.core.properties.NotificationConfig;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;

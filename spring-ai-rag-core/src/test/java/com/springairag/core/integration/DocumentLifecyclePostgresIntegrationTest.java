@@ -154,7 +154,7 @@ class DocumentLifecyclePostgresIntegrationTest {
         document.setContentHash(HASH_A);
         document.setEnabled(true);
         RagProperties properties = new RagProperties();
-        properties.getChunk().setProfile(com.springairag.core.config.RagChunkProperties.Profile.BOUNDED_V3);
+        properties.getChunk().setProfile(com.springairag.core.properties.RagChunkProperties.Profile.BOUNDED_V3);
         properties.getChunk().setDefaultChunkSize(100);
         properties.getChunk().setMinChunkSize(10);
         properties.getChunk().setDefaultChunkOverlap(10);

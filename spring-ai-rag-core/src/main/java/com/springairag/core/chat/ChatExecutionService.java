@@ -10,7 +10,7 @@ import com.springairag.api.enums.ChatMode;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.RagProperties;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.api.dto.CitationValidation;
 import com.springairag.api.dto.EvidenceAssessment;
 import com.springairag.core.diagnostics.RetrievalDiagnosticsService;

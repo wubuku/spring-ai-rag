@@ -18,7 +18,7 @@
 
 代码入口：
 `spring-ai-rag-core/src/main/java/com/springairag/core/budget/BudgetReservationService.java`、
-`core/chat/BudgetedChatModel.java`、`core/config/RagLlmBudgetProperties.java`（后两项相对同一包根）。
+`core/chat/BudgetedChatModel.java`、`core/properties/RagLlmBudgetProperties.java`（后两项相对同一包根）。
 原有集成基线：`LlmBudgetAndGovernancePostgresIntegrationTest`；运行时夹具：
 `scripts/verify-dependency-recovery-e2e.py`。V64 已有 state/version、估算/实际值、日/月窗口，当前最新迁移 V65。
 

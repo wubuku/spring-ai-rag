@@ -1,6 +1,6 @@
 package com.springairag.core.service;
 
-import com.springairag.core.config.RagDataGovernanceProperties;
+import com.springairag.core.properties.RagDataGovernanceProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.repository.RagAuditLogRepository;
 import com.springairag.core.repository.RagClientErrorRepository;

@@ -36,6 +36,26 @@ spring-ai-rag 是基于 Spring AI 的通用 RAG 框架，目标是：
 
 安全、限流和自动配置变更必须验证两种拓扑。
 
+### core 包布局与 `config` 拆分（进行中）
+
+- `com.springairag.core.config`：装配类（`@Configuration`/`@Bean`）与基础服务（路由、注册表、校验器）。
+- `com.springairag.core.properties`：纯只读配置属性类（字段 + getter/setter，可带 `validate()`），
+  与配置键一一对应；**不得出现指向其他 core 包的出边**。架构门禁把指向它的边视为数据 sink，
+  不计入耦合棘轮，因此拆走属性类后消费方对 `config` 的依赖会真实下降。
+- 第一步（已完成）：把 `@ConfigurationProperties` 与嵌套属性类从 `config` 移到 `properties`；
+  配置键、绑定方式与运行时行为不变，`SpringAiRagApplication` 的 `@ConfigurationPropertiesScan`
+  同时覆盖两个包。包图基线随之删除 6 条 `*→config` 边。
+- 第二步（待做）：拆 `config` 里的服务类（`RagChatService`、`ChatModelRouter`、
+  `EmbeddingProfileRegistry`、`ModelRegistry`、`EmbeddingProfileProvider` 等）到领域包。边界与前置条件：
+  - `RagProperties` 聚合器暂留 `config`：它引用 `RagRateLimitProperties`、`RagMultiInstanceProperties`、
+    `RagOpenAiCompatibilityProperties`，后者依赖 `filter`/`chat` 的类型，直接下沉会形成
+    `properties ↔ filter/chat` 环。第二步先把这些类的行为（拓扑校验、可信代理解析、`MemoryMode`
+    映射）抽到服务层，属性类只留字段。
+  - `RagEmbeddingProperties` 因引用 `EmbeddingProfileRegistry.DEFAULT_PROFILE_KEY` 暂留 `config`；
+    第二步把默认值常量移到属性侧或改为调用方注入。
+  - 验收：配置键零变更、`mvn test` 与架构门禁通过、`*→config` 的边继续下降，且不新增 `properties`
+    出边。
+
 ## 3. RAG 执行链
 
 生产 Chat 使用显式的模式化执行路径：

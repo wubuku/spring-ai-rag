@@ -7,7 +7,7 @@ import com.springairag.api.dto.RetrievalTraceSummaryResponse;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.config.RagProperties;
-import com.springairag.core.config.RagRetrievalDiagnosticsProperties;
+import com.springairag.core.properties.RagRetrievalDiagnosticsProperties;
 import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagRetrievalLog;

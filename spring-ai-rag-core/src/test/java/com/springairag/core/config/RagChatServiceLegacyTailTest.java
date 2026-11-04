@@ -1,5 +1,7 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.MultiModelProperties;
+
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.dto.ChatResponse.StepMetricRecord;
 import com.springairag.core.advisor.HybridSearchAdvisor;

@@ -1,6 +1,6 @@
 package com.springairag.core.service.pdf;
 
-import com.springairag.core.config.RagPdfProperties;
+import com.springairag.core.properties.RagPdfProperties;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;

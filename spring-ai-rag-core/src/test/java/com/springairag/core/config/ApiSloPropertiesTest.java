@@ -1,5 +1,7 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.ApiSloProperties;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;

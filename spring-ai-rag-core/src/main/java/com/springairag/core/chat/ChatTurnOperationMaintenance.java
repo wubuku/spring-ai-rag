@@ -1,6 +1,6 @@
 package com.springairag.core.chat;
 
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.repository.ChatTurnOperationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

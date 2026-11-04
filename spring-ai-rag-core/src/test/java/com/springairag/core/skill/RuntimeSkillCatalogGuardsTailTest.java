@@ -1,6 +1,6 @@
 package com.springairag.core.skill;
 
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.RagChatProperties;
 import com.springairag.core.resource.ResourceCatalog;
 import org.junit.jupiter.api.Test;
 

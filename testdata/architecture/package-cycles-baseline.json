@@ -71,10 +71,6 @@
         ],
         [
           "com.springairag.core.alertdelivery",
-          "com.springairag.core.config"
-        ],
-        [
-          "com.springairag.core.alertdelivery",
           "com.springairag.core.entity"
         ],
         [
@@ -507,10 +503,6 @@
         ],
         [
           "com.springairag.core.filter",
-          "com.springairag.core.config"
-        ],
-        [
-          "com.springairag.core.filter",
           "com.springairag.core.entity"
         ],
         [
@@ -532,10 +524,6 @@
         [
           "com.springairag.core.filter",
           "com.springairag.core.web"
-        ],
-        [
-          "com.springairag.core.http",
-          "com.springairag.core.config"
         ],
         [
           "com.springairag.core.http",
@@ -644,10 +632,6 @@
         [
           "com.springairag.core.resilience",
           "com.springairag.core.exception"
-        ],
-        [
-          "com.springairag.core.resource",
-          "com.springairag.core.config"
         ],
         [
           "com.springairag.core.retrieval",
@@ -802,14 +786,6 @@
           "com.springairag.core.util"
         ],
         [
-          "com.springairag.core.service.pdf",
-          "com.springairag.core.config"
-        ],
-        [
-          "com.springairag.core.skill",
-          "com.springairag.core.config"
-        ],
-        [
           "com.springairag.core.skill",
           "com.springairag.core.resource"
         ],
@@ -837,21 +813,17 @@
           "com.springairag.core.entity",
           "com.springairag.core.evaluation",
           "com.springairag.core.filter",
-          "com.springairag.core.http",
           "com.springairag.core.metrics",
           "com.springairag.core.observability",
           "com.springairag.core.rag",
           "com.springairag.core.ratelimit",
           "com.springairag.core.repository",
           "com.springairag.core.resilience",
-          "com.springairag.core.resource",
           "com.springairag.core.retrieval",
           "com.springairag.core.retrieval.fulltext",
           "com.springairag.core.retrieval.rerank",
           "com.springairag.core.security",
           "com.springairag.core.service",
-          "com.springairag.core.service.pdf",
-          "com.springairag.core.skill",
           "com.springairag.core.usage"
         ]
       ]

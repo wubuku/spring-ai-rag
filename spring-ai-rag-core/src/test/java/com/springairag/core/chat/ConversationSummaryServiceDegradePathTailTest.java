@@ -4,7 +4,7 @@ import com.springairag.api.dto.ChatHistoryResponse;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.config.ChatModelRouter;
-import com.springairag.core.config.MultiModelProperties;
+import com.springairag.core.properties.MultiModelProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.repository.RagChatMemorySummaryRepository;

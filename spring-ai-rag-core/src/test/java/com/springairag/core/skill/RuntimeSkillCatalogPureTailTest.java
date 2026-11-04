@@ -19,7 +19,7 @@ class RuntimeSkillCatalogPureTailTest {
     private final RuntimeSkillCatalog catalog =
             new RuntimeSkillCatalog(
                     mock(ResourceCatalog.class),
-                    new com.springairag.core.config.RagChatProperties());
+                    new com.springairag.core.properties.RagChatProperties());
 
     private String truncate(String text, int maxCharacters) throws Exception {
         Method method = RuntimeSkillCatalog.class

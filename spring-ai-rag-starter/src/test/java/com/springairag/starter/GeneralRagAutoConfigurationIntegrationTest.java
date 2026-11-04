@@ -2,11 +2,11 @@ package com.springairag.starter;
 
 import com.springairag.api.service.DomainRagExtension;
 import com.springairag.core.config.ApiSloConfig;
-import com.springairag.core.config.ApiSloProperties;
-import com.springairag.core.config.MultiModelProperties;
-import com.springairag.core.config.RagAlertProperties;
-import com.springairag.core.config.RagProxyProperties;
-import com.springairag.core.config.RagSseProperties;
+import com.springairag.core.properties.ApiSloProperties;
+import com.springairag.core.properties.MultiModelProperties;
+import com.springairag.core.properties.RagAlertProperties;
+import com.springairag.core.properties.RagProxyProperties;
+import com.springairag.core.properties.RagSseProperties;
 import com.springairag.core.config.RagWebSecurityConfiguration;
 import com.springairag.core.SpringAiRagApplication;
 import com.springairag.core.extension.DefaultDomainRagExtension;

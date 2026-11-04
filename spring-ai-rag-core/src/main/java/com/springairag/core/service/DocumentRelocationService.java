@@ -7,7 +7,7 @@ import com.springairag.api.dto.ExternalDocumentRelocateRequest;
 import com.springairag.api.dto.ExternalDocumentRelocateResponse;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.chat.ChatPrincipal;
-import com.springairag.core.config.RagDocumentLifecycleProperties;
+import com.springairag.core.properties.RagDocumentLifecycleProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.entity.RagCollection;

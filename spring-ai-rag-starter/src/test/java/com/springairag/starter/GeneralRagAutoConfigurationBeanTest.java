@@ -1,7 +1,7 @@
 package com.springairag.starter;
 
 import com.springairag.api.dto.ApiSloComplianceResponse;
-import com.springairag.core.config.ApiSloProperties;
+import com.springairag.core.properties.ApiSloProperties;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.extension.DefaultDomainRagExtension;

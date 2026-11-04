@@ -1,5 +1,39 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.RagUsageProperties;
+import com.springairag.core.properties.RagTracingProperties;
+import com.springairag.core.properties.RagTimeoutProperties;
+import com.springairag.core.properties.RagStructuredRecordProperties;
+import com.springairag.core.properties.RagSseProperties;
+import com.springairag.core.properties.RagSlowQueryProperties;
+import com.springairag.core.properties.RagSecurityProperties;
+import com.springairag.core.properties.RagRetrievalProperties;
+import com.springairag.core.properties.RagRetrievalDiagnosticsProperties;
+import com.springairag.core.properties.RagRerankProperties;
+import com.springairag.core.properties.RagQueryRewriteProperties;
+import com.springairag.core.properties.RagProxyProperties;
+import com.springairag.core.properties.RagPdfProperties;
+import com.springairag.core.properties.RagMemoryProperties;
+import com.springairag.core.properties.RagLlmBudgetProperties;
+import com.springairag.core.properties.RagIntegrationObservabilityProperties;
+import com.springairag.core.properties.RagEvaluationProperties;
+import com.springairag.core.properties.RagEmbeddingJobProperties;
+import com.springairag.core.properties.RagDocumentProcessingProperties;
+import com.springairag.core.properties.RagDocumentLifecycleProperties;
+import com.springairag.core.properties.RagDataGovernanceProperties;
+import com.springairag.core.properties.RagCorsProperties;
+import com.springairag.core.properties.RagCollectionPurgeProperties;
+import com.springairag.core.properties.RagCollectionProvisioningProperties;
+import com.springairag.core.properties.RagCircuitBreakerProperties;
+import com.springairag.core.properties.RagChunkProperties;
+import com.springairag.core.properties.RagChatProperties;
+import com.springairag.core.properties.RagCacheProperties;
+import com.springairag.core.properties.RagAsyncProperties;
+import com.springairag.core.properties.RagApiKeyRotationProperties;
+import com.springairag.core.properties.RagApiKeyProvisioningProperties;
+import com.springairag.core.properties.RagApiKeyExpiryAlertProperties;
+import com.springairag.core.properties.RagAdmissionProperties;
+import com.springairag.core.properties.EmbeddingCircuitBreakerProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**

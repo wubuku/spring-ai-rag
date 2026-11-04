@@ -132,7 +132,7 @@ class ChatExecutionServiceOrchestrationTailTest {
         when(model.getDefaultOptions()).thenReturn(null);
         return new ChatModelRouter.ChatModelCandidate(
                 ref, model,
-                new com.springairag.core.config.MultiModelProperties
+                new com.springairag.core.properties.MultiModelProperties
                         .ModelCapabilities(streaming, false));
     }
 
@@ -292,7 +292,7 @@ class ChatExecutionServiceOrchestrationTailTest {
         ChatModelRouter.ChatModelCandidate toolCandidate =
                 new ChatModelRouter.ChatModelCandidate(
                         "agent", toolModel,
-                        new com.springairag.core.config.MultiModelProperties
+                        new com.springairag.core.properties.MultiModelProperties
                                 .ModelCapabilities(true, true));
         when(modelRouter.orderedCandidateDescriptors(isNull()))
                 .thenReturn(List.of(toolCandidate));

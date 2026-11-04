@@ -234,10 +234,11 @@ export function Chat() {
       activeTurnIdRef.current = turnId;
     },
     onRetry: () => {
+      // 断线续传（Last-Event-ID）只补缺失事件，服务端不会重发已投递的正文与来源。
+      // 这里若清空 content/sources，续传成功后回答会变成空白；重复事件由 useSSE
+      // 的 sequence 去重兜底。只清掉工具活动的"进行中"状态，避免它永远卡在搜索中。
       setMessages(prev => prev.map(msg =>
-        msg.isStreaming
-          ? { ...msg, content: '', sources: undefined, toolActivity: undefined }
-          : msg));
+        msg.isStreaming ? { ...msg, toolActivity: undefined } : msg));
     },
     onError: (_error, event) => {
       // A bounded idempotency conflict is safe to retry manually. Keep the

@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.core.alertdelivery.AlertNotificationAttemptResult;
 import com.springairag.core.alertdelivery.AlertNotificationPayload;
 import com.springairag.core.alertdelivery.AlertNotificationProvider;
-import com.springairag.core.config.NotificationConfig;
+import com.springairag.core.properties.NotificationConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;

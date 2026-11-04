@@ -3,7 +3,7 @@ package com.springairag.core.retrieval.rerank;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.RetrievalResult;
-import com.springairag.core.config.RagRerankProperties;
+import com.springairag.core.properties.RagRerankProperties;
 import com.springairag.core.retrieval.RetrievalResultProvenance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

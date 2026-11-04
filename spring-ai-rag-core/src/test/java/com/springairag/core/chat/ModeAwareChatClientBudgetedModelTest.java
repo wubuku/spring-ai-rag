@@ -1,7 +1,7 @@
 package com.springairag.core.chat;
 
 import com.springairag.core.config.ChatModelRouter;
-import com.springairag.core.config.MultiModelProperties;
+import com.springairag.core.properties.MultiModelProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.rag.CitationQueryAugmenter;
 import com.springairag.core.rag.ProjectDocumentRetriever;

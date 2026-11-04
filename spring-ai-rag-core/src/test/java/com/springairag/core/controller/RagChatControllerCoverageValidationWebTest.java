@@ -4,7 +4,7 @@ import com.springairag.api.enums.CollectionCoverageMode;
 import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.core.chat.ChatTurnOperationService;
 import com.springairag.core.config.RagChatService;
-import com.springairag.core.config.RagSseProperties;
+import com.springairag.core.properties.RagSseProperties;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.service.ChatExportService;

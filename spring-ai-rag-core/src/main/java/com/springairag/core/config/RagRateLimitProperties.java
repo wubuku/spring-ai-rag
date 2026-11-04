@@ -1,7 +1,6 @@
 package com.springairag.core.config;
 
 import com.springairag.core.filter.TrustedProxyResolver;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;

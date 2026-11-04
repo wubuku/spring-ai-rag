@@ -3,7 +3,7 @@ package com.springairag.core.alertdelivery;
 import com.springairag.core.integration.MigrationVersions;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.AlertNotificationDeliveryPageResponse;
-import com.springairag.core.config.NotificationConfig;
+import com.springairag.core.properties.NotificationConfig;
 import com.springairag.core.entity.RagAlert;
 import com.springairag.core.exception.RagException;
 import org.flywaydb.core.Flyway;

@@ -1,5 +1,6 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.RagRetryProperties;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.resilience.UpstreamFailureClassifier;
@@ -8,7 +9,6 @@ import org.springframework.retry.backoff.BackOffContext;
 import org.springframework.retry.backoff.BackOffPolicy;
 import org.springframework.retry.backoff.BackOffInterruptedException;
 import org.springframework.retry.backoff.Sleeper;
-
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

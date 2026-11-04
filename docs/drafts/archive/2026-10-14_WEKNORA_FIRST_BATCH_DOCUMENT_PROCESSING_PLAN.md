@@ -764,7 +764,7 @@ worker concurrency 仍是单一事实源，不在新配置中复制。
 修改/新增：
 
 - `spring-ai-rag-core/src/main/resources/db/migration/V61__document_processing_runs.sql`
-- `spring-ai-rag-core/src/main/java/com/springairag/core/config/RagDocumentProcessingProperties.java`
+- `spring-ai-rag-core/src/main/java/com/springairag/core/properties/RagDocumentProcessingProperties.java`
 - `spring-ai-rag-core/src/main/java/com/springairag/core/config/RagProperties.java`
 - `spring-ai-rag-core/src/main/resources/application.yml`
 

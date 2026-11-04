@@ -2,7 +2,7 @@ package com.springairag.core.service;
 
 import com.springairag.api.dto.CollectionRequest;
 import com.springairag.api.enums.ErrorCode;
-import com.springairag.core.config.RagCollectionProvisioningProperties;
+import com.springairag.core.properties.RagCollectionProvisioningProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.CollectionProvisioningOperation;
 import com.springairag.core.entity.RagCollection;

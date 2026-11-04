@@ -1,9 +1,9 @@
 package com.springairag.core.config;
 
+import com.springairag.core.properties.RagEmbeddingProfileProperties;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
-
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 

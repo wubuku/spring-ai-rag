@@ -2,8 +2,8 @@ package com.springairag.core.chat;
 
 import com.springairag.api.enums.ChatMode;
 import com.springairag.core.config.ChatModelRouter;
-import com.springairag.core.config.MultiModelProperties;
-import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.properties.MultiModelProperties;
+import com.springairag.core.properties.RagChatProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;

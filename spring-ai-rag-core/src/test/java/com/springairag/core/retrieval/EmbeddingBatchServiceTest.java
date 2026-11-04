@@ -1,6 +1,6 @@
 package com.springairag.core.retrieval;
 
-import com.springairag.core.config.EmbeddingCircuitBreakerProperties;
+import com.springairag.core.properties.EmbeddingCircuitBreakerProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.resilience.LlmCircuitBreaker;
 import org.junit.jupiter.api.BeforeEach;
