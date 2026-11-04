@@ -680,7 +680,7 @@ class RagCollectionControllerTest {
                 .thenReturn(Optional.of(createCollection(2L, "Target")));
         when(collectionService.findDocument(10L)).thenReturn(Optional.of(document));
 
-        assertThrows(SecurityException.class,
+        assertThrows(com.springairag.core.exception.DocumentNotFoundException.class,
                 () -> controller.addDocument(2L, Map.of("documentId", 10L)));
     }
 
@@ -693,7 +693,7 @@ class RagCollectionControllerTest {
                 .thenReturn(Optional.of(createCollection(2L, "Target")));
         when(collectionService.findDocument(10L)).thenReturn(Optional.of(document));
 
-        assertThrows(SecurityException.class,
+        assertThrows(com.springairag.core.exception.DocumentNotFoundException.class,
                 () -> controller.addDocument(2L, Map.of("documentId", 10L)));
     }
 

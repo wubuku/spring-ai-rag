@@ -2,6 +2,7 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.DocumentChunkPreviewResponse;
 import com.springairag.core.entity.RagDocument;
+import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.DocumentChunkingService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
@@ -48,7 +49,13 @@ public class DocumentChunkPreviewController {
             throw new ChunkingException("CHUNK_PREVIEW_INVALID_PAGE");
         }
         RagDocument document = documentQueryService.requireDocument(id);
-        ApiKeyCollectionAccess.requireDocumentAccess(document, ApiKeyCollectionAccess.currentPolicy());
+        try {
+            ApiKeyCollectionAccess.requireDocumentAccess(
+                    document, ApiKeyCollectionAccess.currentPolicy());
+        } catch (SecurityException denied) {
+            // 与不存在的文档保持一致返回 404，避免分块诊断成为存在性探针。
+            throw new DocumentNotFoundException(id);
+        }
         ChunkingResult result = chunkingService.preview(document);
         List<DocumentChunkPreviewResponse.Chunk> page = new ArrayList<>();
         int from = Math.min(offset, result.chunks().size());

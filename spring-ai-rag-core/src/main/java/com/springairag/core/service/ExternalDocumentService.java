@@ -109,6 +109,10 @@ public class ExternalDocumentService {
                 if ("FAILED".equals(result.embeddingStatus())) {
                     embeddingFailed++;
                 }
+            } catch (SecurityException denied) {
+                // 授权失败是请求级错误：不能降级成 200 的逐项失败，
+                // 否则批量入口会绕过 collection 鉴权语义。
+                throw denied;
             } catch (RuntimeException e) {
                 persistenceFailed++;
                 results.add(failedResponse(request, e));

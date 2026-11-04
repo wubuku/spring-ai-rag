@@ -8,6 +8,7 @@ import com.springairag.api.dto.DocumentUpdateRequest;
 import com.springairag.api.dto.ExternalDocumentUpsertRequest;
 import com.springairag.api.dto.FileUploadResponse;
 import com.springairag.core.config.EmbeddingProfileProvider;
+import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.ApiKeyRole;
@@ -277,30 +278,29 @@ class RagDocumentControllerUploadAccessTailTest {
     }
 
     @Test
-    void restrictedBatchDeleteRejectsForeignCollection() {
+    void restrictedBatchDeleteMasksForeignCollectionAsNotFound() {
         restrictTo("7");
         when(documentRepository.findAllById(anyList()))
                 .thenReturn(List.of(document(1L, 7L), document(2L, 9L)));
 
-        assertThrows(SecurityException.class,
+        assertThrows(DocumentNotFoundException.class,
                 () -> controller.batchDeleteDocuments(Map.of("ids", List.of(1L, 2L))));
 
         verify(batchDocumentService, never()).batchDeleteDocuments(anyList());
     }
 
     @Test
-    void batchDeleteToleratesMissingDocuments() {
+    void batchDeleteMasksMissingDocumentsAsNotFound() {
         restrictTo("7");
         stubBatchDelete();
-        // id=99 无行：缺失文档不阻断删除。
+        // id=99 无行：与“他人 ID”统一 404，避免批量存在性探测。
         when(documentRepository.findAllById(anyList()))
                 .thenReturn(List.of(document(1L, 7L)));
 
-        BatchDeleteResponse response =
-                controller.batchDeleteDocuments(Map.of("ids", List.of(1L, 99L))).getBody();
+        assertThrows(DocumentNotFoundException.class,
+                () -> controller.batchDeleteDocuments(Map.of("ids", List.of(1L, 99L))));
 
-        assertNotNull(response);
-        assertEquals(1, response.summary().deleted());
+        verify(batchDocumentService, never()).batchDeleteDocuments(anyList());
     }
 
     @Test

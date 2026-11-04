@@ -269,8 +269,10 @@ public class DocumentSyncRunService {
             String tokenHash,
             DocumentSyncRunCompleteRequest request) {
         RunRow run = requireRun(runId);
-        requireToken(run, tokenHash);
+        // 先校验 collection 归属，再校验 lease token：否则 token 错误会先返回
+        // 409，与不存在 run 的 404 形成存在性差异。
         requireCollectionAccess(run.collectionId());
+        requireToken(run, tokenHash);
         if (run.status() == DocumentSyncRunStatus.COMPLETED) {
             return toResponse(run, collectionKey(run.collectionId()));
         }
@@ -404,8 +406,8 @@ public class DocumentSyncRunService {
         String tokenHash = hashToken(token);
         return requireResult(transactionTemplate.execute(status -> {
             RunRow run = requireRun(runId);
-            requireToken(run, tokenHash);
             requireCollectionAccess(run.collectionId());
+            requireToken(run, tokenHash);
             if (run.status() == DocumentSyncRunStatus.ABORTED
                     || run.status() == DocumentSyncRunStatus.EXPIRED
                     || run.status() == DocumentSyncRunStatus.COMPLETED) {
@@ -794,8 +796,8 @@ public class DocumentSyncRunService {
 
     private RunRow requireActiveLease(UUID runId, String tokenHash) {
         RunRow run = requireRun(runId);
-        requireToken(run, tokenHash);
         requireCollectionAccess(run.collectionId());
+        requireToken(run, tokenHash);
         expireIfNeeded(run);
         if (run.status() != DocumentSyncRunStatus.ACTIVE) {
             throw invalidState("Sync run is not ACTIVE");
@@ -1140,8 +1142,15 @@ public class DocumentSyncRunService {
     }
 
     private void requireCollectionAccess(long collectionId) {
-        ApiKeyCollectionAccess.requireCollectionId(
-                collectionId, ApiKeyCollectionAccess.currentPolicy());
+        try {
+            ApiKeyCollectionAccess.requireCollectionId(
+                    collectionId, ApiKeyCollectionAccess.currentPolicy());
+        } catch (SecurityException denied) {
+            // 同步运行按 UUID 寻址；越权与不存在统一返回 404，
+            // 避免受限 key 通过 403/404 或令牌校验顺序探测他人运行。
+            throw new RagException(ErrorCode.NOT_FOUND,
+                    "Document sync run not found");
+        }
     }
 
     private String collectionKey(long collectionId) {

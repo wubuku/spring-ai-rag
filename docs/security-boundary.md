@@ -69,6 +69,90 @@ caller-supplied namespace rather than a numeric ID probe.
 Unrestricted keys, root/`ADMIN`, and deployments with authentication disabled are unchanged.
 See §5 for regression entry points.
 
+### 2.5 Authorization Matrix (Endpoint × Role × Ownership)
+
+`scripts/verify-security-boundary.py` enumerates **76 assertions** against a real
+PostgreSQL instance plus a mock provider. Role dimensions: anonymous / forged key,
+principal A (resource owner), principal B (another valid principal), a read-only
+restricted key (`RAG_READ`), and root (unrestricted). Every cross-principal assertion
+also checks that the response body does not contain protected data (document content,
+external IDs, evaluation cases, feedback comments, etc.).
+
+**Status contract** (denials are always 403 or 404, split by probe dimension):
+
+| Expected | Dimension | Reason |
+|----------|-----------|--------|
+| `401` | missing / forged key | authentication precedes authorization; no resource decision is made |
+| `404` | server-side resource ID (numeric ID, UUID, external-ID tuple) is not visible | identical to "not found", blocking existence enumeration |
+| `403` | caller-supplied namespace or missing capability (`collectionKey` outside the allow-list, no `RAG_WRITE`, restricted key creating a Collection) | the input itself is a caller namespace/capability; the response does not reveal whether a server-side resource exists |
+| `200` + empty/own-only | list endpoints scoped by principal | keeps the list contract and leaks no other principal's counts |
+
+Why both codes coexist: the **ID dimension** must be 404, otherwise a 403/404 difference
+is itself an existence oracle. The **namespace/capability dimension** keeps 403: a
+restricted key explicitly asking for a disallowed `collectionKey` is an established
+contract and does not probe a server-side ID. The tests assert both "another principal's
+ID" and "a non-existent ID" for the same resource and require the same status.
+
+**Matrix** (`A` = owner, `B` = another valid principal, `RO` = read-only restricted key,
+`root` = unrestricted):
+
+| Resource | Endpoints | Anonymous | A | B | RO | root |
+|----------|-----------|-----------|---|----|----|------|
+| auth | `GET /collections`, `POST /search`, `GET /files/tree` | 401 | 200 | 200 | 200 | 200 |
+| collection | `GET /collections/{id}` | 401 | 200 | **404** | — | 200 |
+| collection | `GET /collections/{id}/documents`, `/export`, `GET /collections/by-key/{key}/export` | 401 | 200 | **403** | — | 200 |
+| collection | `PUT/DELETE /collections/{id}`, `POST /collections` | 401 | 200 | **403** | **403** | 200 |
+| collection | `POST /search`, `POST /chat` with another principal's `collectionKeys` | 401 | 200 | **403** | — | 200 |
+| collection | `POST /collections/{own}/documents` referencing another principal's `documentId` | 401 | 200 | **404** | — | 200 |
+| document | `GET /documents/{id}`, `/versions`, `/versions/{n}` | 401 | 200 | **404** | — | 200 |
+| document | `PATCH/DELETE /documents/{id}`, `disable`, `restore`, `versions/{n}/restore` | 401 | 200 | **404** | **403** (read-only) | 200 |
+| document | `DELETE /documents/batch`, `POST /documents/batch/embed` (other or missing IDs) | 401 | 200 | **404** | **403** | 200 |
+| chunk | `GET /documents/{id}/chunks/preview` | 401 | 200 | **404** | — | 200 |
+| reindex | `POST /documents/{id}/embed`, `/embed/stream`; `GET /embedding-jobs/{uuid}`, `GET /document-processing-runs/{uuid}` | 401 | 200 | **404** | — | 200 |
+| upload | `POST /documents/upload`, `POST /files/pdf-to-rag` with another principal's `collectionKey` | 401 | 200 | **403** | **403** (read-only) | 200 |
+| import | `GET /files/raw/{uuid}/{name}`, `GET /files/preview/{uuid}/{name}` | 401 | 200 | **404** | — | 200 |
+| import | `POST /files/{uuid}/embed` | 401 | 200 | **403** | **403** | 200 |
+| import | legacy row with `NULL` ownership (fail-closed) | 401 | — | **404** | — | 200 |
+| download | `GET /files/raw?path=` probes: `..`, double encoding, absolute path, NUL, symlink | 401 | 200 | **400/404** | **400/404** | 200 |
+| evaluation | `GET /evaluation/suites/{key}`, `POST .../versions`, `POST .../diagnose`, `GET /evaluation/runs/{uuid}` | 401 | 200 | **404** | — | **404** (principal isolation) |
+| evaluation | `GET /evaluation/suites`, `/history`, `/report`, `/metrics` | 401 | 200 | 200 (own-only/empty) | — | 200 (global) |
+| feedback | `POST /evaluation/feedback`; `GET /feedback/{stats,history,type}` | 401 | 200 | 200 (own-only) | **403** | 200 (global) |
+| sse | `POST /chat/stream` with another principal's `collectionKeys` | 401 | 200 | **403** | — | 200 |
+| external-sync | `GET /document-sync-runs/{uuid}?collectionKey=`, `complete`, `abort`, `batch-upsert` | 401 | 200 | **404** | — | 200 |
+| external-sync | same run addressed with another principal's `collectionKey` | 401 | 200 | **403** | — | 200 |
+| external-sync | `POST /documents/upsert`, `/batch-upsert`, `GET/DELETE /documents/by-external-id` targeting another Collection | 401 | 200 | **403** | **403** | 200 |
+
+Notes:
+
+- root is **not** a cross-principal evaluation superuser: suites and runs are isolated
+  per principal, so root reading A's suite/run gets 404. This is deliberate (root must
+  not accidentally read another principal's evaluation content); operator audit needs a
+  dedicated principal or the database layer.
+- Import batches have no standalone delete route; deletion is covered through the
+  Collection/document paths.
+- A read-only key gets 200 for its own readable resources; write, delete, and
+  administrative routes uniformly return 403 (capability fail-closed).
+
+**Fixes in this round** (each reproduced by an assertion above before being locked in):
+
+1. **Document detail/mutation 403 → 404**: `RagDocumentController.requireDocumentAccess`
+   converts ACL denial into `DocumentNotFoundException`; update, disable, restore, and
+   version restore gained ID pre-checks.
+2. **Batch existence oracle**: batch delete/re-index return a uniform 404 for both
+   "another principal's ID" and "non-existent ID", no longer revealing which entry exists.
+3. **Sub-resources**: chunk preview, document processing run, and embedding job map ACL
+   denial to 404 (`DocumentChunkPreviewController`, `DocumentProcessingRunService`,
+   `EmbeddingJobService`).
+4. **Cross-Collection reference**: `POST /collections/{id}/documents` referencing
+   another principal's document changes 403 → 404 (`RagCollectionController`,
+   `DocumentMutationService`).
+5. **Sync-run lease timing oracle**: `DocumentSyncRunService` now checks Collection ACL
+   before the lease token, removing the "wrong token = 409 / invisible run = 404"
+   difference.
+6. **External batch upsert fail-open**: `ExternalDocumentService.batchUpsert` used to
+   swallow `SecurityException` into a 200 per-item failure; it now rethrows, so an
+   authorization failure is never disguised as a business failure.
+
 ---
 
 ## 3. Input Attack Surface Conclusions
@@ -113,13 +197,21 @@ RAG_ROOT_API_KEY=<random long secret>
 | Layer | Content | Entry |
 |-------|---------|-------|
 | PR fast layer | file ACL decision table, path traversal, feedback/evaluation scoping, disabled-security protection, restricted-key empty tree | `SecurityBoundaryAccessTest`, `SecurityPostureConfigurationTest`, `PdfImportControllerTest.listTree_restrictedKeyReturns200EmptyWhenNothingIsVisible`, `UserFeedbackServiceScopingTest`, `RetrievalEvaluationServiceScopingTest` |
-| gated layer | real PostgreSQL + mock provider, full cross-Collection / cross-principal matrix over HTTP | `scripts/verify-security-boundary.py` (nightly `soak` job) |
+| gated layer | real PostgreSQL + mock provider, 76-assertion "endpoint × role × ownership" authorization matrix over HTTP | `scripts/verify-security-boundary.py` (nightly `soak` job) |
 | gated layer | V70 legacy data → V71: fail-closed, root visibility, new-write ownership, backfill script | `scripts/verify-security-upgrade-path.py` (nightly `soak` job) |
 | PR fast layer | retrieved-content prompt injection, forged tool arguments, caps under injection pressure | `PromptInjectionContainmentTest`, `RagChatToolPolicyCallbackCallTest.policyBudgetExhaustedShortCircuits` |
 | PR fast layer | oversized/malformed input boundaries and NUL | `InputBoundaryValidationTest`, `RagChatControllerCoverageValidationWebTest.nulAndOversizedMessagesAreRejectedAs400WithoutModelWork` |
 | gated layer | deployment posture: `prod` refusal, auth-enabled boot, non-prod warning | `scripts/verify-security-deployment-posture.py` (nightly `soak` job) |
 
-The matrix covers `search`, `chat`, `collections` (detail/documents/export), `documents upload`, `files/pdf-to-rag`, `files tree/raw/preview`, `evaluation history/report/metrics`, and `feedback stats/history/type`.
+The matrix covers `search`, `chat` (including SSE), `collections`
+(detail/documents/write/delete/export), `documents` (read/update/delete/versions/batch/
+reindex), `chunks preview`, `files tree/raw/preview` plus download path probes,
+`documents upload`, `files/pdf-to-rag`, `import batch embed`, `embedding-jobs`,
+`document-processing-runs`, `evaluation` (suite/version/diagnose/run/history/report/
+metrics), `feedback` (stats/history/type), `document-sync-runs`
+(read/complete/abort/batch-upsert), `documents upsert/by-external-id/batch-upsert`,
+read-only capability fail-closed, and orphaned-row fail-closed. Per-assertion
+expectations are in §2.5.
 
 Run locally:
 
@@ -134,6 +226,13 @@ The script creates a temporary database and mock provider and deletes both on ex
 ## 6. Known Residual Risks
 
 - Legacy `fs_files` / feedback / evaluation rows have no ownership and are invisible to restricted keys. Making historical data visible to a specific principal requires a controlled backfill, not a relaxed query.
+- root / `ADMIN` remains principal-isolated for evaluation suites and runs (§2.5); cross-principal evaluation audit needs a dedicated principal or the database layer. root is not a superuser over evaluation content.
+- Import batches have no standalone delete endpoint; any future route must follow the §2.5 status contract and be added to the matrix.
+- File downloads are DB-mediated (virtual path → DB record), so symlinks under the import directory are unreachable. If storage ever becomes direct-from-disk, add `realpath` containment checks and re-run the §5 download probes.
+- Status-code consistency depends on every ID-based endpoint mapping denials explicitly; new ID endpoints must reuse the §2.4 404 masking or they reintroduce an existence oracle.
+- `403` (namespace/capability) and `404` (resource ID) are a dimension contract; clients must not treat 403 as "the resource exists".
+- Batch semantics: any invisible/missing ID in a batch makes the whole request 404 (rather than per-item failures). This is a deliberate trade-off to avoid per-item existence leakage; clients should pre-validate.
+- Multiple keys of one managed principal share ownership (files are owned per principal, not per key). That is design semantics, not cross-tenant access.
 - Audit logs and export artifacts are data-plane data (governed by deployment permissions); the confidentiality boundary for application logs and metrics is in §9.
 - With authentication disabled there is no principal concept; internal paths (plugins/tools) operate globally. That is the established behavior for isolated environments.
 

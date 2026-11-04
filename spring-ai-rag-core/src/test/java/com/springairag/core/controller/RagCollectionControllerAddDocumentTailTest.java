@@ -184,7 +184,8 @@ class RagCollectionControllerAddDocumentTailTest {
         when(collectionService.findDocument(9L))
                 .thenReturn(Optional.of(document));
 
-        assertThrows(SecurityException.class,
+        // 跨 collection 引用他人的文档与文档不存在同返回 404，避免存在性探测。
+        assertThrows(com.springairag.core.exception.DocumentNotFoundException.class,
                 () -> controller.addDocument(5L, request(9L, null)));
     }
 

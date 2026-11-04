@@ -366,6 +366,7 @@ public class RagDocumentController {
     public ResponseEntity<DocumentMutationResponse> updateDocument(
             @PathVariable Long id,
             @Valid @RequestBody DocumentUpdateRequest request) {
+        requireDocumentAccess(id);
         return ResponseEntity.ok(documentMutationService
                 .updateLocal(id, request));
     }
@@ -376,6 +377,7 @@ public class RagDocumentController {
     public ResponseEntity<DocumentMutationResponse> disableDocument(
             @PathVariable Long id,
             @Valid @RequestBody DocumentDisableRequest request) {
+        requireDocumentAccess(id);
         return ResponseEntity.ok(documentMutationService
                 .disableLocal(id, request));
     }
@@ -386,6 +388,7 @@ public class RagDocumentController {
     public ResponseEntity<DocumentMutationResponse> restoreDocument(
             @PathVariable Long id,
             @Valid @RequestBody DocumentRestoreRequest request) {
+        requireDocumentAccess(id);
         return ResponseEntity.ok(documentMutationService
                 .restoreLocal(id, request));
     }
@@ -1258,6 +1261,7 @@ public class RagDocumentController {
             @Parameter(description = "Document ID") @PathVariable Long id,
             @Parameter(description = "Version number") @PathVariable int versionNumber,
             @Valid @RequestBody DocumentVersionRestoreRequest request) {
+        requireDocumentAccess(id);
         return ResponseEntity.ok(documentMutationService
                 .restoreLocalFromVersion(id, versionNumber, request));
     }
@@ -1279,9 +1283,19 @@ public class RagDocumentController {
     }
 
     private void requireDocumentAccess(Long id) {
-        documentQueryService.findById(id).ifPresent(doc ->
-                ApiKeyCollectionAccess.requireDocumentAccess(
-                        doc, ApiKeyCollectionAccess.currentPolicy()));
+        RagDocument document = documentQueryService.findById(id).orElse(null);
+        if (document == null) {
+            // 不存在由下游统一返回 404；这里不额外抛错。
+            return;
+        }
+        try {
+            ApiKeyCollectionAccess.requireDocumentAccess(
+                    document, ApiKeyCollectionAccess.currentPolicy());
+        } catch (SecurityException denied) {
+            // 越权枚举防护：存在但不可见的 documentId 与不存在的 documentId
+            // 一律 404，避免受限 key 通过 403/404 差异探测他人文档是否存在。
+            throw new DocumentNotFoundException(id);
+        }
     }
 
     private void requireDocumentAccess(List<Long> ids) {
@@ -1293,9 +1307,16 @@ public class RagDocumentController {
                 .collect(Collectors.toMap(RagDocument::getId, doc -> doc));
         for (Long id : ids) {
             RagDocument document = documents.get(id);
-            if (document != null) {
+            // 批量入口同样不区分“不存在”和“存在但越权”：两者都 404，
+            // 否则 200/404 的差异会变成 ID 存在性探针。
+            if (document == null) {
+                throw new DocumentNotFoundException(id);
+            }
+            try {
                 ApiKeyCollectionAccess.requireDocumentAccess(
                         document, ApiKeyCollectionAccess.currentPolicy());
+            } catch (SecurityException denied) {
+                throw new DocumentNotFoundException(id);
             }
         }
     }

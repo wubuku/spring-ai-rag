@@ -431,8 +431,14 @@ public class EmbeddingJobService {
                         ErrorCode.NOT_FOUND, "Embedding job not found"));
         RagDocument document = documentRepository.findById(job.documentId())
                 .orElseThrow(() -> new DocumentNotFoundException(job.documentId()));
-        ApiKeyCollectionAccess.requireDocumentAccess(
-                document, ApiKeyCollectionAccess.currentPolicy());
+        try {
+            ApiKeyCollectionAccess.requireDocumentAccess(
+                    document, ApiKeyCollectionAccess.currentPolicy());
+        } catch (SecurityException denied) {
+            // 与不存在的 jobId 保持一致返回 404，阻断受限 key 的存在性探测。
+            throw new RagException(
+                    ErrorCode.NOT_FOUND, "Embedding job not found");
+        }
         return job;
     }
 

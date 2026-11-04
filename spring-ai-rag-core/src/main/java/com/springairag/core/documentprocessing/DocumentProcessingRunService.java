@@ -426,8 +426,15 @@ public class DocumentProcessingRunService {
                         "Document processing run not found"));
         RagDocument document = documentRepository.findById(run.documentId())
                 .orElseThrow(() -> new DocumentNotFoundException(run.documentId()));
-        ApiKeyCollectionAccess.requireDocumentAccess(
-                document, ApiKeyCollectionAccess.currentPolicy());
+        try {
+            ApiKeyCollectionAccess.requireDocumentAccess(
+                    document, ApiKeyCollectionAccess.currentPolicy());
+        } catch (SecurityException denied) {
+            // runId 是不可枚举的 UUID，但越权仍与不存在一致返回 404，
+            // 防止受限 key 通过 403/404 差异探测他人运行记录。
+            throw new DocumentNotFoundException(
+                    "Document processing run not found");
+        }
         return run;
     }
 

@@ -1712,8 +1712,13 @@ public class DocumentMutationService {
     private RagDocument requireLocal(long documentId) {
         RagDocument document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
-        ApiKeyCollectionAccess.requireDocumentAccess(
-                document, ApiKeyCollectionAccess.currentPolicy());
+        try {
+            ApiKeyCollectionAccess.requireDocumentAccess(
+                    document, ApiKeyCollectionAccess.currentPolicy());
+        } catch (SecurityException denied) {
+            // 与不存在的文档保持一致：越权访问不返回 403，避免暴露 documentId 存在性。
+            throw new DocumentNotFoundException(documentId);
+        }
         if (document.getExternalId() != null
                 && !document.getExternalId().isBlank()) {
             throw new RagException(

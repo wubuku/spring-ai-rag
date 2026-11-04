@@ -66,6 +66,82 @@
 **兼容性**：只有受限 Key 受影响，且只会**少**暴露信息；不受限 Key、root/`ADMIN`、
 未启用认证的部署行为不变。回归入口见 §5。
 
+### 2.5 授权矩阵（端点 × 角色 × 归属）
+
+`scripts/verify-security-boundary.py` 在真实 PostgreSQL + mock provider 上枚举
+**76 条**断言。角色维度：匿名 / 非法 key、principal A（资源归属者）、principal B
+（另一个合法 principal）、只读受限 key（`RAG_READ`）、root（不受限）。所有越权断言
+同时检查响应体不包含被保护数据（文档正文、外部 ID、评估 case、反馈 comment 等）。
+
+**状态码契约**（越权一律 403 或 404，二者按“探测维度”划分）：
+
+| 期望 | 适用维度 | 理由 |
+|------|----------|------|
+| `401` | 缺失 / 伪造 key | 认证先于授权，不进入资源判定 |
+| `404` | 服务端资源 ID（数字 ID、UUID、外部 ID 组合）不可见 | 与“不存在”完全一致，阻断存在性枚举 |
+| `403` | 调用方提供的命名空间或能力不足（`collectionKey` 不在 allow-list、缺少 `RAG_WRITE`、受限 key 创建 Collection） | 输入本身就是调用方 namespace / 能力，响应不暴露服务端资源是否存在 |
+| `200` + 空/仅自己 | 列表端点按 principal 收敛 | 不改变列表契约，也不泄漏他人计数 |
+
+为什么两种并存：**ID 维度**必须 404，否则 403/404 差异本身就是存在性 oracle；
+**namespace / 能力维度**保持 403，受限 key 明确请求一个不允许的 `collectionKey` 是
+既有契约，且不构成服务端 ID 探测。测试对同一资源同时用“他人 ID”和“不存在 ID”
+验证，要求两者同码。
+
+**矩阵**（`A` = 资源归属者，`B` = 另一合法 principal，`RO` = 只读受限 key，
+`root` = 不受限）：
+
+| 资源 | 端点 | 匿名 | A | B | RO | root |
+|------|------|------|---|----|----|------|
+| auth | `GET /collections`、`POST /search`、`GET /files/tree` | 401 | 200 | 200 | 200 | 200 |
+| collection | `GET /collections/{id}` | 401 | 200 | **404** | — | 200 |
+| collection | `GET /collections/{id}/documents`、`/export`、`GET /collections/by-key/{key}/export` | 401 | 200 | **403** | — | 200 |
+| collection | `PUT/DELETE /collections/{id}`、`POST /collections` | 401 | 200 | **403** | **403** | 200 |
+| collection | `POST /search`、`POST /chat` 指定他人 `collectionKeys` | 401 | 200 | **403** | — | 200 |
+| collection | `POST /collections/{own}/documents` 引用他人 `documentId` | 401 | 200 | **404** | — | 200 |
+| document | `GET /documents/{id}`、`/versions`、`/versions/{n}` | 401 | 200 | **404** | — | 200 |
+| document | `PATCH/DELETE /documents/{id}`、`disable`、`restore`、`versions/{n}/restore` | 401 | 200 | **404** | **403**（只读） | 200 |
+| document | `DELETE /documents/batch`、`POST /documents/batch/embed`（含他人或不存在 ID） | 401 | 200 | **404** | **403** | 200 |
+| chunk | `GET /documents/{id}/chunks/preview` | 401 | 200 | **404** | — | 200 |
+| reindex | `POST /documents/{id}/embed`、`/embed/stream`；`GET /embedding-jobs/{uuid}`、`GET /document-processing-runs/{uuid}` | 401 | 200 | **404** | — | 200 |
+| upload | `POST /documents/upload`、`POST /files/pdf-to-rag` 指定他人 `collectionKey` | 401 | 200 | **403** | **403**（只读） | 200 |
+| import | `GET /files/raw/{uuid}/{name}`、`GET /files/preview/{uuid}/{name}` | 401 | 200 | **404** | — | 200 |
+| import | `POST /files/{uuid}/embed` | 401 | 200 | **403** | **403** | 200 |
+| import | 归属列为 `NULL` 的遗留文件（fail-closed） | 401 | — | **404** | — | 200 |
+| download | `GET /files/raw?path=` 的 `..`、双重编码、绝对路径、NUL、符号链接探针 | 401 | 200 | **400/404** | **400/404** | 200 |
+| evaluation | `GET /evaluation/suites/{key}`、`POST .../versions`、`POST .../diagnose`、`GET /evaluation/runs/{uuid}` | 401 | 200 | **404** | — | **404**（principal 隔离） |
+| evaluation | `GET /evaluation/suites`、`/history`、`/report`、`/metrics` | 401 | 200 | 200（仅自己/空） | — | 200（全量） |
+| feedback | `POST /evaluation/feedback`；`GET /feedback/{stats,history,type}` | 401 | 200 | 200（仅自己） | **403** | 200（全量） |
+| sse | `POST /chat/stream` 指定他人 `collectionKeys` | 401 | 200 | **403** | — | 200 |
+| external-sync | `GET /document-sync-runs/{uuid}?collectionKey=`、`complete`、`abort`、`batch-upsert` | 401 | 200 | **404** | — | 200 |
+| external-sync | 同一 run 但使用他人 `collectionKey` | 401 | 200 | **403** | — | 200 |
+| external-sync | `POST /documents/upsert`、`/batch-upsert`、`GET/DELETE /documents/by-external-id` 指向他人 Collection | 401 | 200 | **403** | **403** | 200 |
+
+说明：
+
+- root **不是**跨 principal 的评估超级用户：评估套件 / 运行按 principal 隔离，
+  root 读取 A 的 suite / run 返回 404。这是刻意选择（避免 root 意外读到他人评测
+  内容），运维审计需使用专用 principal 或数据库层。
+- 导入批次没有独立的删除路由，删除经 Collection / document 路径覆盖。
+- 只读 key 读取自有资源返回 200；写入、删除、管理类统一 403（能力 fail-closed）。
+
+**本轮修复**（全部先由上表断言复现，再按表锁定）：
+
+1. **文档详情 / 变更 403→404**：`RagDocumentController.requireDocumentAccess`
+   将 ACL 拒绝转换为 `DocumentNotFoundException`；更新、禁用、恢复、版本恢复
+   增加 ID 预检。
+2. **批量操作存在性 oracle**：批量删除 / 重索引对“他人 ID”与“不存在 ID”统一
+   404，不再暴露哪一条存在。
+3. **子资源**：分块预览、document processing run、embedding job 的 ACL 拒绝
+   统一 404（`DocumentChunkPreviewController`、`DocumentProcessingRunService`、
+   `EmbeddingJobService`）。
+4. **跨 Collection 引用**：`POST /collections/{id}/documents` 引用他人文档由
+   403 改为 404（`RagCollectionController`、`DocumentMutationService`）。
+5. **同步 run lease 时序 oracle**：`DocumentSyncRunService` 把 Collection ACL
+   校验放在 lease token 校验之前，消除“token 错=409 / run 不可见=404”的差异。
+6. **外部批量 upsert fail-open**：`ExternalDocumentService.batchUpsert` 原先把
+   `SecurityException` 吞成 200 逐条失败；改为直接抛出 403，授权失败不再伪装成
+   业务失败。
+
 ---
 
 ## 3. 输入攻击面结论
@@ -110,13 +186,20 @@ RAG_ROOT_API_KEY=<随机长密钥>
 | 层 | 内容 | 入口 |
 |----|------|------|
 | PR 快层 | 文件 ACL 判定表、路径穿越、反馈/评估 scoping、安全关闭防护、受限 key 空树 | `SecurityBoundaryAccessTest`、`SecurityPostureConfigurationTest`、`PdfImportControllerTest.listTree_restrictedKeyReturns200EmptyWhenNothingIsVisible`、`UserFeedbackServiceScopingTest`、`RetrievalEvaluationServiceScopingTest` |
-| gated 层 | 真实 PostgreSQL + mock provider，全入口跨 Collection / 跨 principal 矩阵 | `scripts/verify-security-boundary.py`（nightly `soak` job） |
+| gated 层 | 真实 PostgreSQL + mock provider，76 条「端点 × 角色 × 归属」授权矩阵断言 | `scripts/verify-security-boundary.py`（nightly `soak` job） |
 | gated 层 | V70 历史数据 → V71 升级：fail-closed、root 可见、新写入归属、回填脚本 | `scripts/verify-security-upgrade-path.py`（nightly `soak` job） |
 | PR 快层 | 检索内容提示注入、伪造工具参数、注入诱导下的预算与工具上限 | `PromptInjectionContainmentTest`、`RagChatToolPolicyCallbackCallTest.policyBudgetExhaustedShortCircuits` |
 | PR 快层 | 超长/畸形输入边界与 NUL | `InputBoundaryValidationTest`、`RagChatControllerCoverageValidationWebTest.nulAndOversizedMessagesAreRejectedAs400WithoutModelWork` |
 | gated 层 | 部署态：`prod` 拒绝启动、认证开启正常启动、非 prod 告警 | `scripts/verify-security-deployment-posture.py`（nightly `soak` job） |
 
-回归矩阵覆盖：`search`、`chat`、`collections`（详情/文档/导出）、`documents upload`、`files/pdf-to-rag`、`files tree/raw/preview`、`evaluation history/report/metrics`、`feedback stats/history/type`。
+回归矩阵覆盖：`search`、`chat`（含 SSE）、`collections`（详情/文档/写/删/导出）、
+`documents`（读/更新/删除/版本/批量/重索引）、`chunks preview`、
+`files tree/raw/preview` 与下载路径探针、`documents upload`、`files/pdf-to-rag`、
+`import batch embed`、`embedding-jobs`、`document-processing-runs`、
+`evaluation`（suite/version/diagnose/run/history/report/metrics）、
+`feedback`（stats/history/type）、`document-sync-runs`（读/complete/abort/batch-upsert）、
+`documents upsert/by-external-id/batch-upsert`、只读能力 fail-closed、无归属行
+fail-closed。逐条期望见 §2.5。
 
 本地运行：
 
@@ -131,6 +214,13 @@ python3 scripts/verify-security-boundary.py
 ## 6. 已知残余风险
 
 - 历史 `fs_files` / feedback / evaluation 行无归属，受限 key 不可见；如需让历史数据对特定 principal 可见，必须做受控回填，而不是放宽查询。
+- root / `ADMIN` 对评估 suite / run 仍按 principal 隔离（§2.5）；跨 principal 的评估审计需要专用 principal 或数据库层，root 不是评测内容的超级用户。
+- 导入批次没有独立删除端点；若未来新增，必须按 §2.5 的状态契约实现并纳入矩阵。
+- 文件下载通过数据库中介（virtual path → DB 记录），导入目录下的符号链接不可达；若未来改为磁盘直读，必须做 `realpath` 包含校验并重跑 §5 的下载路径探针。
+- 状态码一致性依赖每个 ID 型端点显式映射；新增 ID 端点必须复用 §2.4 的 404 掩码，否则会重新引入存在性 oracle。
+- `403`（namespace / 能力）与 `404`（资源 ID）是维度约定；客户端不得把 403 当作“资源存在”的信号。
+- 批量语义：批次中任一不可见 / 不存在 ID 会使整个请求 404（而非逐条失败），这是为避免逐条错误泄漏存在性而做的刻意收敛；调用方应先校验。
+- 同一 managed principal 的多个 key 共享归属（文件按 principal 而非按 key），这是设计语义，不是越权。
 - 审计日志、导出产物属于数据面（按部署侧权限管理）；应用日志与指标的保密边界见 §9。
 - 未启用认证时没有 principal 概念，插件/工具调用等内部路径按全量处理；这是隔离环境的既有行为。
 

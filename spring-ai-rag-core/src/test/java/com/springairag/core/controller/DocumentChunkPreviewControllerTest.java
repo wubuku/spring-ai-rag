@@ -85,7 +85,7 @@ class DocumentChunkPreviewControllerTest {
     }
 
     @Test
-    void restrictedCollectionIsRejectedBeforeChunking() throws Exception {
+    void restrictedCollectionIsMaskedAsNotFoundBeforeChunking() throws Exception {
         RagApiKey key = new RagApiKey();
         key.setRole(ApiKeyRole.NORMAL);
         key.setAllowedCollectionIds("2");
@@ -93,7 +93,10 @@ class DocumentChunkPreviewControllerTest {
                 .thenReturn(document("SECRET_BODY_".repeat(100)));
         mvc.perform(get("/api/v1/rag/documents/41/chunks/preview")
                 .requestAttr(ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY, key))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isNotFound())
+                .andExpect(content().string(
+                        org.hamcrest.Matchers.not(
+                                org.hamcrest.Matchers.containsString("SECRET_BODY_"))));
     }
 
     @Test

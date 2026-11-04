@@ -22,6 +22,7 @@ import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.chat.IdempotencyKeyValidator;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
+import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.exception.DocumentRevisionConflictException;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.security.ApiKeyCollectionAccess;
@@ -650,7 +651,13 @@ public class RagCollectionController {
 
         return collectionService.findDocument(documentId)
                 .map(doc -> {
-                    ApiKeyCollectionAccess.requireDocumentAccess(doc, currentKey);
+                    try {
+                        ApiKeyCollectionAccess.requireDocumentAccess(doc, currentKey);
+                    } catch (SecurityException denied) {
+                        // 与不存在的 documentId 保持一致返回 404，避免跨 collection
+                        // 添加/引用成为他人文档存在性探针。
+                        throw new DocumentNotFoundException(documentId);
+                    }
                     if (doc.getExternalId() != null && !doc.getExternalId().isBlank()) {
                         throw new DocumentRevisionConflictException(
                                 "External-managed documents must be synchronized by external identity");
