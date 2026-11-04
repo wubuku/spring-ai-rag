@@ -5,6 +5,7 @@ import com.springairag.core.config.RagProperties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -67,6 +69,18 @@ class EvaluationSuiteWorkerTest {
         assertEquals(
                 new java.util.HashSet<>(claimOwners.getAllValues()),
                 new java.util.HashSet<>(executionOwners.getAllValues()));
+    }
+
+    @Test
+    void workerStaysEnabledWhenHostApplicationOmitsTheProperty() {
+        ConditionalOnProperty condition = EvaluationSuiteWorker.class
+                .getAnnotation(ConditionalOnProperty.class);
+        assertTrue(condition.matchIfMissing(),
+                "出厂配置默认启用受管 suite worker；宿主应用覆盖 application.yml "
+                        + "时属性缺失，不能让它静默停摆");
+        assertEquals("true", condition.havingValue());
+        assertEquals("rag.evaluation", condition.prefix());
+        assertEquals("managed-suites-enabled", condition.name()[0]);
     }
 
     private EvaluationSuiteRepository.RunRow run(UUID id) {

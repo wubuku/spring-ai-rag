@@ -178,6 +178,11 @@ export const GATES = [
     kind: 'gate',
     selfTest: 'scripts/test-support/null-request-forwarding-self-test.mjs',
   },
+  {
+    gate: 'scripts/verify-architecture-boundaries.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/architecture-boundaries-self-test.mjs',
+  },
 
   // 端点行为矩阵。REST 文档与 OpenAPI 基线里出现的每一个端点都必须在
   // `testdata/api-contract/endpoint-behavior-matrix.json` 有条目，记录

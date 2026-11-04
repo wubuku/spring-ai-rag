@@ -450,7 +450,8 @@ rag:
 
   # Re-ranking configuration
   rerank:
-    enabled: false
+    # 本地启发式重排默认关闭（prod profile 默认打开），并允许任何 profile 用环境变量覆盖。
+    enabled: ${RAG_RERANK_ENABLED:false}
     provider: heuristic   # heuristic | http | none
     diversity-weight: 0.2
     top-n: 5

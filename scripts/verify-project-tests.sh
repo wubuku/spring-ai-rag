@@ -201,6 +201,18 @@ pass "Null-request forwarding self-test"
 node scripts/verify-null-request-forwarding.mjs
 pass "Null-request forwarding"
 
+# 架构边界：模块依赖方向、跨模块 import、core 包分层。只收“当前零违规”的硬规则；
+# 包级循环与 controller 直连 repository 的测量结论留在脚本头部，不落地为门禁。
+node scripts/test-support/architecture-boundaries-self-test.mjs >/dev/null || {
+  echo "Architecture-boundaries self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/architecture-boundaries-self-test.mjs >&2 || true
+  exit 1
+}
+pass "Architecture boundaries self-test"
+
+node scripts/verify-architecture-boundaries.mjs
+pass "Architecture boundaries"
+
 # 端点行为矩阵：文档与 OpenAPI 里的每个端点都必须在矩阵中有条目。这条规则
 # 只能靠"清单对清单"来守，靠人记一定会漏——所以它进 PR 层，静态部分每次
 # 提交都跑；真实 PG + mock provider 的运行时探针在 nightly 的 resilience job。

@@ -626,7 +626,8 @@ rag:
     semantic-batch-limit: ${RAG_EVALUATION_SEMANTIC_BATCH_LIMIT:50}
 ```
 
-citation 校验只解析约定的 `[S1]` token，不是覆盖率分数。受管 suite worker 默认关闭。
+citation 校验只解析约定的 `[S1]` token，不是覆盖率分数。受管 suite worker 默认启用；
+宿主应用覆盖 `application.yml` 且省略该属性时仍保持启用（`matchIfMissing`）。
 `max-concurrent-runs` 限制同时执行的 run；`run-concurrency` 限制单个 run 内并行执行的
 检索 case 数，取值上限为 8。
 

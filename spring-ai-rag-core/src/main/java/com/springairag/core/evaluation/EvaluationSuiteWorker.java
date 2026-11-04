@@ -22,7 +22,8 @@ import java.util.concurrent.TimeUnit;
 @ConditionalOnProperty(
         prefix = "rag.evaluation",
         name = "managed-suites-enabled",
-        havingValue = "true")
+        havingValue = "true",
+        matchIfMissing = true)
 public class EvaluationSuiteWorker {
 
     private static final Logger log = LoggerFactory.getLogger(EvaluationSuiteWorker.class);

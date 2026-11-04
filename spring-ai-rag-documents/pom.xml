@@ -16,26 +16,9 @@
     <description>Document processing components (parsers, chunking strategies, text cleaning)</description>
 
     <dependencies>
-        <!-- Project API module -->
-        <dependency>
-            <groupId>com.springairag</groupId>
-            <artifactId>spring-ai-rag-api</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-
-        <!-- Spring AI Model -->
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-model</artifactId>
-        </dependency>
-
-        <!-- Spring Boot (provides @Service and other annotation support) -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
-        </dependency>
-
-        <!-- Test -->
+        <!-- 本模块只依赖 JDK；解析/分块组件不引用 Spring 或本项目其他模块。
+             原先声明的 api、spring-ai-model、spring-boot-starter 均未被源码使用
+             （mvn dependency:analyze 判定为 Unused declared）。 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
