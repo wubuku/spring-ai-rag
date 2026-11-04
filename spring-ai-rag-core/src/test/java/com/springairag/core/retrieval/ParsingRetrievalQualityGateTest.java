@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.core.service.DocumentTextExtractor;
 import com.springairag.core.service.extract.DocumentParsingCorpus;
+import com.springairag.core.service.pdf.PdfTextExtractor;
 import com.springairag.documents.chunk.BoundedTextChunker;
 import com.springairag.documents.chunk.ChunkDiagnostics;
 import com.springairag.documents.chunk.ChunkingResult;
@@ -113,27 +114,75 @@ class ParsingRetrievalQualityGateTest {
     }
 
     @Test
-    @DisplayName("多栏 PDF：不得逐行跨栏串行，左栏整体先于右栏")
+    @DisplayName("双栏/混排：左栏整体先于右栏，chunk 内不得逐行交错")
     void multiColumnPdfIsNotInterleaved() {
-        String text = index.texts().get("pdf-multicolumn");
-        List<String> ordered = List.of(
-                "LEFT-ALPHA", "LEFT-BETA", "LEFT-GAMMA",
-                "RIGHT-ALPHA", "RIGHT-BETA", "RIGHT-GAMMA");
-        int previous = -1;
-        for (String marker : ordered) {
-            int position = text.indexOf(marker);
-            assertTrue(position >= 0, "missing column marker: " + marker);
-            assertTrue(position > previous,
-                    "column marker out of order: " + marker);
-            previous = position;
-        }
-        for (ChunkRecord chunk : chunksOf("pdf-multicolumn")) {
-            if (chunk.text().contains("LEFT-") && chunk.text().contains("RIGHT-")) {
-                assertTrue(chunk.text().lastIndexOf("LEFT-")
-                                < chunk.text().indexOf("RIGHT-"),
-                        "chunk mixes columns row by row: " + chunk.text());
+        for (Map.Entry<String, List<String>> entry : spec.columnOrder().entrySet()) {
+            String text = index.texts().get(entry.getKey());
+            assertMarkersInOrder(text, entry.getValue(),
+                    entry.getKey() + " extracted text");
+            for (ChunkRecord chunk : chunksOf(entry.getKey())) {
+                assertMarkersInOrder(chunk.text(), entry.getValue(),
+                        entry.getKey() + " chunk #" + chunk.chunkIndex());
             }
         }
+    }
+
+    private static void assertMarkersInOrder(String text, List<String> markers,
+                                             String where) {
+        int previous = -1;
+        for (String marker : markers) {
+            int position = text.indexOf(marker);
+            if (position < 0) {
+                continue;
+            }
+            assertTrue(position > previous,
+                    () -> where + " order broken at marker: " + marker);
+            previous = position;
+        }
+    }
+
+    @Test
+    @DisplayName("版式诊断：分栏/行序决定与原因可解释，歧义样本可预期降级")
+    void layoutDecisionsAreExplained() throws Exception {
+        for (DocumentSpec document : spec.documents()) {
+            LayoutExpectation expected =
+                    spec.layoutDiagnostics().get(document.documentId());
+            if (expected == null) {
+                continue;
+            }
+            PdfTextExtractor.PdfExtraction extraction = PdfTextExtractor.extract(
+                    fixture(document.fixture()), 2000);
+            assertEquals(1, extraction.layout().size(),
+                    document.documentId() + " should have one page");
+            PdfTextExtractor.PageLayout layout = extraction.layout().get(0);
+            assertEquals(expected.decision(), layout.decision(),
+                    document.documentId() + " decision");
+            assertEquals(expected.reason(), layout.reason(),
+                    document.documentId() + " reason");
+
+            DocumentTextExtractor.ExtractedDocument extracted =
+                    DocumentTextExtractor.extract(document.filename(),
+                            fixture(document.fixture()));
+            assertFalse(extracted.layoutDiagnostics().isEmpty(),
+                    document.documentId() + " must carry layout diagnostics");
+            assertTrue(extracted.layoutDiagnostics().get(0)
+                            .contains("decision=" + expected.decision()),
+                    document.documentId() + " diagnostics missing decision");
+            assertTrue(extracted.layoutDiagnostics().get(0)
+                            .contains("reason=" + expected.reason()),
+                    document.documentId() + " diagnostics missing reason");
+        }
+
+        PdfTextExtractor.PdfExtraction ambiguous = PdfTextExtractor.extract(
+                DocumentParsingCorpus.ambiguousTwoClusterPdf(), 2000);
+        assertEquals("ROW_ORDER", ambiguous.layout().get(0).decision());
+        assertEquals("AMBIGUOUS_FALLBACK", ambiguous.layout().get(0).reason());
+
+        DocumentTextExtractor.ExtractedDocument text =
+                DocumentTextExtractor.extract("reimbursement.txt",
+                        DocumentParsingCorpus.retrievalGbkText());
+        assertTrue(text.layoutDiagnostics().isEmpty(),
+                "non-PDF documents should not carry PDF layout diagnostics");
     }
 
     @Test
@@ -313,6 +362,12 @@ class ParsingRetrievalQualityGateTest {
         return switch (name) {
             case "multiColumnPdf" -> DocumentParsingCorpus.multiColumnPdf();
             case "retrievalTablePdf" -> DocumentParsingCorpus.retrievalTablePdf();
+            case "twoColumnTablePdf" -> DocumentParsingCorpus.twoColumnTablePdf();
+            case "twoColumnBodyPdf" -> DocumentParsingCorpus.twoColumnBodyPdf();
+            case "twoColumnBodyWithTablePdf" ->
+                    DocumentParsingCorpus.twoColumnBodyWithTablePdf();
+            case "singleColumnWideTablePdf" ->
+                    DocumentParsingCorpus.singleColumnWideTablePdf();
             case "docx" -> DocumentParsingCorpus.docx();
             case "markdown" -> DocumentParsingCorpus.markdown();
             case "htmlWithNoise" -> DocumentParsingCorpus.htmlWithNoise();
@@ -549,10 +604,15 @@ class ParsingRetrievalQualityGateTest {
                      List<String> expectedTerms) {
     }
 
+    record LayoutExpectation(String decision, String reason) {
+    }
+
     record Spec(int version, String name, String description,
                 Chunking chunking, Metrics metrics, Thresholds thresholds,
                 List<DocumentSpec> documents, List<QuerySpec> queries,
-                Map<String, List<List<String>>> tableRows) {
+                Map<String, List<List<String>>> tableRows,
+                Map<String, List<String>> columnOrder,
+                Map<String, LayoutExpectation> layoutDiagnostics) {
 
         static Spec load() throws IOException {
             try (InputStream input = ParsingRetrievalQualityGateTest.class

@@ -102,6 +102,158 @@ public final class DocumentParsingCorpus {
         return "报销流程需要财务审批、发票核验和预算冻结。".getBytes(Charset.forName("GBK"));
     }
 
+    /** 两列表格：x 簇恰好两个，但单元格短且逐行对齐，不能被当成双栏正文。 */
+    public static byte[] twoColumnTablePdf() throws IOException {
+        try (PDDocument document = new PDDocument();
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            PDPage page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            try (PDPageContentStream stream = new PDPageContentStream(document, page)) {
+                stream.beginText();
+                stream.setFont(font(), 12);
+                stream.setLeading(20f);
+                stream.newLineAtOffset(40, 720);
+                stream.showText("KEY");
+                stream.newLineAtOffset(140, 0);
+                stream.showText("VALUE");
+                stream.newLineAtOffset(-140, -20);
+                stream.showText("TIMEOUT");
+                stream.newLineAtOffset(140, 0);
+                stream.showText("30 SEC");
+                stream.newLineAtOffset(-140, -20);
+                stream.showText("RETRY");
+                stream.newLineAtOffset(140, 0);
+                stream.showText("3 TIMES");
+                stream.newLineAtOffset(-140, -20);
+                stream.showText("LOG");
+                stream.newLineAtOffset(140, 0);
+                stream.showText("ENABLED");
+                stream.endText();
+            }
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
+    /** 真实双栏正文：两栏行距不同，长行构成连续句子，必须按左栏整段、右栏整段重排。 */
+    public static byte[] twoColumnBodyPdf() throws IOException {
+        try (PDDocument document = new PDDocument();
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            PDPage page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            try (PDPageContentStream stream = new PDPageContentStream(document, page)) {
+                stream.beginText();
+                stream.setFont(font(), 12);
+                stream.setLeading(18f);
+                stream.newLineAtOffset(40, 760);
+                stream.showText("LEFT-BODY-1 left column paragraph line one continues");
+                stream.newLine();
+                stream.showText("LEFT-BODY-2 second line keeps the same sentence going");
+                stream.newLine();
+                stream.showText("LEFT-BODY-3 third line carries the paragraph forward");
+                stream.setLeading(23f);
+                stream.newLineAtOffset(280, 54);
+                stream.showText("RIGHT-BODY-1 right column starts another paragraph");
+                stream.newLine();
+                stream.showText("RIGHT-BODY-2 right column leading differs from left");
+                stream.newLine();
+                stream.showText("RIGHT-BODY-3 third line continues the right paragraph");
+                stream.endText();
+            }
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
+    /** 双栏正文与局部两列表格混排：主导 gutter 仍应按栏重排，表格行在左栏内合并。 */
+    public static byte[] twoColumnBodyWithTablePdf() throws IOException {
+        try (PDDocument document = new PDDocument();
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            PDPage page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            try (PDPageContentStream stream = new PDPageContentStream(document, page)) {
+                stream.beginText();
+                stream.setFont(font(), 12);
+                stream.setLeading(18f);
+                stream.newLineAtOffset(40, 760);
+                stream.showText("MIX-LEFT-1 left column body first line");
+                stream.newLine();
+                stream.showText("MIX-LEFT-2 left column body second line");
+                stream.newLineAtOffset(0, -24);
+                stream.showText("MIX-KEY-1");
+                stream.newLineAtOffset(100, 0);
+                stream.showText("MIX-VAL-1");
+                stream.newLineAtOffset(-100, -20);
+                stream.showText("MIX-KEY-2");
+                stream.newLineAtOffset(100, 0);
+                stream.showText("MIX-VAL-2");
+                stream.setLeading(21f);
+                stream.newLineAtOffset(180, 80);
+                stream.showText("MIX-RIGHT-1 right column body first line");
+                stream.newLine();
+                stream.showText("MIX-RIGHT-2 right column body second line");
+                stream.endText();
+            }
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
+    /** 单栏宽表格：整行是一条长文本，没有第二个 x 簇，不触发任何分栏。 */
+    public static byte[] singleColumnWideTablePdf() throws IOException {
+        try (PDDocument document = new PDDocument();
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            PDPage page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            try (PDPageContentStream stream = new PDPageContentStream(document, page)) {
+                stream.beginText();
+                stream.setFont(font(), 12);
+                stream.setLeading(20f);
+                stream.newLineAtOffset(40, 720);
+                stream.showText("WIDE-ROW-1 KEY TIMEOUT VALUE 30 SEC");
+                stream.newLine();
+                stream.showText("WIDE-ROW-2 KEY RETRY VALUE 3 TIMES");
+                stream.newLine();
+                stream.showText("WIDE-ROW-3 KEY LOG VALUE ENABLED");
+                stream.endText();
+            }
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
+    /**
+     * 歧义样本：两个 x 簇、行宽中等，既不像短单元格也不像连续正文。
+     * 期望降级为行序并记录 {@code AMBIGUOUS_FALLBACK}，而不是猜分栏。
+     */
+    public static byte[] ambiguousTwoClusterPdf() throws IOException {
+        try (PDDocument document = new PDDocument();
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            PDPage page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            try (PDPageContentStream stream = new PDPageContentStream(document, page)) {
+                stream.beginText();
+                stream.setFont(font(), 12);
+                stream.setLeading(20f);
+                stream.newLineAtOffset(40, 720);
+                stream.showText("medium text a1");
+                stream.newLineAtOffset(160, 0);
+                stream.showText("medium text b1");
+                stream.newLineAtOffset(-160, -20);
+                stream.showText("medium text a2");
+                stream.newLineAtOffset(160, 0);
+                stream.showText("medium text b2");
+                stream.newLineAtOffset(-160, -20);
+                stream.showText("medium text a3");
+                stream.newLineAtOffset(160, 0);
+                stream.showText("medium text b3");
+                stream.endText();
+            }
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
     static byte[] tablePdf() throws IOException {
         try (PDDocument document = new PDDocument();
              ByteArrayOutputStream output = new ByteArrayOutputStream()) {

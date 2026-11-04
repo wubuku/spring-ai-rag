@@ -88,11 +88,12 @@ mvn -o -pl spring-ai-rag-core -am \
   -Dsurefire.failIfNoSpecifiedTests=false test
 ```
 
-- 语料：6 个文档在运行时确定性生成——双栏 PDF、三列表格 PDF、段落 + 表格
-  DOCX、带代码块和表格的 Markdown、含 script/style 噪声的 HTML、GBK 纯文本；
+- 语料：10 个文档在运行时确定性生成，覆盖五种 PDF 版式（双栏正文、三列表格、
+  两列表格、双栏正文含局部两列表格、单栏宽表格），以及段落 + 表格 DOCX、
+  带代码块和表格的 Markdown、含 script/style 噪声的 HTML、GBK 纯文本；
   夹具见 `DocumentParsingCorpus`。
 - 查询集与阈值：`spring-ai-rag-core/src/test/resources/retrieval/parsing-retrieval-quality-gate-v1.json`
-  （9 条查询，每条固定目标 `documentId` 与必须同块出现的 `expectedTerms`）。
+  （16 条查询，每条固定目标 `documentId` 与必须同块出现的 `expectedTerms`）。
 - embedding：测试内 FNV-1a 特征哈希，1024 维、签名哈希、L2 归一化；拉丁
   run 与 CJK unigram/bigram 分词。同一文本永远得到同一向量。
 - 排序：`score desc → documentId` 字典序 `→ chunkIndex` 升序；同分结果不依赖
@@ -103,29 +104,47 @@ mvn -o -pl spring-ai-rag-core -am \
 
 | 指标 | 实测值 | 阈值 | 余量 |
 | --- | --- | --- | --- |
-| Recall@5 | 1.000 | 0.94 | 6 个百分点 |
-| MRR | 1.000 | 0.92 | 8 个百分点 |
-| nDCG@10 | 1.000 | 0.92 | 8 个百分点 |
+| Recall@5 | 1.000 | 0.95 | 5 个百分点 |
+| MRR | 1.000 | 0.95 | 5 个百分点 |
+| nDCG@10 | 1.000 | 0.95 | 5 个百分点 |
 
-阈值取“实测 1.0 下浮 6–8 个百分点”，不是拍脑袋：9 条查询里丢掉任意 1 条相关
-证据会使 Recall 降到 `8/9 = 0.889`，必然低于 0.94；单条查询从第 1 掉到第 2
-只会让 MRR 降到 `(8 + 0.5)/9 ≈ 0.944`、nDCG 降到约 `0.959`，仍在阈值之上，
-属于允许的轻微排序抖动；丢掉 2 条即约 `0.78–0.81`，变红。
+阈值取“实测 1.0 下浮 5 个百分点”：16 条查询里丢掉任意 1 条，三项指标都降到
+`15/16 = 0.9375`，低于 0.95；单条查询从第 1 掉到第 2 时 Recall 仍为 1.0、
+MRR `(15 + 0.5)/16 ≈ 0.969`、nDCG 约 `0.977`，仍在阈值之上，允许轻微排序
+抖动；丢掉 2 条即 `14/16 = 0.875`，稳定变红。
+
+PDF 版式判据（`PdfTextExtractor.PageLayout` 逐页记录，并在
+`ExtractedDocument.layoutDiagnostics()` 上对外可见）：
+
+- 主导 gutter：最宽 x 簇间隙 ≥ 页宽 8%，且在三簇及以上时 ≥ 次宽间隙的 1.5 倍；
+  满足才按栏重排。三列表格（120/100 两条相近间隙）因此保持行序。
+- 恰好两个 x 簇时不能只看间隙：短单元格占比 ≥ 0.5 且左右逐行成对 ≥ 0.7 →
+  判为表格，按行序；同一簇相邻长行（≥20 字符、无句末标点）的接续比例 ≥ 0.5，
+  或长行占比 ≥ 0.6 → 判为正文双栏，按栏重排。
+- 证据冲突或不足 → `ROW_ORDER` 降级并记录原因；单簇、无主导 gutter、单元格
+  特征分别记录 `SINGLE_CLUSTER`、`NO_DOMINANT_GUTTER`、`CELL_LIKE_COLUMNS`，
+  歧义记录 `AMBIGUOUS_MIXED_SIGNALS` 或 `AMBIGUOUS_FALLBACK`，不静默猜。
 
 分块质量断言（任一条失败即红）：
 
 - 没有空 chunk、没有超过 `size=1000` 的 chunk，`ChunkDiagnostics` 无
   `violations`，原文非空白字符覆盖率必须等于 100%。
-- 双栏 PDF 必须“左栏整段 → 右栏整段”，chunk 内不得出现 `RIGHT-*` 先于
-  `LEFT-*` 的逐行交错。
-- 表格行（PDF 同行单元格、DOCX/Markdown 表格行）必须落在同一输出行，并完整
-  落在同一个 chunk 内；`CODE` / `TABLE` 的 protected block 元数据在检索侧仍可读。
+- 双栏/混排 PDF 必须按 `columnOrder` 顺序输出（左栏整体先于右栏），chunk 内
+  不得逐行交错。
+- 表格行（两列/三列表格 PDF 同行单元格、双栏混排中的局部表格、DOCX/Markdown
+  表格行）必须落在同一输出行，并完整落在同一个 chunk 内；`CODE` / `TABLE`
+  的 protected block 元数据在检索侧仍可读。
 - 每个 chunk 携带 `documentId`、连续 `chunkIndex`、非空 `title`；命中块必须
   能定位回目标文档。
 
-已知边界：抽取器把“恰好两个 x 起始簇”判为双栏（这是双栏 PDF 的重排条件），
-因此两列表格在纯文字坐标上仍可能与两栏版式混淆；门禁语料固定为三列表格，
-覆盖当前承诺的按行合并行为。
+剩余样本（实测记录，不隐藏）：
+
+- `ambiguousTwoClusterPdf`（两个 x 簇、中长行、既无接续也无短单元格）→
+  `ROW_ORDER` + `AMBIGUOUS_FALLBACK`，保真优先。
+- 两栏各自都含等宽内嵌表格时可能出现多条接近等宽的间隙 →
+  `NO_DOMINANT_GUTTER`，整页退化为行序（可预期降级）。
+- 长自由文本单元格（≥20 字符且无句末标点）与正文换行在坐标上不可区分，仍可能
+  被判为双栏；键值/短单元格两列表格已被固定测试覆盖。
 
 确定性与幂等：
 

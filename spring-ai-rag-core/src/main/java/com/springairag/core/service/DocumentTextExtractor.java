@@ -60,7 +60,22 @@ public final class DocumentTextExtractor {
         PDF, DOCX, HTML, MARKDOWN, TEXT, JSON, XML, CSV, LOG
     }
 
-    public record ExtractedDocument(String title, String text, Format format) {
+    /**
+     * 抽取结果。
+     *
+     * @param layoutDiagnostics PDF 逐页版式判定摘要；非 PDF 或无需判定时为空。
+     *                          降级为行序时这里会记录原因，避免静默猜测。
+     */
+    public record ExtractedDocument(String title, String text, Format format,
+                                    List<String> layoutDiagnostics) {
+        public ExtractedDocument {
+            layoutDiagnostics = List.copyOf(
+                    layoutDiagnostics == null ? List.of() : layoutDiagnostics);
+        }
+
+        public ExtractedDocument(String title, String text, Format format) {
+            this(title, text, format, List.of());
+        }
     }
 
     public static boolean isSupportedFilename(String filename) {
@@ -115,19 +130,29 @@ public final class DocumentTextExtractor {
         }
         String title = stripExtension(filename);
         try {
-            String text = switch (format) {
-                case PDF -> pdfText(bytes);
-                case DOCX -> docxText(bytes);
-                case HTML -> htmlText(bytes);
-                case MARKDOWN, TEXT, JSON, XML, CSV, LOG -> decodeText(bytes, filename);
-            };
+            List<String> layoutDiagnostics = List.of();
+            String text;
+            if (format == Format.PDF) {
+                PdfTextExtractor.PdfExtraction extraction = pdfExtraction(bytes);
+                text = extraction.text();
+                layoutDiagnostics = extraction.layout().stream()
+                        .map(PdfTextExtractor.PageLayout::summary)
+                        .toList();
+            } else {
+                text = switch (format) {
+                    case DOCX -> docxText(bytes);
+                    case HTML -> htmlText(bytes);
+                    case MARKDOWN, TEXT, JSON, XML, CSV, LOG -> decodeText(bytes, filename);
+                    case PDF -> throw new IllegalStateException("PDF handled above");
+                };
+            }
             text = normalize(text);
             if (text.isBlank()) {
                 throw new DocumentExtractionException(
                         DocumentExtractionException.Reason.NO_EXTRACTABLE_TEXT,
                         "No extractable text was found in " + safeName(filename));
             }
-            return new ExtractedDocument(title, text, format);
+            return new ExtractedDocument(title, text, format, layoutDiagnostics);
         } catch (DocumentExtractionException e) {
             throw e;
         } catch (RuntimeException e) {
@@ -137,10 +162,10 @@ public final class DocumentTextExtractor {
         }
     }
 
-    private static String pdfText(byte[] bytes) {
+    private static PdfTextExtractor.PdfExtraction pdfExtraction(byte[] bytes) {
         if (startsWith(bytes, PDF_MAGIC)) {
             try {
-                return PdfTextExtractor.extractText(bytes, MAX_PDF_PAGES);
+                return PdfTextExtractor.extract(bytes, MAX_PDF_PAGES);
             } catch (PdfConversionException e) {
                 throw switch (e.getReason()) {
                     case ENCRYPTED_PDF -> new DocumentExtractionException(

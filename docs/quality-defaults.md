@@ -95,14 +95,16 @@ mvn -o -pl spring-ai-rag-core -am \
   -Dsurefire.failIfNoSpecifiedTests=false test
 ```
 
-- Corpus: six documents generated deterministically at runtime — a two-column
-  PDF, a three-column table PDF, a DOCX with paragraphs and a table, a Markdown
-  file with a code block and a table, an HTML file with script/style noise,
-  and GBK plain text. Fixtures live in `DocumentParsingCorpus`.
+- Corpus: ten documents generated deterministically at runtime, covering five
+  PDF layouts (two-column body text, three-column table, two-column table, two
+  column body text with an embedded two-column table, and a single-column wide
+  table), plus a DOCX with paragraphs and a table, a Markdown file with a code
+  block and a table, an HTML file with script/style noise, and GBK plain text.
+  Fixtures live in `DocumentParsingCorpus`.
 - Queries and floors:
   `spring-ai-rag-core/src/test/resources/retrieval/parsing-retrieval-quality-gate-v1.json`
-  (nine queries, each with a fixed target `documentId` and `expectedTerms` that
-  must co-occur in one chunk).
+  (sixteen queries, each with a fixed target `documentId` and `expectedTerms`
+  that must co-occur in one chunk).
 - Embedding: in-test FNV-1a feature hashing, 1024 dimensions, signed hashing,
   L2-normalized; Latin runs and CJK unigrams/bigrams are tokenized. The same
   text always yields the same vector.
@@ -115,34 +117,58 @@ Baseline (measured 2026-11-05 with the fixed corpus and hashed embedding):
 
 | Metric | Measured | Floor | Headroom |
 | --- | --- | --- | --- |
-| Recall@5 | 1.000 | 0.94 | 6 points |
-| MRR | 1.000 | 0.92 | 8 points |
-| nDCG@10 | 1.000 | 0.92 | 8 points |
+| Recall@5 | 1.000 | 0.95 | 5 points |
+| MRR | 1.000 | 0.95 | 5 points |
+| nDCG@10 | 1.000 | 0.95 | 5 points |
 
-The floors are "measured 1.0 minus 6–8 points", not arbitrary: losing any one
-of the nine queries drops Recall to `8/9 = 0.889`, below 0.94. A single query
-moving from rank 1 to rank 2 only lowers MRR to `(8 + 0.5)/9 ≈ 0.944` and nDCG
-to about `0.959`, still above the floors, so mild ranking jitter is tolerated.
-Losing two queries lands around `0.78–0.81` and turns the gate red.
+The floors are "measured 1.0 minus 5 points": losing any one of the sixteen
+queries drops all three metrics to `15/16 = 0.9375`, below 0.95. A single query
+moving from rank 1 to rank 2 leaves Recall at 1.0, MRR at `(15 + 0.5)/16 ≈
+0.969`, and nDCG around `0.977`, still above the floors, so mild ranking jitter
+is tolerated. Losing two queries gives `14/16 = 0.875` and turns the gate red.
+
+PDF layout criteria (recorded per page in `PdfTextExtractor.PageLayout` and
+exposed through `ExtractedDocument.layoutDiagnostics()`):
+
+- Dominant gutter: the widest x-cluster gap must be ≥ 8% of the page width and,
+  with three or more clusters, ≥ 1.5× the second-widest gap; only then is the
+  page reordered by column. A three-column table (two similar gaps of 120/100)
+  therefore stays in row order.
+- With exactly two x clusters the gap alone is not enough: short cells ≥ 0.5
+  plus paired left/right rows ≥ 0.7 select row order as a table; a continuation
+  ratio ≥ 0.5 among long adjacent lines (≥ 20 chars, no sentence-final
+  punctuation), or a long-line ratio ≥ 0.6, selects column reordering.
+- Conflicting or insufficient evidence degrades to `ROW_ORDER` with a recorded
+  reason: `SINGLE_CLUSTER`, `NO_DOMINANT_GUTTER`, `CELL_LIKE_COLUMNS`,
+  `AMBIGUOUS_MIXED_SIGNALS`, or `AMBIGUOUS_FALLBACK`. Nothing is guessed
+  silently.
 
 Chunk-quality assertions (any failure turns red):
 
 - No blank chunk, no chunk longer than `size=1000`, no
   `ChunkDiagnostics.violations`, and 100% coverage of the source's
   non-whitespace characters.
-- The two-column PDF must be emitted left column first, then right column; no
-  chunk may interleave `RIGHT-*` before `LEFT-*` row by row.
-- Table rows (PDF same-row cells and DOCX/Markdown table rows) must stay on one
-  output line and fall entirely inside one chunk; `CODE`/`TABLE` protected-block
-  metadata remains readable on the retrieval side.
+- Two-column and mixed-layout PDFs must follow `columnOrder` (the whole left
+  column before the right column); no chunk may interleave them row by row.
+- Table rows (same-row cells in two/three-column PDFs, embedded tables in mixed
+  layouts, and DOCX/Markdown table rows) must stay on one output line and fall
+  entirely inside one chunk; `CODE`/`TABLE` protected-block metadata remains
+  readable on the retrieval side.
 - Every chunk carries `documentId`, contiguous `chunkIndex`, and a nonblank
   `title`; a hit must locate back to its target document.
 
-Known boundary: the extractor treats "exactly two x-start clusters" as a
-two-column layout (that is the reordering trigger for two-column PDFs), so a
-two-column table can still be confused with a two-column layout from text
-coordinates alone. The gate corpus therefore fixes a three-column table, which
-covers the row-merging behavior currently promised.
+Residual samples (measured and reported, not hidden):
+
+- `ambiguousTwoClusterPdf` (two x clusters, medium-length lines, neither
+  continuation nor short cells) degrades to `ROW_ORDER` with
+  `AMBIGUOUS_FALLBACK`, preserving fidelity.
+- When both columns contain embedded tables of similar width, several nearly
+  equal gaps yield `NO_DOMINANT_GUTTER` and the whole page falls back to row
+  order (a predictable degradation).
+- Long free-text cells (≥ 20 chars, no sentence-final punctuation) are
+  geometrically indistinguishable from wrapped body lines and may still be
+  treated as two-column body text; key/value and short-cell two-column tables
+  are covered by fixed tests.
 
 Determinism and idempotency:
 

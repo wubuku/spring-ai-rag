@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "name": "parsing-retrieval-quality-gate-v1",
   "description": "固定语料 + 固定查询的确定性解析/分块检索门禁；假 embedding 由测试内特征哈希实现，不依赖真实模型、数据库或 Docker。",
   "chunking": {
@@ -14,22 +14,46 @@
     "ndcgK": 10
   },
   "thresholds": {
-    "recallAtK": 0.94,
-    "mrr": 0.92,
-    "ndcgAtK": 0.92
+    "recallAtK": 0.95,
+    "mrr": 0.95,
+    "ndcgAtK": 0.95
   },
   "documents": [
     {
       "documentId": "pdf-multicolumn",
       "filename": "multi-column.pdf",
       "fixture": "multiColumnPdf",
-      "description": "双栏 PDF：左栏整段先于右栏整段"
+      "description": "双栏正文：左栏整段先于右栏整段"
     },
     {
       "documentId": "pdf-table",
       "filename": "product-table.pdf",
       "fixture": "retrievalTablePdf",
-      "description": "表格 PDF：同一行单元格合并为一行"
+      "description": "三列表格 PDF：同一行单元格合并为一行"
+    },
+    {
+      "documentId": "pdf-table-two-column",
+      "filename": "two-column-table.pdf",
+      "fixture": "twoColumnTablePdf",
+      "description": "两列表格 PDF：两个 x 簇但不得判为双栏"
+    },
+    {
+      "documentId": "pdf-body-two-column",
+      "filename": "two-column-body.pdf",
+      "fixture": "twoColumnBodyPdf",
+      "description": "双栏正文：两栏行距不同，必须按栏重排"
+    },
+    {
+      "documentId": "pdf-body-two-column-with-table",
+      "filename": "two-column-body-table.pdf",
+      "fixture": "twoColumnBodyWithTablePdf",
+      "description": "双栏正文含局部两列表格：按主导 gutter 分栏且表格行不拆"
+    },
+    {
+      "documentId": "pdf-wide-table-single-column",
+      "filename": "wide-table.pdf",
+      "fixture": "singleColumnWideTablePdf",
+      "description": "单栏宽表格：只有一个 x 簇，按行序输出"
     },
     {
       "documentId": "docx-policy",
@@ -82,6 +106,48 @@
       "expectedTerms": ["WidgetC", "360", "USD"]
     },
     {
+      "id": "q-pdf-two-column-table-timeout",
+      "query": "TIMEOUT 30 SEC",
+      "expectedDocumentId": "pdf-table-two-column",
+      "expectedTerms": ["TIMEOUT", "30 SEC"]
+    },
+    {
+      "id": "q-pdf-two-column-table-retry",
+      "query": "RETRY 3 TIMES",
+      "expectedDocumentId": "pdf-table-two-column",
+      "expectedTerms": ["RETRY", "3 TIMES"]
+    },
+    {
+      "id": "q-pdf-body-left",
+      "query": "LEFT-BODY-2 same sentence",
+      "expectedDocumentId": "pdf-body-two-column",
+      "expectedTerms": ["LEFT-BODY-2", "same sentence"]
+    },
+    {
+      "id": "q-pdf-body-right",
+      "query": "RIGHT-BODY-3 paragraph",
+      "expectedDocumentId": "pdf-body-two-column",
+      "expectedTerms": ["RIGHT-BODY-3", "paragraph"]
+    },
+    {
+      "id": "q-pdf-mixed-table",
+      "query": "MIX-KEY-2 MIX-VAL-2",
+      "expectedDocumentId": "pdf-body-two-column-with-table",
+      "expectedTerms": ["MIX-KEY-2", "MIX-VAL-2"]
+    },
+    {
+      "id": "q-pdf-mixed-right",
+      "query": "MIX-RIGHT-2 second line",
+      "expectedDocumentId": "pdf-body-two-column-with-table",
+      "expectedTerms": ["MIX-RIGHT-2", "second line"]
+    },
+    {
+      "id": "q-pdf-wide-row",
+      "query": "WIDE-ROW-2 RETRY",
+      "expectedDocumentId": "pdf-wide-table-single-column",
+      "expectedTerms": ["WIDE-ROW-2", "RETRY"]
+    },
+    {
       "id": "q-docx-table-zhang",
       "query": "张三 年龄 30",
       "expectedDocumentId": "docx-policy",
@@ -118,6 +184,21 @@
       ["WidgetB", "240", "USD"],
       ["WidgetC", "360", "USD"]
     ],
+    "pdf-table-two-column": [
+      ["KEY", "VALUE"],
+      ["TIMEOUT", "30 SEC"],
+      ["RETRY", "3 TIMES"],
+      ["LOG", "ENABLED"]
+    ],
+    "pdf-body-two-column-with-table": [
+      ["MIX-KEY-1", "MIX-VAL-1"],
+      ["MIX-KEY-2", "MIX-VAL-2"]
+    ],
+    "pdf-wide-table-single-column": [
+      ["WIDE-ROW-1", "KEY", "TIMEOUT", "VALUE", "30 SEC"],
+      ["WIDE-ROW-2", "KEY", "RETRY", "VALUE", "3 TIMES"],
+      ["WIDE-ROW-3", "KEY", "LOG", "VALUE", "ENABLED"]
+    ],
     "docx-policy": [
       ["| 姓名 | 年龄 |"],
       ["| 张三 | 30 |"]
@@ -126,5 +207,27 @@
       ["| 列一 | 列二 |"],
       ["| 值一 | 值二 |"]
     ]
+  },
+  "columnOrder": {
+    "pdf-multicolumn": [
+      "LEFT-ALPHA", "LEFT-BETA", "LEFT-GAMMA",
+      "RIGHT-ALPHA", "RIGHT-BETA", "RIGHT-GAMMA"
+    ],
+    "pdf-body-two-column": [
+      "LEFT-BODY-1", "LEFT-BODY-2", "LEFT-BODY-3",
+      "RIGHT-BODY-1", "RIGHT-BODY-2", "RIGHT-BODY-3"
+    ],
+    "pdf-body-two-column-with-table": [
+      "MIX-LEFT-1", "MIX-LEFT-2", "MIX-KEY-1", "MIX-VAL-1",
+      "MIX-KEY-2", "MIX-VAL-2", "MIX-RIGHT-1", "MIX-RIGHT-2"
+    ]
+  },
+  "layoutDiagnostics": {
+    "pdf-multicolumn": {"decision": "COLUMN_BANDS", "reason": "CONTINUOUS_TEXT"},
+    "pdf-table": {"decision": "ROW_ORDER", "reason": "NO_DOMINANT_GUTTER"},
+    "pdf-table-two-column": {"decision": "ROW_ORDER", "reason": "CELL_LIKE_COLUMNS"},
+    "pdf-body-two-column": {"decision": "COLUMN_BANDS", "reason": "CONTINUOUS_TEXT"},
+    "pdf-body-two-column-with-table": {"decision": "COLUMN_BANDS", "reason": "DOMINANT_GUTTER"},
+    "pdf-wide-table-single-column": {"decision": "ROW_ORDER", "reason": "SINGLE_CLUSTER"}
   }
 }
