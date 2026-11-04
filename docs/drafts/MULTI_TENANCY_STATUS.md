@@ -3,8 +3,11 @@
 > 只读调研：基于当前仓库代码、Flyway 迁移与 `docs/` 正式文档，未启动服务、未修改代码。
 > 行号指向调研时的仓库快照，供复核使用。
 >
-> **2026-11-04 复核**：V71 已补齐文件子系统与评估/反馈面的归属边界，本文第 4 节
+> **2026-11-04 复核**：V71 已补齐文件子系统与评估/反馈面的归属边界，本文第 5 节
 > 缺口 1、2 随之关闭；其余结论（无租户实体、无 RLS、ACL 只到 Collection）不变。
+>
+> **配套方案**：[多租户平台技术路线与可插拔方案](MULTI_TENANCY_TECH_ROADMAP.md)
+> —— 方向已定、代码未实施。
 
 ## 1. 结论
 
@@ -23,9 +26,48 @@
 
 因此可用于"单实例 + 多业务 Key / 多知识库"场景，不能直接作为多租户平台。
 
-## 2. 现有隔离能力
+## 2. 已确定的技术方向（2026-11-04）
 
-### 2.1 Collection ACL
+> 这是方向决策，不是实现状态。代码与迁移尚未做多租户改造；当前真实能力仍以本文
+> 第 3–7 节为准。系统化方案、代价表与外部考古见
+> [多租户平台技术路线与可插拔方案](MULTI_TENANCY_TECH_ROADMAP.md)。
+
+结论：**选 C —— 单仓、单 schema、表永远租户化。**
+
+- 不在本仓之外另开 EE 仓，也不做"单租户无 `tenant_id` 列 / 多租户有列"的双 schema 插件。
+- 所有该隔离的表从第一天就带 `tenant_id`；唯一约束、外键、索引、RLS 都按租户设计，
+  只有一条迁移线。
+- **单租户 = N=1**：固定解析到 `default`，代码、表、查询与多租户完全相同。
+- **多租户 = 严格模式**：真实解析租户，强制 RLS + 独立 `NOBYPASSRLS` 应用角色 + 启动校验。
+- 可插拔只落在 `TenantResolver`、`TenantJobDispatcher` 与可选运营模块；schema 不插拔。
+- 若必须闭源企业版，选 C2：core 保持开源单 schema，企业能力做私有模块，仍不 fork 仓库。
+
+与既有事实的关系：
+
+- V71 的 `owner_principal_id` / `collection_id` 归属是**租户内二级边界**，继续保留；
+  不能替代租户隔离。
+- `collection_key` 当前仍是全局唯一（第 5 节缺口 5），将在第一阶段改为
+  `(tenant_id, collection_key)`。
+- ACL 仍停留在 Collection、且无 RLS 兜底（第 5 节缺口 4）；多租户模式由 RLS 补齐
+  数据库级兜底。
+- 当前"默认无认证"（第 5 节缺口 3）在多租户模式必须关闭；单租户模式保持现状，
+  但不得被误当成多租户。
+
+六条方向的摘要（完整"建议 / 理由 / 代价"见方案文档第 9 节）：
+
+1. 商业模式：一仓开源 + 可选企业模块；闭源则私有模块，不 fork。
+2. 租户是安全边界，Collection 是租户内知识库；不跨租户共享 Collection。
+3. 多租户模式强依赖 PostgreSQL RLS，并需 migrator / app / platform 三角色。
+4. 单租户默认关 RLS，但 schema/列/约束/任务路径必须完整；CI 始终跑双租户 RLS。
+5. 租户来源用 API Key 绑定 + 宿主 `TenantResolver`；v1 不在 URL 放 `tenantId`。
+6. 平台全局表单张裁决，不一刀切加 `tenant_id`。
+
+**未实现声明**：以上是设计与决策输入；截至本记录，仓库仍无 `tenant` 表、`tenant_id` 列、
+RLS 迁移、`TenantContext` 或租户管理面。
+
+## 3. 现有隔离能力
+
+### 3.1 Collection ACL
 
 - ACL 落在凭证上：`rag_api_key.allowed_collection_ids VARCHAR(2048)`，
   受管 principal 使用同名字段
@@ -35,7 +77,7 @@
   `spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java:L138-L167`。
 - 受限 Key 不能创建、导入或克隆 Collection（同文件 `:L309-L314`）。
 
-### 2.2 principal 级归属
+### 3.2 principal 级归属
 
 - 聊天历史与检索日志带 `owner_principal_id`
   （`.../entity/RagChatHistory.java:L43`、`.../entity/RagRetrievalLog.java:L74-L75`）。
@@ -53,9 +95,9 @@
   （`.../service/RetrievalEvaluationServiceImpl.java:L236-L283`、
   `.../service/UserFeedbackServiceImpl.java:L150`）。
 
-## 3. 证据
+## 4. 证据
 
-### 3.1 数据模型
+### 4.1 数据模型
 
 - `rag_collection` 只有名称、描述、嵌入配置、启用状态与 metadata；
   `rag_documents` 只有 `collection_id`，没有租户列
@@ -67,7 +109,7 @@
   （`.../entity/RagCollection.java:L16-L21`、`:L31`）。
 - 没有 `ROW LEVEL SECURITY` 迁移，隔离完全依赖应用层 SQL 拼接。
 
-### 3.2 检索
+### 4.2 检索
 
 - 统一过滤片段：`SELECTED` → `AND d.collection_id = ANY (?)`，`ANY_ASSIGNED` →
   `collection_id IS NOT NULL`，`NONE` → 不过滤
@@ -83,7 +125,7 @@
   Collection 列表（`.../controller/RagCollectionController.java:L361-L367`）、
   OpenAI 兼容（`.../openai/OpenAiRequestRetrievalScopeAdapter.java:L85-L99`）。
 
-### 3.3 接口与认证
+### 4.3 接口与认证
 
 - 没有租户请求上下文（无 `X-Tenant` / `tenantId`），只有 `Bearer` / `X-API-Key`。
 - 受保护路由以 `/api/` 与 `/v1/` 前缀识别
@@ -95,13 +137,13 @@
   `application.yml` 仅配置 root key（`spring-ai-rag-core/src/main/resources/application.yml:L313-L316`），
   `prod` profile 才置 `true`（`.../application-prod.yml:L7-L11`）。
 
-### 3.4 WebUI
+### 4.4 WebUI
 
 - 单一后端基址与单一凭据，无租户选择器或租户字段
   （`spring-ai-rag-webui/src/api/client.ts:L16-L29`）；全目录 `tenant` 仅出现在
   测试数据 `'tenant:catalog:v1'`（`spring-ai-rag-webui/src/api/collections.test.ts:L76-L88`）。
 
-## 4. 缺口与风险
+## 5. 缺口与风险
 
 | # | 缺口 | 证据 | 风险 |
 |---|------|------|------|
@@ -115,7 +157,11 @@
 补充：`collection_id IS NULL` 的遗留文档对 unrestricted 调用方可见（`NONE` scope 不加
 过滤），对受限调用方不可见（走 `SELECTED`）。这是兼容行为，但共享实例需注意遗留数据。
 
-## 5. 文档与代码一致性
+方向裁决后的处置：第 2 节的 C 方案已把这些缺口收敛为实施项，但**尚未实现**。
+缺口 4、5 在阶段一由 RLS 与 `(tenant_id, collection_key)` 解决；缺口 6 在阶段三补；
+缺口 3 在多租户模式必须关闭，单租户模式保持现状，但不得被误当成多租户。
+
+## 6. 文档与代码一致性
 
 主体一致：正式文档把边界描述为"API Key/principal + Collection ACL"，并明确不是完整
 租户平台。
@@ -133,13 +179,13 @@
    实际只是 Collection 级 ACL。
 2. `docs/configuration-zh-CN.md:L1425` 的"按 API Key 限流 ... 适合多租户场景"只是限流
    建议，容易被读成租户能力。
-3. ~~正式文档尚未提示第 4 节缺口 1、2（文件子系统与评估/反馈面无 ACL 边界）。~~
+3. ~~正式文档尚未提示第 5 节缺口 1、2（文件子系统与评估/反馈面无 ACL 边界）。~~
    2026-11-04 复核：V71 已修复该边界，正式文档按"API Key/principal + Collection ACL
    + 资源归属"描述；本节保留为历史调研记录。
 4. `docs/2026-07-21_CODE_AUDIT_REPORT.md:L177`"无 tenantId/ownerId/workspace"是
    V24 之前的历史结论，不代表当前 ACL 状态；该报告已加历史声明。
 
-## 6. 若要真多租户需要补的四层
+## 7. 若要真多租户需要补的四层
 
 1. **数据层**：租户维度与复合唯一/索引（或 RLS），迁移 `collection_key` 等全局唯一约束。
 2. **认证上下文**：把租户绑定到 principal/token，并在请求上下文中传递。
@@ -150,11 +196,13 @@
 在此之前，多租户部署的可行兜底是"每租户独立实例/独立数据库"，并强制配置
 `RAG_ROOT_API_KEY`、禁用 auth-disabled 路径。
 
-## 7. 现状更新记录
+## 8. 现状更新记录
 
 | 日期 | 变更 | 证据 |
 |------|------|------|
 | 2026-11-04 | 缺口 1、2 关闭：文件、评估历史、反馈增加 owner/collection 归属并按 principal 过滤；遗留无归属行对受限 key fail-closed，可选用回填脚本 | `V71__security_boundary_ownership.sql`、`scripts/verify-security-upgrade-path.py`、`scripts/backfill-security-ownership.py` |
+| 2026-11-04 | 技术方向确定：选 C（单仓单 schema、表永远租户化、单租户固定 `default` 的 N=1、多租户强制 RLS；插件只插解析/任务分发/运营模块）；**代码未实施** | [多租户平台技术路线与可插拔方案](MULTI_TENANCY_TECH_ROADMAP.md) |
 
-仍未关闭：缺口 3（默认无认证）、4（ACL 只到 Collection、无 RLS 兜底）、
-5（`collection_key` 全局唯一）、6（无租户层级/租户级配额）。
+截至本节记录，仍未实现：缺口 3（默认无认证）、4（ACL 只到 Collection、无 RLS 兜底）、
+5（`collection_key` 全局唯一）、6（无租户层级/租户级配额）。第 2 节的方向只是实施输入，
+不是完成状态。

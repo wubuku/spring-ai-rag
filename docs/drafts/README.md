@@ -50,6 +50,11 @@ Active plans are listed here and in `docs/index*`.
   Git delivery has not started.
 - [Multi-tenancy status](MULTI_TENANCY_STATUS.md) (Chinese): read-only audit of the current
   ACL and ownership boundary; gaps 1 and 2 were closed by V71 and the draft tracks the rest.
+- [Multi-tenancy platform roadmap and pluggable design](MULTI_TENANCY_TECH_ROADMAP.md)
+  (Chinese only): the 2026-11-04 route decision (single repository and schema, tenant-aware
+  tables from day one, single-tenant as fixed-`default` N=1, mandatory RLS for multi-tenant),
+  EE/CE archaeology, four implementation phases, six decisions, and three risks. The direction
+  is decided; the code is not implemented.
 - [Knowledge-graph module review](KNOWLEDGE_GRAPH_MODULE_REVIEW.md) (Chinese only): critical
   review of an external knowledge-graph proposal, item-by-item alignment with this
   repository's real implementation, and a phased landing path; it becomes a formal document
