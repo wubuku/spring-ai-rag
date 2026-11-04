@@ -126,7 +126,7 @@ python3 scripts/verify-security-boundary.py
 ## 6. 已知残余风险
 
 - 历史 `fs_files` / feedback / evaluation 行无归属，受限 key 不可见；如需让历史数据对特定 principal 可见，必须做受控回填，而不是放宽查询。
-- 日志、审计导出（如 `logs/*.jsonl`）不在本文范围，仍按部署侧权限管理。
+- 审计日志、导出产物属于数据面（按部署侧权限管理）；应用日志与指标的保密边界见 §9。
 - 未启用认证时没有 principal 概念，插件/工具调用等内部路径按全量处理；这是隔离环境的既有行为。
 
 ---
@@ -248,3 +248,83 @@ python3 scripts/verify-browser-security-headers-e2e.py
 
 单元层：`SecurityHeadersFilterTest`、`ChatExportServiceTest`（CSV 公式注入）、
 `PdfImportControllerContentTypeTest`（RFC 5987 头）。
+
+---
+
+## 9. 日志与可观测性保密
+
+### 9.1 原则
+
+**请求体/响应体与文档正文只存在于数据面**：日志与指标只记录关联标识、长度、
+计数与耗时。以下内容不得出现在任何级别的应用日志里：
+
+| 内容 | 日志里的替代形式 |
+|------|------------------|
+| 用户 prompt / 聊天历史 | `messageChars` |
+| 检索 query / 重写 query | `queryChars` |
+| 文档标题、collection 名称、上传文件名 | 长度或资源 id |
+| 文档正文、检索命中片段 | 不记录 |
+| API Key、`Authorization`、`Idempotency-Key` | 不记录；认证失败只记路径与 principal |
+| 客户端上报的错误 message / pageUrl | 只记 `errorType` 与 session |
+
+慢查询日志只保留 SQL 语句形状：所有单引号字面量统一替换为 `'***'`，避免
+写入慢查询的 INSERT/UPDATE 把文档正文带进 WARN 日志。客户端 JSON 日志中的
+`apiKey` / `token` / `password` 仍由 `SensitiveDataMaskingConverter` 兜底掩码。
+
+### 9.2 actuator 与错误体
+
+- `/actuator` 只暴露 `health,info,metrics,prometheus`；`env`、`beans`、
+  `loggers`、`configprops` 返回 404。
+- `/actuator/health` 保留 `ragSecurityPosture` 明细，但关闭内置 `diskSpace`
+  指标：后者会把本机绝对路径写进公开响应。容器健康应以配额/探针判断，
+  不以宿主磁盘路径判断。
+- 5xx 错误体走 `ErrorMessageSanitizer`，移除堆栈、类名与本机路径；导出产物
+  不包含内部路径或连接串。
+
+### 9.3 验收
+
+```bash
+python3 scripts/verify-log-secrecy-e2e.py
+```
+
+真实进程 + 隔离 PostgreSQL + mock provider：发送带 `SECRET_CANARY_*` 的
+prompt、检索 query、文档标题/正文、上传文件名/内容、客户端错误、非法
+API Key/Bearer、`Idempotency-Key`，然后全量扫描应用日志（demo 对
+`com.springairag` 开到 DEBUG，覆盖 INFO/DEBUG）、actuator 响应、错误体与
+collection/chat 导出。
+
+允许出现 canary 的位置只有数据面本身：collection/chat 导出必须包含被导出的
+正文与标题（否则说明脱敏过度）。凭据 canary、内部路径特征在日志、指标、
+错误体与导出中都必须为零命中。
+
+---
+
+## 10. WebUI 凭据存储与会话安全
+
+### 10.1 存储位置
+
+| 位置 | 是否存放 API Key | 说明 |
+|------|------------------|------|
+| 模块内存 | 是 | `credentialStore` 的模块级变量，React 组件通过订阅读取 |
+| `localStorage` | 否 | 禁止写入；启动时清理旧版本遗留的 `rag-api-key*` |
+| `sessionStorage` | 否 | 只存非敏感的页面路由/工作区状态；登出时一并清空 |
+| Cookie | 否 | 不使用 Cookie 保存凭据 |
+| URL / Referer | 否 | 凭据只通过 `X-API-Key` 请求头发送；`Referrer-Policy: no-referrer` |
+
+由此得到的会话语义：
+
+- **刷新即锁定**：内存态不跨页面加载，刷新后回到 Unlock；不提供“记住我”。
+- **多标签互不影响**：每个标签页各自持有内存凭据；A 标签解锁不会解锁 B 标签。
+- **登出清空全部痕迹**：内存凭据、旧版本明文存储、会话级工作区状态一起清空。
+- **XSS 可达面为空**：注入脚本能读的 `localStorage` / `sessionStorage` /
+  cookie / URL 里都没有凭据；模块闭包变量不在全局对象上。
+
+### 10.2 验收
+
+```bash
+python3 scripts/verify-webui-credential-security-e2e.py
+```
+
+真实后端 + 真实 Chromium：解锁后扫描全部存储面；刷新回到 Unlock；新标签页
+保持锁定；页面内注入脚本扫描存储/全局/表单读不到凭据；登出后存储清空；
+所有请求 URL 与 `Referer` 不含凭据，凭据只出现在 `X-API-Key` 请求头。

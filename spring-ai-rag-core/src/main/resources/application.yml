@@ -782,6 +782,10 @@ management:
   health:
     defaults:
       enabled: true
+    # 内置 diskSpace 指标会把本机绝对路径放进公开的 /actuator/health；
+    # 容器环境也用配额而不是宿主磁盘判断健康，因此关闭该指标。
+    diskspace:
+      enabled: false
     livenessstate:
       enabled: true
     readinessstate:

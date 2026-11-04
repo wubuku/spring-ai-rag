@@ -272,7 +272,8 @@ public class RagDocumentController {
             @Valid @RequestBody DocumentRequest request,
             @RequestHeader(value = "Idempotency-Key", required = false)
             String idempotencyKey) {
-        log.info("Creating document: title={}", request.getTitle());
+        log.info("Creating document: titleChars={}",
+                request.getTitle() == null ? 0 : request.getTitle().length());
         var currentKey = ApiKeyCollectionAccess.currentPolicy();
         Long collectionId = resolveWritableCollectionId(
                 request.getCollectionId(), request.getCollectionKey(), currentKey);
@@ -1078,7 +1079,7 @@ public class RagDocumentController {
                     docReq, collectionId, embeddingPolicy, force,
                     idempotencyKey, filename, content.title);
         } catch (Exception e) { // Best-effort: file processing errors return a failure result without throwing
-            log.error("Failed to process uploaded file '{}': {}", filename, e.getMessage());
+            log.error("Failed to process uploaded file: {}", e.getMessage());
             return new FileUploadResponse.FileResult(
                     filename, null, null, false, 0,
                     "Processing failed: " + e.getMessage());

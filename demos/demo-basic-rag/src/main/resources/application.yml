@@ -96,6 +96,10 @@ management:
   endpoint:
     health:
       show-details: always
+  health:
+    # 本机绝对路径不应出现在公开健康详情里；容器用配额判断磁盘健康。
+    diskspace:
+      enabled: false
 
 logging:
   level:

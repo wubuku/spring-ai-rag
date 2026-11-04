@@ -128,7 +128,9 @@ public class RagSearchController {
             @RequestParam(required = false) List<String> collectionKeys,
             HttpServletRequest httpRequest) {
 
-        log.info("Direct search: query={}, limit={}, useHybrid={}", query, limit, useHybrid);
+        // 用户查询文本不进日志：只保留长度与检索参数。
+        log.info("Direct search: queryChars={}, limit={}, useHybrid={}",
+                query == null ? 0 : query.length(), limit, useHybrid);
 
         if (query == null || query.isBlank()) {
             return badRequest("Query must not be blank", httpRequest);
@@ -222,8 +224,9 @@ public class RagSearchController {
             HttpServletRequest httpRequest) {
 
         ApiAccessPolicy key = ApiKeyCollectionAccess.currentPolicy(httpRequest);
-        log.info("Direct search with config: query={}, scopeMode={}, collectionCount={}, documentCount={}",
-                request.getQuery(), request.getCollectionScopeMode(),
+        log.info("Direct search with config: queryChars={}, scopeMode={}, collectionCount={}, documentCount={}",
+                request.getQuery() == null ? 0 : request.getQuery().length(),
+                request.getCollectionScopeMode(),
                 request.getCollectionIds() == null && request.getCollectionKeys() == null
                         ? 0
                         : Math.max(

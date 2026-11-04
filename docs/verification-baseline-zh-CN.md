@@ -132,6 +132,7 @@
 | `verify-security-boundary.py` | 受限 key 不能跨 Collection/principal，路径穿越被拒 | 14.0s | 隔离 PostgreSQL、mock provider | 具体越权断言 |
 | `verify-security-upgrade-path.py` | V70→V71 升级路径 fail-closed、归属回填正确 | 34.7s | 隔离 PostgreSQL、V70 数据构造 | 升级前后可见性断言 |
 | `verify-security-deployment-posture.py` | 部署态安全开关默认值正确 | 32.2s | 隔离 PostgreSQL、demo jar | 不安全的默认值 |
+| `verify-log-secrecy-e2e.py` | 敏感 canary 不进日志/指标/错误体/导出；actuator 诊断端点关闭 | 24.0s | 隔离 PostgreSQL、mock provider | 报告里泄漏的 canary 名称与被扫描位置 |
 | `verify-container-image.sh` | 镜像可构建、可启动、健康检查通过 | 未实测 | Docker、Buildx | 构建日志与容器健康输出 |
 | 真实 WebUI specs | 真实后端 + 真实模型下页面流程可用 | 未实测 | 开发栈、真实模型、Playwright | Playwright trace 与后端日志 |
 | CodeQL | Java/JS 静态安全扫描无新增高置信告警 | 未实测 | GitHub Actions | CodeQL 告警位置 |
@@ -185,6 +186,7 @@
 | `verify-timezone-consistency-e2e.py` | 三时区下存储/返回/解析/cron/TTL/日志一致 | 36.5s（22 项） | 隔离 PostgreSQL、mock provider |
 | `verify-collection-export-roundtrip-e2e.py` | 导出→重建后文档/chunk/向量/检索一致 | 12.5s（7 项） | 隔离 PostgreSQL、mock provider |
 | `verify-browser-security-headers-e2e.py` | 安全头、CSP 不阻断功能、注入被拒 | 19.5s | 隔离 PostgreSQL、Chromium、mock provider |
+| `verify-webui-credential-security-e2e.py` | API Key 只驻留内存；刷新/登出/多标签/注入脚本读不到 | 22.0s | 隔离 PostgreSQL、Chromium、mock provider |
 | `verify-upload-boundaries-e2e.py` | 413/503、预读拒绝、并发与中断清理 | 未实测 | 隔离 PostgreSQL、mock provider |
 | `verify-resource-saturation-e2e.py` | 池耗尽/慢查询/DB 不可达的 503/504 与恢复 | 未实测 | 隔离 PostgreSQL、mock provider |
 | `verify-concurrency-idempotency.py` | 并发写幂等与租约语义 | 未实测 | 隔离 PostgreSQL、mock provider |

@@ -60,8 +60,7 @@ public class ModelComparisonService {
         if (models == null || models.isEmpty() || query == null || query.isBlank()) {
             return List.of();
         }
-        log.info("Comparing {} models with query: {}", models.size(),
-                query.length() > 50 ? query.substring(0, 50) + "..." : query);
+        log.info("Comparing {} models, queryChars={}", models.size(), query.length());
 
         Map<String, Future<ModelComparisonResult>> futures = new LinkedHashMap<>();
 

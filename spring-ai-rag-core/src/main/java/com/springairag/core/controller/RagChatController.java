@@ -281,10 +281,10 @@ public class RagChatController {
             request.setSessionId(UUID.randomUUID().toString());
         }
         RetrievalScope scope = resolveScope(request, httpRequest);
-        log.info("RAG {}: sessionId={}, domain={}, collectionIds={}, message={}",
+        // 只记录关联标识与长度：用户 prompt 属于请求体内容，任何级别都不落日志。
+        log.info("RAG {}: sessionId={}, domain={}, collectionIds={}, messageChars={}",
                 endpointLabel, request.getSessionId(), request.getDomainId(),
-                request.getCollectionIds(),
-                request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
+                request.getCollectionIds(), request.getMessage().length());
 
         RetrievalTraceSession session = beginChatTrace(request, scope, httpRequest);
         ChatResponse response = scope != null
@@ -409,9 +409,9 @@ public class RagChatController {
         }
         RetrievalScope scope = resolveScope(request, httpRequest);
         String sessionId = request.getSessionId();
-        log.info("RAG stream: sessionId={}, domain={}, collectionIds={}, message={}",
+        log.info("RAG stream: sessionId={}, domain={}, collectionIds={}, messageChars={}",
                 sessionId, request.getDomainId(), request.getCollectionIds(),
-                request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
+                request.getMessage().length());
 
         RetrievalTraceSession session = beginChatTrace(request, scope, httpRequest);
         if (session != null && httpResponse != null) {

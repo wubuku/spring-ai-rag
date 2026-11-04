@@ -136,6 +136,7 @@ The 56 automated gates below (57 are registered; `verify-container-image.sh` nee
 | `verify-security-boundary.py` | a restricted key cannot cross Collections or principals; path traversal is rejected | 14.0s | isolated PostgreSQL, mock provider | the specific privilege-escalation assertion |
 | `verify-security-upgrade-path.py` | V70→V71 upgrade fails closed and ownership backfill is correct | 34.7s | isolated PostgreSQL, V70 data construction | the pre/post visibility assertions |
 | `verify-security-deployment-posture.py` | deployment security switch defaults are correct | 32.2s | isolated PostgreSQL, demo jar | the unsafe default |
+| `verify-log-secrecy-e2e.py` | sensitive canaries stay out of logs/metrics/error bodies/exports; diagnostic actuator endpoints are closed | 24.0s | isolated PostgreSQL, mock provider | leaked canary name and scanned location |
 | `verify-container-image.sh` | the image builds, starts, and passes health checks | not measured | Docker, Buildx | build log and container health output |
 | Real WebUI specs | page flows work against a real backend and real model | not measured | dev stack, real model, Playwright | Playwright traces and backend logs |
 | CodeQL | Java/JS static security scanning has no new high-confidence alerts | not measured | GitHub Actions | the CodeQL alert location |
@@ -189,6 +190,7 @@ The 56 automated gates below (57 are registered; `verify-container-image.sh` nee
 | `verify-timezone-consistency-e2e.py` | storage/return/parsing/cron/TTL/logging agree across three timezones | 36.5s (22 checks) | isolated PostgreSQL, mock provider |
 | `verify-collection-export-roundtrip-e2e.py` | export→rebuild keeps documents/chunks/vectors/retrieval equivalent | 12.5s (7 checks) | isolated PostgreSQL, mock provider |
 | `verify-browser-security-headers-e2e.py` | security headers, CSP does not break features, injections are rejected | 19.5s | isolated PostgreSQL, Chromium, mock provider |
+| `verify-webui-credential-security-e2e.py` | API key lives in memory only; refresh/logout/multi-tab/injected scripts cannot read it | 22.0s | isolated PostgreSQL, Chromium, mock provider |
 | `verify-upload-boundaries-e2e.py` | 413/503, pre-read rejection, concurrency and interrupt cleanup | not measured | isolated PostgreSQL, mock provider |
 | `verify-resource-saturation-e2e.py` | pool exhaustion/slow query/DB unreachable produce 503/504 and recover | not measured | isolated PostgreSQL, mock provider |
 | `verify-concurrency-idempotency.py` | concurrent write idempotency and lease semantics | not measured | isolated PostgreSQL, mock provider |

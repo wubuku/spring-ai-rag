@@ -353,7 +353,7 @@ public class HybridRetrieverService {
                     0);
         }
 
-        log.debug("Executing hybrid search for query: {}", query);
+        log.debug("Executing hybrid search, queryChars={}", query == null ? 0 : query.length());
         FulltextSearchProvider fulltextProvider = selectFulltextProvider(query);
         int effectiveLimit = (config != null && config.getMaxResults() > 0)
                 ? config.getMaxResults() : limit;

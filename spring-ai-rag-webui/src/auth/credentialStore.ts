@@ -21,6 +21,8 @@ export function setCredential(nextCredential: string): void {
 
 export function clearCredential(): void {
   credential = null;
+  // 登出 = 清掉全部痕迹：内存凭据、旧版本明文存储、会话级工作区状态。
+  clearLegacyCredentialStorage();
   clearWorkspaceState();
   listeners.forEach(listener => listener(null));
 }

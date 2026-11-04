@@ -95,9 +95,9 @@ public class PdfToRagService {
         if (policy == EmbeddingPolicy.ASYNC) {
             EmbeddingPolicySupport.requireJobsEnabled(dispatchService);
         }
-        log.info("Importing PDF conversion to RAG: entryMarkdownPath={}, originalFilename={}, "
+        log.info("Importing PDF conversion to RAG: entryMarkdownPath={}, "
                 + "collectionId={}, policy={}, forceReembed={}",
-                entryMarkdownPath, originalFilename, collectionId, policy, forceReembed);
+                entryMarkdownPath, collectionId, policy, forceReembed);
         String title = deriveTitle(originalFilename);
         DocumentBuildResult result = buildDocumentFromMarkdown(
                 entryMarkdownPath, title, originalFilename, collectionId,
@@ -121,9 +121,9 @@ public class PdfToRagService {
                                                        boolean forceReembed,
                                                        Consumer<EmbedProgressEvent> progressCallback) {
         Objects.requireNonNull(entryMarkdownPath, "entryMarkdownPath must not be null");
-        log.info("Importing PDF to RAG with SSE embedding: entryMarkdownPath={}, originalFilename={}, "
+        log.info("Importing PDF to RAG with SSE embedding: entryMarkdownPath={}, "
                 + "collectionId={}, forceReembed={}",
-                entryMarkdownPath, originalFilename, collectionId, forceReembed);
+                entryMarkdownPath, collectionId, forceReembed);
 
         String title = deriveTitle(originalFilename);
         DocumentBuildResult result = buildDocumentFromMarkdown(entryMarkdownPath, title, originalFilename, collectionId);

@@ -115,7 +115,7 @@ public class PdfImportService {
         // Generate UUID as virtual directory name
         UUID importId = UUID.randomUUID();
         String uuid = importId.toString();
-        log.info("Importing PDF: originalFilename={}, uuid={}", originalFilename, uuid);
+        log.info("Importing PDF: uuid={}", uuid);
 
         // Create temp working directory
         Path tempWorkDir;

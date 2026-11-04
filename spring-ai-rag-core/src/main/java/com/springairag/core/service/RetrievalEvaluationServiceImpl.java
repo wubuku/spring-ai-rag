@@ -108,8 +108,9 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
         RagRetrievalEvaluation saved = evaluationRepository.save(evaluation);
         evaluateTimer.record(System.currentTimeMillis() - start, TimeUnit.MILLISECONDS);
         recordEvaluationMetrics(metrics);
-        log.info("[RetrievalEval] query=\"{}\", MRR={}, NDCG={}, hitRate={}",
-                query, metrics.getMrr(), metrics.getNdcg(), metrics.getHitRate());
+        log.info("[RetrievalEval] queryChars={}, MRR={}, NDCG={}, hitRate={}",
+                query == null ? 0 : query.length(),
+                metrics.getMrr(), metrics.getNdcg(), metrics.getHitRate());
         return saved;
     }
 
@@ -315,17 +316,17 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
                         .get(timeout, TimeUnit.SECONDS);
                 return parseJudgeResponse(responseText);
             } catch (TimeoutException e) {
-                log.warn("Answer quality evaluation timed out after {}s for query: {}",
-                        ragProperties.getRetrieval().getAnswerQualityTimeoutSeconds(), query);
+                log.warn("Answer quality evaluation timed out after {}s (queryChars={})",
+                        ragProperties.getRetrieval().getAnswerQualityTimeoutSeconds(), query.length());
                 return new AnswerQualityResult(3, 3, 3,
                         "Evaluation timed out, service unavailable", "REVISION");
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                log.warn("Answer quality evaluation interrupted for query: {}", query);
+                log.warn("Answer quality evaluation interrupted (queryChars={})", query.length());
                 return new AnswerQualityResult(3, 3, 3,
                         "Evaluation interrupted", "REVISION");
             } catch (ExecutionException e) {
-                log.error("Answer quality evaluation failed for query: {}", query, e.getCause());
+                log.error("Answer quality evaluation failed (queryChars={})", query.length(), e.getCause());
                 return new AnswerQualityResult(3, 3, 3,
                         "Evaluation failed: " + e.getCause().getMessage(), "REVISION");
             }

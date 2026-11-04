@@ -512,6 +512,13 @@ jobs:
           set -euo pipefail
           python3 scripts/verify-security-deployment-posture.py 2>&1 | tee "$RUNNER_TEMP/security-posture.log"
 
+      # 敏感 canary 审计：prompt/query/正文/文件名/凭据不得进入日志、指标、
+      # 错误体与导出；actuator 诊断端点必须关闭。
+      - name: Run log secrecy canary regression
+        run: |
+          set -euo pipefail
+          python3 scripts/verify-log-secrecy-e2e.py 2>&1 | tee "$RUNNER_TEMP/log-secrecy.log"
+
       - name: Upload soak evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -523,6 +530,7 @@ jobs:
             ${{ runner.temp }}/security-boundary.log
             ${{ runner.temp }}/security-upgrade.log
             ${{ runner.temp }}/security-posture.log
+            ${{ runner.temp }}/log-secrecy.log
             ${{ runner.temp }}/start-server.log
             ${{ runner.temp }}/mock-llm.log
           if-no-files-found: warn

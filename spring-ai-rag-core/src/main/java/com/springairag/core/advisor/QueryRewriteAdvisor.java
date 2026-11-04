@@ -100,10 +100,11 @@ public class QueryRewriteAdvisor extends AbstractRagAdvisor {
         String retrievalQuery = originalQuery;
         long elapsedMs = System.currentTimeMillis() - startMs;
 
-        log.info("[QueryRewriteAdvisor] original query: \"{}\" → retrieval query: \"{}\", "
-                        + "{} rewritten, {}ms: {}",
-                originalQuery, retrievalQuery,
-                rewrittenQueries.size(), elapsedMs, rewrittenQueries);
+        // 查询正文属于用户输入，日志只保留长度与条数。
+        log.info("[QueryRewriteAdvisor] originalChars={} → retrievalChars={}, "
+                        + "{} rewritten, {}ms",
+                originalQuery.length(), retrievalQuery.length(),
+                rewrittenQueries.size(), elapsedMs);
 
         // Record Micrometer metrics for Prometheus + in-memory pipeline metrics
         RagPipelineMetrics.getOrCreate(request.context())

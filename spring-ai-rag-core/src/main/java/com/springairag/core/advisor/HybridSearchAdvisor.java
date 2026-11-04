@@ -136,8 +136,8 @@ public class HybridSearchAdvisor extends AbstractRagAdvisor {
         }
         long elapsedMs = System.currentTimeMillis() - startMs;
 
-        log.info("[HybridSearchAdvisor] hybrid search returned {} results in {}ms, query: \"{}\", scope={}",
-                results.size(), elapsedMs, query,
+        log.info("[HybridSearchAdvisor] hybrid search returned {} results in {}ms, queryChars={}, scope={}",
+                results.size(), elapsedMs, query == null ? 0 : query.length(),
                 scopeSummary(retrievalScope, documentIds));
 
         recordMetricsAndLog(request, query, elapsedMs, results);

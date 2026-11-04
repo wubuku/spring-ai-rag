@@ -129,7 +129,7 @@ The script creates a temporary database and mock provider and deletes both on ex
 ## 6. Known Residual Risks
 
 - Legacy `fs_files` / feedback / evaluation rows have no ownership and are invisible to restricted keys. Making historical data visible to a specific principal requires a controlled backfill, not a relaxed query.
-- Logs and audit exports (for example `logs/*.jsonl`) are out of scope here and remain governed by deployment permissions.
+- Audit logs and export artifacts are data-plane data (governed by deployment permissions); the confidentiality boundary for application logs and metrics is in §9.
 - With authentication disabled there is no principal concept; internal paths (plugins/tools) operate globally. That is the established behavior for isolated environments.
 
 ---
@@ -260,3 +260,93 @@ upload, search, and export remain usable under CSP; inline `<script>` and
 
 Unit level: `SecurityHeadersFilterTest`, `ChatExportServiceTest` (CSV formula
 injection), `PdfImportControllerContentTypeTest` (RFC 5987 headers).
+
+---
+
+## 9. Log And Observability Confidentiality
+
+### 9.1 Principle
+
+**Request/response bodies and document text belong to the data plane only**:
+logs and metrics record correlation identifiers, lengths, counts, and timings.
+The following must never appear in application logs at any level:
+
+| Content | Log substitute |
+|---------|----------------|
+| User prompt / chat history | `messageChars` |
+| Retrieval query / rewritten query | `queryChars` |
+| Document title, collection name, uploaded filename | length or resource id |
+| Document body, retrieved chunks | not logged |
+| API key, `Authorization`, `Idempotency-Key` | not logged; auth failures log path and principal only |
+| Client-reported error message / pageUrl | `errorType` and session only |
+
+Slow-query logging keeps only the statement shape: every single-quoted literal
+is replaced with `'***'`, so a slow INSERT/UPDATE cannot push document text into
+the WARN log. Client JSON logs still mask `apiKey` / `token` / `password`
+through `SensitiveDataMaskingConverter`.
+
+### 9.2 Actuator and error bodies
+
+- `/actuator` exposes only `health,info,metrics,prometheus`; `env`, `beans`,
+  `loggers`, and `configprops` return 404.
+- `/actuator/health` keeps the `ragSecurityPosture` details but disables the
+  built-in `diskSpace` indicator, which would publish absolute host paths.
+  Container health should use quota/probes, not host disk paths.
+- 5xx error bodies pass through `ErrorMessageSanitizer`, which removes stack
+  traces, class names, and local paths; exports contain no internal paths or
+  connection strings.
+
+### 9.3 Acceptance
+
+```bash
+python3 scripts/verify-log-secrecy-e2e.py
+```
+
+Real process plus isolated PostgreSQL and mock provider: send prompts, retrieval
+queries, document titles/bodies, upload filenames/content, client errors, invalid
+API key/Bearer, and `Idempotency-Key` headers carrying `SECRET_CANARY_*`, then
+scan the full application log (the demo sets `com.springairag` to DEBUG, covering
+INFO and DEBUG), actuator responses, error bodies, and collection/chat exports.
+
+The only allowed canary locations are the data plane itself: collection/chat
+exports must contain the exported body and title (otherwise redaction is
+over-broad). Credential canaries and internal path markers must have zero hits
+in logs, metrics, error bodies, and exports.
+
+---
+
+## 10. WebUI Credential Storage And Session Security
+
+### 10.1 Storage locations
+
+| Location | Holds API key | Notes |
+|----------|---------------|-------|
+| Module memory | yes | module-level variable in `credentialStore`, read by React via subscription |
+| `localStorage` | no | writes are forbidden; legacy `rag-api-key*` entries are cleared at startup |
+| `sessionStorage` | no | stores only non-sensitive route/workspace state; cleared on logout |
+| Cookie | no | credentials are never stored in cookies |
+| URL / Referer | no | credentials travel only in the `X-API-Key` request header; `Referrer-Policy: no-referrer` |
+
+Resulting session semantics:
+
+- **Refresh locks the app**: memory does not survive a page load, so refresh
+  returns to Unlock; there is no "remember me".
+- **Tabs are independent**: each tab holds its own memory credential; unlocking
+  tab A does not unlock tab B.
+- **Logout clears everything**: memory credential, legacy plaintext entries,
+  and session-level workspace state are removed together.
+- **No reachable XSS surface**: injected scripts can read `localStorage` /
+  `sessionStorage` / cookies / URL and find nothing; the module closure value is
+  not attached to the global object.
+
+### 10.2 Acceptance
+
+```bash
+python3 scripts/verify-webui-credential-security-e2e.py
+```
+
+Real backend plus real Chromium: scan every storage surface after unlock; refresh
+returns to Unlock; a new tab stays locked; an injected in-page script scanning
+storage/globals/form values finds no credential; logout clears storage; no request
+URL or `Referer` contains the credential, which appears only in the `X-API-Key`
+request header.

@@ -138,7 +138,7 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
                     executeSearch(
                             query.trim(), scope, limit,
                             embeddingProfileId, filters);
-            log.debug("pg_trgm search for '{}' returned {} rows", query, rows.size());
+            log.debug("pg_trgm search returned {} rows (queryChars={})", rows.size(), query.length());
             List<RetrievalResult> candidates = rows.stream()
                     .filter(row -> !isExcluded(row, excludeIds))
                     .map(row -> {
@@ -155,7 +155,7 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
             return SearchResult.success(results, candidates.size());
         } catch (Exception e) {
             // Resilience: search failure returns empty list (graceful degradation)
-            log.warn("pg_trgm search failed for query '{}': {}", query, e.getMessage());
+            log.warn("pg_trgm search failed (queryChars={}): {}", query.length(), e.getMessage());
             return SearchResult.failure(e.getClass().getSimpleName());
         }
     }

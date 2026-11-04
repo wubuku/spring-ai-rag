@@ -249,8 +249,7 @@ public class RagCollectionController {
             HttpServletRequest httpRequest) {
         ApiKeyCollectionAccess.requireCollectionCreationAllowed(
                 ApiKeyCollectionAccess.currentPolicy(httpRequest));
-        log.info("Creating collection: key={}, name={}",
-                request.getCollectionKey(), request.getName());
+        log.info("Creating collection");
 
         String idempotencyKey = IdempotencyKeyValidator.normalize(
                 httpRequest == null
@@ -265,8 +264,7 @@ public class RagCollectionController {
                             IdempotencyKeyValidator.hash(idempotencyKey));
             RagCollection collection = result.collection();
             if (!result.replay()) {
-                log.info("Collection created: id={}, name={}",
-                        collection.getId(), collection.getName());
+                log.info("Collection created: id={}", collection.getId());
                 auditCollectionCreated(collection);
             }
             ResponseEntity.BodyBuilder builder = ResponseEntity.status(
@@ -280,7 +278,7 @@ public class RagCollectionController {
 
         RagCollection collection = collectionService.createCollection(request);
 
-        log.info("Collection created: id={}, name={}", collection.getId(), collection.getName());
+        log.info("Collection created: id={}", collection.getId());
         auditCollectionCreated(collection);
 
         return ResponseEntity.ok(CollectionMapper.toMap(collection, 0));
@@ -509,7 +507,7 @@ public class RagCollectionController {
         ApiKeyCollectionAccess.requireCollectionCreationAllowed(
                 ApiKeyCollectionAccess.currentPolicy());
         ApiKeyCollectionAccess.requireCollectionId(id, ApiKeyCollectionAccess.currentPolicy());
-        log.info("Cloning collection: id={}, key={}", id, collectionKey);
+        log.info("Cloning collection: id={}", id);
 
         return collectionService.cloneCollection(id, collectionKey)
                 .map(ResponseEntity::ok)
@@ -757,7 +755,7 @@ public class RagCollectionController {
         validateImportRequest(importRequest);
         String name = importRequest.getName();
 
-        log.info("Importing collection: name={}", name);
+        log.info("Importing collection");
 
         RagCollection collection = collectionService.createCollection(
                 buildCollectionRequestFromImport(importRequest));
@@ -767,8 +765,8 @@ public class RagCollectionController {
                 collection.getCollectionKey(),
                 importRequest.getDocuments());
 
-        log.info("Collection imported: id={}, name={}, documents={}",
-                collection.getId(), name, importedDocs);
+        log.info("Collection imported: id={}, documents={}",
+                collection.getId(), importedDocs);
         audit(AuditLogService.AuditAction.CREATE, AuditLogService.ENTITY_COLLECTION,
                 String.valueOf(collection.getId()),
                 "Collection imported: " + name + ", documents: " + importedDocs,

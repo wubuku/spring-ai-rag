@@ -38,6 +38,12 @@ public class SlowQueryMetricsService {
     private static final Pattern SENSITIVE_SQL_PATTERN = Pattern.compile(
             "(?i)(api[_-]?key|token|secret|password)\\s*=\\s*'[^']*'");
 
+    /**
+     * 所有单引号字面量。慢查询日志只需要语句形状；文档正文、用户 query 等
+     * 请求内容可能作为绑定值出现在字面量里。
+     */
+    private static final Pattern SQL_STRING_LITERAL = Pattern.compile("'(?:[^']|'')*'");
+
     private final RagProperties properties;
     private final EntityManagerFactory entityManagerFactory;
     private final Counter slowQueryCounter;
@@ -211,8 +217,9 @@ public class SlowQueryMetricsService {
 
     private String maskSensitiveSql(String sql) {
         if (sql == null) return null;
-        // Mask obvious API keys and tokens in SQL comments/values
-        return SENSITIVE_SQL_PATTERN.matcher(sql).replaceAll("$1='***'");
+        // 先按键名掩掉敏感值，再统一抹掉全部字符串字面量。
+        String masked = SENSITIVE_SQL_PATTERN.matcher(sql).replaceAll("$1='***'");
+        return SQL_STRING_LITERAL.matcher(masked).replaceAll("'***'");
     }
 
     private String truncateSql(String sql, int maxLength) {

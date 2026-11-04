@@ -61,8 +61,8 @@ public class RetrievalLoggingService {
             entry.setResultScores(extractResultScores(results));
 
             repository.save(entry);
-            log.debug("[RetrievalLogging] Retrieval log recorded: query=\"{}\", strategy={}, total={}ms, results={}",
-                    query, strategy, entry.getTotalTimeMs(), entry.getResultCount());
+            log.debug("[RetrievalLogging] Retrieval log recorded: queryChars={}, strategy={}, total={}ms, results={}",
+                    query == null ? 0 : query.length(), strategy, entry.getTotalTimeMs(), entry.getResultCount());
         } catch (Exception e) { // Resilience: retrieval logging is non-critical
             log.warn("[RetrievalLogging] Failed to record retrieval log: {}", e.getMessage());
         }

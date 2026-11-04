@@ -58,10 +58,9 @@ public class ClientErrorServiceImpl implements ClientErrorService {
 
         clientErrorRepository.save(error);
 
-        log.warn("Client error recorded: type={}, message={}, page={}, session={}",
+        // 客户端上报的 message/pageUrl 可能夹带用户输入；落库已掩码，日志只记类型与会话。
+        log.warn("Client error recorded: type={}, session={}",
                 error.getErrorType(),
-                error.getErrorMessage(),
-                error.getPageUrl(),
                 request.getSessionId());
     }
 

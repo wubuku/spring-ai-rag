@@ -134,7 +134,7 @@ public class PgEnglishFtsProvider implements FulltextSearchProvider {
                     executeSearch(
                             query.trim(), scope, limit,
                             embeddingProfileId, filters);
-            log.debug("English FTS search for '{}' returned {} rows", query, rows.size());
+            log.debug("English FTS search returned {} rows (queryChars={})", rows.size(), query.length());
             return SearchResult.success(rows.stream()
                     .filter(row -> !isExcluded(row, excludeIds))
                     .map(row -> {
@@ -147,7 +147,7 @@ public class PgEnglishFtsProvider implements FulltextSearchProvider {
                     .toList());
         } catch (Exception e) {
             // Resilience: search failure returns empty list (graceful degradation)
-            log.warn("English FTS search failed for query '{}': {}", query, e.getMessage());
+            log.warn("English FTS search failed (queryChars={}): {}", query.length(), e.getMessage());
             return SearchResult.failure(e.getClass().getSimpleName());
         }
     }

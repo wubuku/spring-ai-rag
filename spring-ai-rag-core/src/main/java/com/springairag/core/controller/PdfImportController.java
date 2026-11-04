@@ -143,7 +143,7 @@ public class PdfImportController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
         } catch (Exception e) { // Resilience: convert
-            log.error("PDF import failed for '{}': {}", filename, e.getMessage(), e);
+            log.error("PDF import failed: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError()
                     .body(ErrorResponse.of("PDF import failed: " + e.getMessage()));
         }
@@ -385,7 +385,7 @@ public class PdfImportController {
         } catch (IllegalArgumentException | SecurityException e) {
             throw e;
         } catch (Exception e) {
-            log.error("PDF-to-RAG import failed for '{}': {}", filename, e.getMessage(), e);
+            log.error("PDF-to-RAG import failed: {}", e.getMessage(), e);
             throw new IllegalStateException(
                     "PDF-to-RAG import failed: " + e.getMessage(), e);
         }
@@ -864,7 +864,7 @@ public class PdfImportController {
             @PathVariable("filename") String filename) {
 
         String path = uuid + "/" + filename;
-        log.debug("Raw file requested (path param): uuid={}, filename={}, path={}", uuid, filename, path);
+        log.debug("Raw file requested (path param): uuid={}", uuid);
         PdfImportService.validateVirtualPath(path);
 
         Optional<FsFile> file = resolveFile(path);
@@ -906,7 +906,7 @@ public class PdfImportController {
             @RequestParam("path") String path) {
 
         String decodedPath = PdfImportService.validateVirtualPath(urlDecode(path));
-        log.debug("Raw file requested (query param): path={}", decodedPath);
+        log.debug("Raw file requested (query param)");
 
         Optional<FsFile> file = resolveFile(decodedPath);
         if (file.isEmpty()) {

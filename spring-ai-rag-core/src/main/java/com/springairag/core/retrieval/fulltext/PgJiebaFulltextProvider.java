@@ -139,7 +139,7 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
                     executeSearch(
                             query.trim(), scope, limit,
                             embeddingProfileId, filters);
-            log.debug("pg_jieba search for '{}' returned {} rows", query, rows.size());
+            log.debug("pg_jieba search returned {} rows (queryChars={})", rows.size(), query.length());
             return SearchResult.success(rows.stream()
                     .filter(row -> !isExcluded(row, excludeIds))
                     .map(row -> {
@@ -151,7 +151,7 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
                     .limit(limit)
                     .toList());
         } catch (Exception e) { // Resilience: return empty on search failure
-            log.warn("pg_jieba search failed for query '{}': {}", query, e.getMessage());
+            log.warn("pg_jieba search failed (queryChars={}): {}", query.length(), e.getMessage());
             return SearchResult.failure(e.getClass().getSimpleName());
         }
     }
