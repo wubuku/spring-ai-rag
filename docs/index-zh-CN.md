@@ -50,6 +50,7 @@
 | 跑可访问性/响应式基线，或被 axe、键盘、三档宽度用例拦下 | [WebUI 可访问性与响应式基线](webui-accessibility-zh-CN.md) | [WebUI 设计语言](webui-design-language-zh-CN.md)、`spring-ai-rag-webui/e2e/` |
 | 做领域定制 | [extension-guide-zh-CN.md](extension-guide-zh-CN.md) | `demos/demo-domain-extension` |
 | 写测试 / 跑回归 | [testing-guide-zh-CN.md](testing-guide-zh-CN.md) | [developer-reference-zh-CN.md](developer-reference-zh-CN.md) E2E 段 |
+| 查「这个仓被哪些门禁证明过」、某条门禁红了先看哪里 | [验证基线总览](verification-baseline-zh-CN.md)（[EN](verification-baseline.md)） | [scripts/gate-registry.mjs](../scripts/gate-registry.mjs)、`.github/workflows/` |
 | 规划、实施、验收并交付复杂功能 | [规划、实施与验收工作流](delivery-workflow-zh-CN.md) | [当前活跃规划](drafts/README-zh-CN.md)、[测试指南](testing-guide-zh-CN.md) |
 | 线上部署 | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`、`k8s/` |
 | 运行多副本 / 理解跨实例语义 | [多实例语义](multi-instance-semantics-zh-CN.md) | [DEPLOYMENT.md](DEPLOYMENT.md)、[测试指南](testing-guide-zh-CN.md) |
@@ -114,6 +115,7 @@
 | 文档 | 说明 |
 |------|------|
 | [testing-guide-zh-CN.md](testing-guide-zh-CN.md) | 单元 / 集成 / E2E / 覆盖率 |
+| [verification-baseline-zh-CN.md](verification-baseline-zh-CN.md) / [English](verification-baseline.md) | 验证基线总览：每层门禁证明的命题、实测耗时、依赖与红了先看哪里 |
 | [capacity-and-scale-zh-CN.md](capacity-and-scale-zh-CN.md) / [English](capacity-and-scale.md) | 数据量放大后的退化曲线、N+1/全表扫描修复与容量边界 |
 | [mutation-testing-zh-CN.md](mutation-testing-zh-CN.md) / [English](mutation-testing.md) | 变异测试记录：关键判定包的存活变异体与“测试假绿”风险 |
 | [supply-chain-security-zh-CN.md](supply-chain-security-zh-CN.md) / [English](supply-chain-security.md) | 依赖漏洞扫描结果、版本覆盖清单与不升大版本的取舍 |

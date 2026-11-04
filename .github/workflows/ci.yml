@@ -288,6 +288,15 @@ jobs:
       - name: Production build
         run: npm run build
 
+      # 静态产物入库（jar 内直接可用），因此必须证明重建结果与提交一致；
+      # 只比较内容，不比较 mtime。锁定依赖下实测逐字节可复现。
+      - name: Committed static build matches a fresh build
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          npm run build
+          diff -r dist ../spring-ai-rag-core/src/main/resources/static/webui
+
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:

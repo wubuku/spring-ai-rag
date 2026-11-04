@@ -50,6 +50,7 @@ Additive capabilities: [trustworthy assertions, active diagnostics and offline q
 | Run the accessibility/responsive baseline, or trip axe, keyboard, or viewport specs | [WebUI accessibility and responsive baseline](webui-accessibility.md) | [WebUI design language](webui-design-language.md), `spring-ai-rag-webui/e2e/` |
 | Domain customization | [extension-guide.md](extension-guide.md) | `demos/demo-domain-extension` |
 | Write / run tests | [testing-guide.md](testing-guide.md) | [developer-reference.md](developer-reference.md) E2E section |
+| Answer “what has this repo actually proven?” or triage a red gate | [Verification Baseline](verification-baseline.md) ([Chinese](verification-baseline-zh-CN.md)) | [scripts/gate-registry.mjs](../scripts/gate-registry.mjs), `.github/workflows/` |
 | Plan, implement, accept, and deliver substantial work | [Planning, Implementation, And Acceptance Workflow](delivery-workflow.md) | [Current active plans](drafts/README.md), [Testing guide](testing-guide.md) |
 | Production deploy | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`, `k8s/` |
 | Run multiple replicas / understand cross-instance semantics | [Multi-instance semantics](multi-instance-semantics.md) | [DEPLOYMENT.md](DEPLOYMENT.md), [Testing guide](testing-guide.md) |
@@ -114,6 +115,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | Doc | Description |
 |-----|-------------|
 | [testing-guide.md](testing-guide.md) | Unit / integration / E2E / coverage |
+| [verification-baseline.md](verification-baseline.md) / [Chinese](verification-baseline-zh-CN.md) | Verification baseline: what each layer of gates proves, measured durations, dependencies, and where to look first when red |
 | [capacity-and-scale.md](capacity-and-scale.md) / [Chinese](capacity-and-scale-zh-CN.md) | Degradation curve at scale, N+1/full-scan fixes, and capacity boundaries |
 | [mutation-testing.md](mutation-testing.md) / [Chinese](mutation-testing-zh-CN.md) | Mutation-testing record: surviving mutants and hollow-test risk in critical packages |
 | [supply-chain-security.md](supply-chain-security.md) / [Chinese](supply-chain-security-zh-CN.md) | Dependency scan results, version overrides, and majors deliberately not taken |
