@@ -50,6 +50,10 @@ Active plans are listed here and in `docs/index*`.
   Git delivery has not started.
 - [Multi-tenancy status](MULTI_TENANCY_STATUS.md) (Chinese): read-only audit of the current
   ACL and ownership boundary; gaps 1 and 2 were closed by V71 and the draft tracks the rest.
+- [Knowledge-graph module review](KNOWLEDGE_GRAPH_MODULE_REVIEW.md) (Chinese only): critical
+  review of an external knowledge-graph proposal, item-by-item alignment with this
+  repository's real implementation, and a phased landing path; it becomes a formal document
+  only after decisions D1–D3 are settled.
 The processing/recovery, citation/streaming, chunking-correctness, and default-feature/automatic-upgrade/recovery batches,
 including supplemental real-LLM acceptance, are in the
 [historical archive](archive/README.md).
