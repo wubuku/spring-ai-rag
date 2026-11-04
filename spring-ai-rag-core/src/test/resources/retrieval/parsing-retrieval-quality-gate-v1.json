@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "name": "parsing-retrieval-quality-gate-v1",
+  "description": "固定语料 + 固定查询的确定性解析/分块检索门禁；假 embedding 由测试内特征哈希实现，不依赖真实模型、数据库或 Docker。",
+  "chunking": {
+    "size": 1000,
+    "minSize": 100,
+    "overlap": 100,
+    "maxInputChars": 200000,
+    "maxChunks": 2000
+  },
+  "metrics": {
+    "recallK": 5,
+    "ndcgK": 10
+  },
+  "thresholds": {
+    "recallAtK": 0.94,
+    "mrr": 0.92,
+    "ndcgAtK": 0.92
+  },
+  "documents": [
+    {
+      "documentId": "pdf-multicolumn",
+      "filename": "multi-column.pdf",
+      "fixture": "multiColumnPdf",
+      "description": "双栏 PDF：左栏整段先于右栏整段"
+    },
+    {
+      "documentId": "pdf-table",
+      "filename": "product-table.pdf",
+      "fixture": "retrievalTablePdf",
+      "description": "表格 PDF：同一行单元格合并为一行"
+    },
+    {
+      "documentId": "docx-policy",
+      "filename": "policy.docx",
+      "fixture": "docx",
+      "description": "DOCX：段落 + 表格行列"
+    },
+    {
+      "documentId": "markdown-runbook",
+      "filename": "runbook.md",
+      "fixture": "markdown",
+      "description": "Markdown：标题、代码块与表格"
+    },
+    {
+      "documentId": "html-faq",
+      "filename": "faq.html",
+      "fixture": "htmlWithNoise",
+      "description": "HTML：去噪后的可见正文与表格"
+    },
+    {
+      "documentId": "txt-encoding",
+      "filename": "reimbursement.txt",
+      "fixture": "retrievalGbkText",
+      "description": "GBK 纯文本：编码回退后中文可检索"
+    }
+  ],
+  "queries": [
+    {
+      "id": "q-pdf-right-column",
+      "query": "RIGHT-GAMMA second column",
+      "expectedDocumentId": "pdf-multicolumn",
+      "expectedTerms": ["RIGHT-GAMMA", "second column"]
+    },
+    {
+      "id": "q-pdf-left-column",
+      "query": "LEFT-BETA first column",
+      "expectedDocumentId": "pdf-multicolumn",
+      "expectedTerms": ["LEFT-BETA", "first column"]
+    },
+    {
+      "id": "q-pdf-table-widget-b",
+      "query": "WidgetB 240 USD",
+      "expectedDocumentId": "pdf-table",
+      "expectedTerms": ["WidgetB", "240", "USD"]
+    },
+    {
+      "id": "q-pdf-table-widget-c",
+      "query": "WidgetC 360 USD",
+      "expectedDocumentId": "pdf-table",
+      "expectedTerms": ["WidgetC", "360", "USD"]
+    },
+    {
+      "id": "q-docx-table-zhang",
+      "query": "张三 年龄 30",
+      "expectedDocumentId": "docx-policy",
+      "expectedTerms": ["张三", "年龄", "30"]
+    },
+    {
+      "id": "q-docx-code-word",
+      "query": "DOCX 第二段 code word",
+      "expectedDocumentId": "docx-policy",
+      "expectedTerms": ["DOCX", "第二段", "code", "word"]
+    },
+    {
+      "id": "q-markdown-code",
+      "query": "int answer = 42",
+      "expectedDocumentId": "markdown-runbook",
+      "expectedTerms": ["int", "answer", "42"]
+    },
+    {
+      "id": "q-html-heading",
+      "query": "HTML 可见标题 这是可见段落",
+      "expectedDocumentId": "html-faq",
+      "expectedTerms": ["HTML", "可见标题", "这是可见段落"]
+    },
+    {
+      "id": "q-txt-gbk",
+      "query": "报销流程 财务审批",
+      "expectedDocumentId": "txt-encoding",
+      "expectedTerms": ["报销流程", "财务审批"]
+    }
+  ],
+  "tableRows": {
+    "pdf-table": [
+      ["WidgetA", "120", "USD"],
+      ["WidgetB", "240", "USD"],
+      ["WidgetC", "360", "USD"]
+    ],
+    "docx-policy": [
+      ["| 姓名 | 年龄 |"],
+      ["| 张三 | 30 |"]
+    ],
+    "markdown-runbook": [
+      ["| 列一 | 列二 |"],
+      ["| 值一 | 值二 |"]
+    ]
+  }
+}

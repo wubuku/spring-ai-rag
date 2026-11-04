@@ -81,6 +81,79 @@ rejected or the script exits 1; success prints `MUTATION_DETECTED_OK`. Measured:
 below their floors. The mutation only reorders in-memory results, so there is no
 corpus to roll back.
 
+## Parsing And Chunking Retrieval Quality Gate (No Model / No Database)
+
+A parsing change cannot be accepted on "text was extracted" alone.
+`ParsingRetrievalQualityGateTest` runs the same format corpus through extraction,
+chunking, and retrieval, then measures Recall@5, MRR, and nDCG@10. Any metric
+below its floor turns `mvn test` red. It calls no real LLM, needs no Postgres,
+and requires no Docker.
+
+```bash
+mvn -o -pl spring-ai-rag-core -am \
+  -Dtest=ParsingRetrievalQualityGateTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+- Corpus: six documents generated deterministically at runtime — a two-column
+  PDF, a three-column table PDF, a DOCX with paragraphs and a table, a Markdown
+  file with a code block and a table, an HTML file with script/style noise,
+  and GBK plain text. Fixtures live in `DocumentParsingCorpus`.
+- Queries and floors:
+  `spring-ai-rag-core/src/test/resources/retrieval/parsing-retrieval-quality-gate-v1.json`
+  (nine queries, each with a fixed target `documentId` and `expectedTerms` that
+  must co-occur in one chunk).
+- Embedding: in-test FNV-1a feature hashing, 1024 dimensions, signed hashing,
+  L2-normalized; Latin runs and CJK unigrams/bigrams are tokenized. The same
+  text always yields the same vector.
+- Ordering: `score desc → documentId` lexicographic `→ chunkIndex` ascending;
+  equal scores never depend on Map/Hash iteration order.
+- Relevance: the chunk belongs to the target document and contains every
+  `expectedTerm` of the query.
+
+Baseline (measured 2026-11-05 with the fixed corpus and hashed embedding):
+
+| Metric | Measured | Floor | Headroom |
+| --- | --- | --- | --- |
+| Recall@5 | 1.000 | 0.94 | 6 points |
+| MRR | 1.000 | 0.92 | 8 points |
+| nDCG@10 | 1.000 | 0.92 | 8 points |
+
+The floors are "measured 1.0 minus 6–8 points", not arbitrary: losing any one
+of the nine queries drops Recall to `8/9 = 0.889`, below 0.94. A single query
+moving from rank 1 to rank 2 only lowers MRR to `(8 + 0.5)/9 ≈ 0.944` and nDCG
+to about `0.959`, still above the floors, so mild ranking jitter is tolerated.
+Losing two queries lands around `0.78–0.81` and turns the gate red.
+
+Chunk-quality assertions (any failure turns red):
+
+- No blank chunk, no chunk longer than `size=1000`, no
+  `ChunkDiagnostics.violations`, and 100% coverage of the source's
+  non-whitespace characters.
+- The two-column PDF must be emitted left column first, then right column; no
+  chunk may interleave `RIGHT-*` before `LEFT-*` row by row.
+- Table rows (PDF same-row cells and DOCX/Markdown table rows) must stay on one
+  output line and fall entirely inside one chunk; `CODE`/`TABLE` protected-block
+  metadata remains readable on the retrieval side.
+- Every chunk carries `documentId`, contiguous `chunkIndex`, and a nonblank
+  `title`; a hit must locate back to its target document.
+
+Determinism and idempotency:
+
+- Indexing the same corpus twice produces identical extracted text, chunk list,
+  and `ChunkDiagnostics`, item by item.
+- A zero-hit query (all scores 0) verifies the tie-break: results are ordered
+  strictly by `documentId`, then `chunkIndex`, and repeated ranking is identical.
+- External-document sync idempotency is pinned by
+  `DocumentMutationExternalCasTailTest#unchangedWhenSameRevisionAndSameManagedState`:
+  the same `sourceRevision` with unchanged managed fields returns `UNCHANGED`
+  and writes nothing.
+
+Sensitivity proof: the gate contains two reverse cases — removing every relevant
+chunk must yield `0/0/0`, and reversing the ranking must push MRR/nDCG below
+their floors. Both passing proves the floors actually reject recall or ranking
+regressions instead of staying permanently green.
+
 ## Retrieval Result Reproducibility
 
 Retrieval correctness is pinned by the gated

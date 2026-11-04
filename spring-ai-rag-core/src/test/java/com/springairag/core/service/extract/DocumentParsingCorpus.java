@@ -33,7 +33,7 @@ public final class DocumentParsingCorpus {
     private DocumentParsingCorpus() {
     }
 
-    static byte[] multiColumnPdf() throws IOException {
+    public static byte[] multiColumnPdf() throws IOException {
         try (PDDocument document = new PDDocument();
              ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             PDPage page = new PDPage(PDRectangle.A4);
@@ -60,6 +60,46 @@ public final class DocumentParsingCorpus {
             document.save(output);
             return output.toByteArray();
         }
+    }
+
+    /** 检索质量语料：表格 PDF 使用可检索的产品/价格文本（三列，避免被识别为双栏布局）。 */
+    public static byte[] retrievalTablePdf() throws IOException {
+        try (PDDocument document = new PDDocument();
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            PDPage page = new PDPage(PDRectangle.A4);
+            document.addPage(page);
+            try (PDPageContentStream stream = new PDPageContentStream(document, page)) {
+                stream.beginText();
+                stream.setFont(font(), 12);
+                stream.setLeading(20f);
+                stream.newLineAtOffset(40, 720);
+                stream.showText("WidgetA");
+                stream.newLineAtOffset(120, 0);
+                stream.showText("120");
+                stream.newLineAtOffset(100, 0);
+                stream.showText("USD");
+                stream.newLineAtOffset(-220, -20);
+                stream.showText("WidgetB");
+                stream.newLineAtOffset(120, 0);
+                stream.showText("240");
+                stream.newLineAtOffset(100, 0);
+                stream.showText("USD");
+                stream.newLineAtOffset(-220, -20);
+                stream.showText("WidgetC");
+                stream.newLineAtOffset(120, 0);
+                stream.showText("360");
+                stream.newLineAtOffset(100, 0);
+                stream.showText("USD");
+                stream.endText();
+            }
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
+    /** 检索质量语料：GBK 编码的报销流程文本。 */
+    public static byte[] retrievalGbkText() {
+        return "报销流程需要财务审批、发票核验和预算冻结。".getBytes(Charset.forName("GBK"));
     }
 
     static byte[] tablePdf() throws IOException {
@@ -210,7 +250,7 @@ public final class DocumentParsingCorpus {
                 """.getBytes(StandardCharsets.UTF_8);
     }
 
-    static byte[] markdown() {
+    public static byte[] markdown() {
         return """
                 # Markdown 语料
 

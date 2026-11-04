@@ -76,6 +76,66 @@ BASE_URL=http://127.0.0.1:18081 ./scripts/run-retrieval-goldenset.sh \
 `shuffle` MRR 0.2218 / nDCG 0.4171，`demote` 0.2167 / 0.4127，`drop` 0/0，全部
 低于门槛。变异只作用于内存中的排序，不写语料，无需回滚。
 
+## 解析与分块检索质量门禁（无模型 / 无数据库）
+
+解析层改动不能只看“有没有抽出字”。`ParsingRetrievalQualityGateTest` 把同一批
+格式语料送进抽取、分块和检索，度量 Recall@5、MRR、nDCG@10，任何一项跌破阈值
+都会让 `mvn test` 变红。它不调用真实 LLM、不连 Postgres、不需要 Docker。
+
+```bash
+mvn -o -pl spring-ai-rag-core -am \
+  -Dtest=ParsingRetrievalQualityGateTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+- 语料：6 个文档在运行时确定性生成——双栏 PDF、三列表格 PDF、段落 + 表格
+  DOCX、带代码块和表格的 Markdown、含 script/style 噪声的 HTML、GBK 纯文本；
+  夹具见 `DocumentParsingCorpus`。
+- 查询集与阈值：`spring-ai-rag-core/src/test/resources/retrieval/parsing-retrieval-quality-gate-v1.json`
+  （9 条查询，每条固定目标 `documentId` 与必须同块出现的 `expectedTerms`）。
+- embedding：测试内 FNV-1a 特征哈希，1024 维、签名哈希、L2 归一化；拉丁
+  run 与 CJK unigram/bigram 分词。同一文本永远得到同一向量。
+- 排序：`score desc → documentId` 字典序 `→ chunkIndex` 升序；同分结果不依赖
+  Map/Hash 顺序。
+- 相关性：命中目标文档，且 chunk 同时包含该查询的全部 `expectedTerms`。
+
+基线（2026-11-05，固定语料 + 固定哈希 embedding，实测）：
+
+| 指标 | 实测值 | 阈值 | 余量 |
+| --- | --- | --- | --- |
+| Recall@5 | 1.000 | 0.94 | 6 个百分点 |
+| MRR | 1.000 | 0.92 | 8 个百分点 |
+| nDCG@10 | 1.000 | 0.92 | 8 个百分点 |
+
+阈值取“实测 1.0 下浮 6–8 个百分点”，不是拍脑袋：9 条查询里丢掉任意 1 条相关
+证据会使 Recall 降到 `8/9 = 0.889`，必然低于 0.94；单条查询从第 1 掉到第 2
+只会让 MRR 降到 `(8 + 0.5)/9 ≈ 0.944`、nDCG 降到约 `0.959`，仍在阈值之上，
+属于允许的轻微排序抖动；丢掉 2 条即约 `0.78–0.81`，变红。
+
+分块质量断言（任一条失败即红）：
+
+- 没有空 chunk、没有超过 `size=1000` 的 chunk，`ChunkDiagnostics` 无
+  `violations`，原文非空白字符覆盖率必须等于 100%。
+- 双栏 PDF 必须“左栏整段 → 右栏整段”，chunk 内不得出现 `RIGHT-*` 先于
+  `LEFT-*` 的逐行交错。
+- 表格行（PDF 同行单元格、DOCX/Markdown 表格行）必须落在同一输出行，并完整
+  落在同一个 chunk 内；`CODE` / `TABLE` 的 protected block 元数据在检索侧仍可读。
+- 每个 chunk 携带 `documentId`、连续 `chunkIndex`、非空 `title`；命中块必须
+  能定位回目标文档。
+
+确定性与幂等：
+
+- 同一语料连续两次索引，抽取文本、chunk 列表与 `ChunkDiagnostics` 逐项相等。
+- 无命中查询（全 0 分）验证 tie-break：结果严格按 `documentId`、`chunkIndex`
+  排序，重复排序完全一致。
+- 外部文档同步路径的幂等由
+  `DocumentMutationExternalCasTailTest#unchangedWhenSameRevisionAndSameManagedState`
+  固定：相同 `sourceRevision` 且托管字段未变化时返回 `UNCHANGED`，不重复写库。
+
+灵敏度反证：门禁测试自身包含两个反向用例——移除所有相关 chunk 后必须
+`0/0/0`，反转排序后 MRR/nDCG 必须低于阈值；两者都通过才说明阈值真的会拦下
+召回或排序下滑，而不是恒绿。
+
 ## 检索结果可复现性
 
 检索正确性由 gated 套件 `RetrievalCorrectnessPostgresIntegrationTest` 固定，使用
