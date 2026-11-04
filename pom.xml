@@ -49,7 +49,7 @@
           会拒绝模块里出现字面量版本）。hibernate-vector 必须跟随 hibernate.version，
           否则它会和 hibernate-core 变成同一 classpath 上的两个版本。
         -->
-        <logstash-logback-encoder.version>7.4</logstash-logback-encoder.version>
+        <logstash-logback-encoder.version>9.0</logstash-logback-encoder.version>
         <commonmark.version>0.22.0</commonmark.version>
         <jsoup.version>1.23.2</jsoup.version>
         <testcontainers.version>1.20.4</testcontainers.version>
