@@ -1,7 +1,9 @@
 package com.springairag.core.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.entity.RagAbExperiment;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagAbExperimentRepository;
 import com.springairag.core.repository.RagAbResultRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -85,8 +87,9 @@ class AbTestServiceImplRecordVariantTailTest {
         when(experimentRepository.findById(7L))
                 .thenReturn(Optional.empty());
 
-        assertThrows(IllegalArgumentException.class,
+        RagException missing = assertThrows(RagException.class,
                 () -> service.recordResult(7L, "v", "s1", "q", null, null));
+        assertEquals(ErrorCode.NOT_FOUND, missing.getErrorCodeEnum());
     }
 
     @Test

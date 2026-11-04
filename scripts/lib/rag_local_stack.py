@@ -149,10 +149,11 @@ class LocalStack:
         })
         return env
 
-    def start_mock(self) -> None:
+    def start_mock(self, delay_ms: int = 0) -> None:
         log = (self.log_dir / "mock.log").open("w")
         self.mock_process = subprocess.Popen(
-            [str(MOCK_SCRIPT), "--port", str(self.mock_port), "--delay", "0"],
+            [str(MOCK_SCRIPT), "--port", str(self.mock_port),
+             "--delay", str(delay_ms)],
             cwd=str(PROJECT_DIR), stdout=log, stderr=subprocess.STDOUT,
             env=dict(os.environ),
         )
@@ -215,7 +216,8 @@ class LocalStack:
 
     def start_app(self, extra_env: dict[str, str] | None = None,
                   port: int | None = None,
-                  database: str | None = None) -> str:
+                  database: str | None = None,
+                  extra_args: list[str] | None = None) -> str:
         self.stop_app()
         port = port or self.app_port
         env = self._base_env(database)
@@ -223,11 +225,13 @@ class LocalStack:
             env.update({k: str(v) for k, v in extra_env.items()})
         jar = self.demo_jar()
         log = (self.log_dir / f"app-{port}.log").open("w")
+        args = ["java", "-jar", str(jar), f"--server.port={port}",
+                # demo 自带的 application.yml 会遮蔽 core jar 里的同名配置，
+                # 因此 root key 直接走命令行属性，避免依赖 RAG_ROOT_API_KEY 绑定。
+                f"--rag.security.root-api-key={ROOT_API_KEY}"]
+        args.extend(extra_args or [])
         self.app_process = subprocess.Popen(
-            ["java", "-jar", str(jar), f"--server.port={port}",
-             # demo 自带的 application.yml 会遮蔽 core jar 里的同名配置，
-             # 因此 root key 直接走命令行属性，避免依赖 RAG_ROOT_API_KEY 绑定。
-             f"--rag.security.root-api-key={ROOT_API_KEY}"],
+            args,
             cwd=str(PROJECT_DIR), stdout=log, stderr=subprocess.STDOUT, env=env,
         )
         log.close()
@@ -235,6 +239,17 @@ class LocalStack:
                         f"demo（端口 {port}）", process=self.app_process,
                         log_file=self.log_dir / f"app-{port}.log")
         return f"http://127.0.0.1:{port}"
+
+    def kill_app(self) -> None:
+        """发送 SIGKILL，模拟进程被强杀；不等待任何优雅关闭钩子。"""
+        process = self.app_process
+        if process is None:
+            return
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=10)
+        self.app_process = None
+        self._kill_port(self.app_port)
 
     def stop_app(self) -> None:
         process = self.app_process

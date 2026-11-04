@@ -267,6 +267,17 @@ class AlertControllerTest {
         assertTrue(response.getBody().isMet());
     }
 
+    @Test
+    void checkSlo_invalidDate_isBadRequestNotServerError() {
+        // Contract says 400 for a bad date. `ZonedDateTime.parse` throws
+        // DateTimeParseException, which would surface as 500 if it bubbled out.
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> controller.checkSlo("availability", "not-a-date", "2026-04-02T00:00:00+08:00"));
+
+        assertTrue(error.getMessage().contains("ISO-8601"), error.getMessage());
+        verifyNoInteractions(alertService);
+    }
+
     // ==================== SLO Config CRUD ====================
 
     @Test

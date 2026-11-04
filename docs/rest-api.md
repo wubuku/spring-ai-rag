@@ -3062,8 +3062,7 @@ reads the whole page's counts with one grouped query, not one count per row.
 
 ### `GET /api/v1/rag/ab/experiments/{id}`
 
-One experiment by id. 404 when it does not exist (the service throws
-`IllegalArgumentException("Experiment not found: {id}")`).
+One experiment by id. Returns `404 NOT_FOUND` when it does not exist.
 
 Added in Batch 932, for the same reason: the detail view called this path and
 there was no handler behind it.
@@ -3260,7 +3259,9 @@ Get all SLO definitions.
 
 ### `GET /api/v1/rag/alerts/slos/{sloName}`
 
-Get details of a specific SLO.
+Get details of a specific SLO. Requires the `startDate`/`endDate` query parameters
+(ISO-8601 date-time). An unparseable date returns `400`; an unknown `sloName` still
+returns `200` with a zero-valued status rather than 404.
 
 ### `POST /api/v1/rag/alerts/slos`
 
@@ -3926,7 +3927,8 @@ document bodies, or credentials.
 ### `GET /api/v1/rag/data-governance/erasures/{operationId}`
 
 Returns the low-sensitivity status visible to the operation owner, including completed categories,
-remaining categories, and stable error codes.
+remaining categories, and stable error codes. An unknown `operationId` (or one owned by a
+different principal) returns `404 NOT_FOUND`.
 
 ### `POST /api/v1/rag/data-governance/erasures/{operationId}/apply`
 

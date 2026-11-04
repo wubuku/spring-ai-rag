@@ -366,12 +366,12 @@ of in someone's memory:
 | Layer | Trigger | Workflow | Includes | Excludes |
 |-------|---------|----------|----------|----------|
 | PR fast | push to `main`/`develop`, PR to `main`; a newer commit cancels the stale run | `.github/workflows/ci.yml` | `mvn test` (including `OpenApiContractTest` and `WebUiRouteContract`), `verify-project-tests.sh`, `verify-project-docs.sh`, Flyway migration inventory, WebUI lint/unit/coverage thresholds/build/mock E2E | gated PostgreSQL, real models, goldenset, soak, `*-real.spec.ts` |
-| Long-running | daily 18:00 UTC (02:00 Asia/Shanghai) and manual `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL (33 suites), upstream/embedding failure modes (controlled provider + isolated PG, no real models), real LLM smoke + goldenset + retrieval regression, bounded soak, real WebUI specs that need no manual fixtures | `alerts-real` (needs preset alert/delivery IDs) and `rerank-document-diversity-real` (needs a rerank fixture) |
+| Long-running | daily 18:00 UTC (02:00 Asia/Shanghai) and manual `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL (33 suites), upstream/embedding failure modes (controlled provider + isolated PG, no real models), crash consistency (real `SIGKILL`) and the endpoint behaviour runtime matrix (controlled provider + isolated PG), real LLM smoke + goldenset + retrieval regression, bounded soak, real WebUI specs that need no manual fixtures | `alerts-real` (needs preset alert/delivery IDs) and `rerank-document-diversity-real` (needs a rerank fixture) |
 
 The PR layer is bounded by job-level `timeout-minutes` (backend 45, webui 30).
 Gated IT takes about 9–19 minutes locally; keeping it in the PR layer would push
 feedback past twenty minutes, so it runs only in nightly. Each nightly job has
-its own timeout (90/60/60/30/75 minutes) and they do not block each other.
+its own timeout (90/60/60/60/30/75 minutes) and they do not block each other.
 
 The failure-modes job runs `python3 scripts/verify-upstream-recovery-e2e.py`
 (chat 500/429/timeout/connection drop/malformed response/SSE truncation, history
@@ -379,6 +379,29 @@ residue, metrics and logs) and `python3 scripts/verify-embedding-failure-e2e.py`
 (upload/import/retrieval degradation, bounded calls, no half-written vectors).
 Both bring their own isolated PostgreSQL container and controlled provider, so
 they need no real-model secrets and stay out of the PR layer.
+
+The resilience job runs two scripts:
+
+- `python3 scripts/verify-crash-consistency-e2e.py`: real PostgreSQL + mock
+  provider + `SIGKILL`, four scenarios — an embedding job killed mid-flight, a
+  batch upload killed mid-flight, a chat SSE stream killed mid-flight, and an
+  idempotent chat request killed mid-flight. Each asserts eventual convergence:
+  no job stuck in `INDEXING`/`PROCESSING`, an expired lease handed to a restarted
+  instance, `chunk_count` equal to the vector row count, retries that never stay
+  409, and no half-written history message. The observable convergence bounds
+  are in the script header: **embedding 60 s** (30 s lease + 10 s scan + 20 s
+  margin) and **chat session/idempotency 45 s** (30 s lease + 15 s retry margin).
+- `python3 scripts/verify-endpoint-behavior-e2e.py`: runs the matrix against a
+  real process — 195 endpoints × unauthenticated 401, invalid parameter 400,
+  missing resource 404 (or a documented exception the matrix states a reason
+  for), plus 21 success probes (JSON / SSE / multipart / the `/v1`
+  OpenAI-compatible surface). The static half,
+  `node scripts/verify-endpoint-behavior-matrix.mjs`, runs in the PR layer
+  (`verify-project-tests.sh`); a newly documented endpoint with no matrix entry
+  fails immediately.
+
+Both scripts carry their own isolated PostgreSQL and controlled provider, so
+neither needs a secret.
 
 Flyway **application** is verified in nightly's gated PostgreSQL, where Spring Boot
 actually starts and runs the migrations. The PR layer only checks the migration
@@ -406,15 +429,15 @@ without that variable, they still scan the working tree).
   one bounded retry; two consecutive failures still fail.
 - Artifacts are retained for 14–30 days: `backend-test-results`,
   `backend-gate-logs`, `jacoco-reports`, `webui-playwright-report`,
-  `nightly-gated-it`, `nightly-failure-modes`, `nightly-real-llm`,
-  `nightly-soak`, `nightly-webui-real`.
+  `nightly-gated-it`, `nightly-failure-modes`, `nightly-resilience`,
+  `nightly-real-llm`, `nightly-soak`, `nightly-webui-real`.
   Download with `gh run list --workflow=nightly.yml` and
   `gh run download <run-id>`.
 
 ### Nightly Failure Notification (Issue Automation)
 
 A red nightly run only shows up on the Actions page, which nobody checks daily.
-The `report` job runs after the five check jobs (`if: always()`) and folds the
+The `report` job runs after the six check jobs (`if: always()`) and folds the
 result into a single tracking issue with a fixed title:
 
 - The title is always `[Nightly] Long-running layer failing`. A failing run only
@@ -432,7 +455,7 @@ result into a single tracking issue with a fixed title:
   the issue as a failure (with a minimal fallback body), so a broken reporter
   never becomes a missing notification.
 - Real rehearsal: `gh workflow run nightly.yml -f debug_report_failure=true`
-  runs only the `report` job, skips the five check jobs (no model calls), and
+  runs only the `report` job, skips all check jobs (no model calls), and
   exercises the real create/update/comment path under the title
   `[TEST] Nightly issue automation debug`. Close that TEST issue afterwards.
   The switch never touches the real tracker, and a plain manual dispatch still
@@ -528,6 +551,11 @@ npm run test:e2e:mock
 
 # Nightly gated IT
 ./scripts/verify-gated-it.sh
+
+# Nightly crash consistency and endpoint behaviour runtime matrix
+# (isolated PG + mock provider)
+python3 scripts/verify-crash-consistency-e2e.py
+python3 scripts/verify-endpoint-behavior-e2e.py
 ```
 
 Real-model and real-WebUI commands are in

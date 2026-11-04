@@ -16,6 +16,7 @@ import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -458,6 +459,16 @@ public final class DataErasureService {
     }
 
     private Operation load(UUID id) {
+        try {
+            return queryOperation(id);
+        } catch (EmptyResultDataAccessException notFound) {
+            // 不存在的数据擦除操作应返回 404，而不是被当作数据库错误 500。
+            throw new RagException(ErrorCode.NOT_FOUND,
+                    "Data erasure operation not found: " + id);
+        }
+    }
+
+    private Operation queryOperation(UUID id) {
         return jdbcTemplate.queryForObject(
                 "SELECT operation_id, owner_principal_id, target_principal_id, session_id, trace_id, "
                         + "scope_fingerprint, confirmation_token_hash, preview_counts::text, completed_counts::text, "

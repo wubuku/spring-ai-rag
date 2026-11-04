@@ -6,6 +6,7 @@ import com.springairag.core.config.RagProperties;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.EmbeddingCommitGuard;
 import com.springairag.core.service.EmbeddingCommitRejectedException;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,6 +58,15 @@ class EmbeddingJobWorkerTest {
     @AfterEach
     void tearDown() {
         worker.shutdown();
+    }
+
+    @Test
+    void workerBeanIsEnabledWhenPropertyIsMissing() {
+        // 外部应用常以自己的 application.yml 遮蔽 core 配置；
+        // 属性缺失时必须保持新能力默认启用，否则异步摄入会永久停在 QUEUED。
+        ConditionalOnProperty condition = EmbeddingJobWorker.class
+                .getAnnotation(ConditionalOnProperty.class);
+        assertEquals(true, condition.matchIfMissing());
     }
 
     @Test

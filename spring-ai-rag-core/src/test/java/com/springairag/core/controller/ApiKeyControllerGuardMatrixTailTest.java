@@ -109,7 +109,8 @@ class ApiKeyControllerGuardMatrixTailTest {
         adminRequest.addHeader("Idempotency-Key",
                 java.util.UUID.randomUUID().toString());
         var response = controller(collectionIdentityResolver)
-                .prepareRotation("rag_k_ghost", null, adminRequest);
+                .prepareRotation("rag_k_ghost", null,
+                        adminRequest.getHeader("Idempotency-Key"), adminRequest);
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
         assertTrue(response.getHeaders().getCacheControl().contains("no-store"));

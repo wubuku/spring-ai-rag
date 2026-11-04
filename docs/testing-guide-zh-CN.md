@@ -329,17 +329,33 @@ workflow 里，而不是靠人记得：
 | 层 | 触发 | 工作流 | 包含 | 不包含 |
 |----|------|--------|------|--------|
 | PR 快层 | push `main`/`develop`、PR → `main`；同分支新提交自动取消旧运行 | `.github/workflows/ci.yml` | `mvn test`（含 `OpenApiContractTest` 与 `WebUiRouteContract`）、`verify-project-tests.sh`、`verify-project-docs.sh`、Flyway 迁移清单校验、WebUI lint/单测/覆盖率阈值/构建/Mock E2E | gated PostgreSQL、真实模型、goldenset、soak、`*-real.spec.ts` |
-| 长跑层 | 每日 18:00 UTC（北京时间 02:00）与手动 `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL（31 套件）、上游/Embedding 故障模式（受控 provider + 隔离 PG，无需真实模型）、真实 LLM smoke + goldenset + 检索回归、有界 soak、无需人工 fixture 的真实 WebUI spec | 需要预置告警/投递 ID 的 `alerts-real`、需要 rerank fixture 的 `rerank-document-diversity-real` |
+| 长跑层 | 每日 18:00 UTC（北京时间 02:00）与手动 `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL（31 套件）、上游/Embedding 故障模式（受控 provider + 隔离 PG，无需真实模型）、崩溃一致性（真实 `SIGKILL`）与端点行为运行时矩阵（受控 provider + 隔离 PG）、真实 LLM smoke + goldenset + 检索回归、有界 soak、无需人工 fixture 的真实 WebUI spec | 需要预置告警/投递 ID 的 `alerts-real`、需要 rerank fixture 的 `rerank-document-diversity-real` |
 
 PR 层的时间预算由 job 级 `timeout-minutes` 固定（backend 45、webui 30）。gated IT
 本地约 9–19 分钟，放在 PR 层会把反馈时间拖到 20 分钟以上，所以它只在 nightly 跑；
-nightly 的每个 job 各自有超时（90/60/60/30/75 分钟），互相不阻塞。
+nightly 的每个 job 各自有超时（90/60/60/60/30/75 分钟），互相不阻塞。
 
 故障模式 job（`failure-modes`）跑两条脚本：
 `python3 scripts/verify-upstream-recovery-e2e.py`（chat 500/429/超时/连接中断/畸形响应/SSE 断流、
 历史残留、指标与日志）和 `python3 scripts/verify-embedding-failure-e2e.py`
 （上传/导入/检索降级、有界调用、无半写向量）。两者都自带隔离 PostgreSQL 容器和
 controlled provider，不读取真实模型密钥，因此不需要放在 PR 层，也不需要 secret。
+
+崩溃一致性 job（`resilience`）跑两条脚本：
+
+- `python3 scripts/verify-crash-consistency-e2e.py`：真实 PostgreSQL + mock provider
+  + `SIGKILL`，四个场景——嵌入任务中途杀进程、批量上传中途杀进程、聊天 SSE 中途
+  杀进程、聊天幂等请求中途杀进程。断言最终收敛：任务不停在 `INDEXING`/`PROCESSING`、
+  重启后租约到期能被接管、`chunk_count` 与向量行数一致、重试不永久 409、历史不落
+  半截消息。可观测收敛上界写在脚本头部：**嵌入 60s**（租约 30s + 扫描周期 10s +
+  余量 20s）、**聊天会话/幂等 45s**（租约 30s + 重试余量 15s）。
+- `python3 scripts/verify-endpoint-behavior-e2e.py`：按矩阵对真实进程执行 195 个端点
+  的未认证 401、非法参数 400、不存在 404（或矩阵写明理由的合法例外），以及 21 个
+  成功探针（JSON / SSE / multipart / `/v1` OpenAI 兼容面）。
+  静态部分 `node scripts/verify-endpoint-behavior-matrix.mjs` 在 PR 层
+  （`verify-project-tests.sh`），文档或 OpenAPI 新增端点却没有矩阵条目会直接失败。
+
+两条脚本都自带隔离 PostgreSQL 与 controlled provider，不需要 secret。
 
 Flyway 的**应用**校验放在 nightly 的 gated PostgreSQL：那里会真正启动 Spring Boot
 并执行迁移。PR 层只校验迁移清单结构（命名、重复版本号），因为 `mvn test` 不启动
@@ -362,12 +378,13 @@ CI 的 backend checkout 使用 `fetch-depth: 0`，PR 上把 `DOCS_DIFF_BASE` 设
   smoke 里的 OpenAI-compatible JSON 断言同理允许一次有界重试，连续两次失败仍然报错。
 - artifact 保留 14–30 天：`backend-test-results`、`backend-gate-logs`、
   `jacoco-reports`、`webui-playwright-report`、`nightly-gated-it`、
-  `nightly-failure-modes`、`nightly-real-llm`、`nightly-soak`、`nightly-webui-real`。下载：
+  `nightly-failure-modes`、`nightly-resilience`、`nightly-real-llm`、`nightly-soak`、
+  `nightly-webui-real`。下载：
   `gh run list --workflow=nightly.yml`，然后 `gh run download <run-id>`。
 
 ### Nightly 失败通知（Issue 自动化）
 
-nightly 的红色只出现在 Actions 页面，没人会每天看。`report` job 在五个检查 job
+nightly 的红色只出现在 Actions 页面，没人会每天看。`report` job 在六个检查 job
 之后运行（`if: always()`），把结果汇总到一个固定标题的追踪 issue：
 
 - 标题固定为 `[Nightly] Long-running layer failing`；失败的 run 只会**更新**这个
@@ -381,7 +398,7 @@ nightly 的红色只出现在 Actions 页面，没人会每天看。`report` job
 - 如果汇总脚本自身失败，`report` job 仍按失败创建/更新 issue（正文退化为最小信息），
   不会出现“报告挂了所以没通知”。
 - 真实演练：`gh workflow run nightly.yml -f debug_report_failure=true` 只跑 `report`
-  job，跳过四个检查 job（不产生模型调用），用 `[TEST] Nightly issue automation debug`
+  job，跳过全部检查 job（不产生模型调用），用 `[TEST] Nightly issue automation debug`
   标题走完真实的创建/更新/评论路径；跑完后手动关闭该 TEST issue。该开关永远不会碰
   真实追踪 issue，普通手动 dispatch 也仍然不动 issue。
 
@@ -466,6 +483,10 @@ npm run test:e2e:mock
 
 # nightly 的 gated IT
 ./scripts/verify-gated-it.sh
+
+# nightly 的崩溃一致性与端点行为运行时矩阵（隔离 PG + mock provider）
+python3 scripts/verify-crash-consistency-e2e.py
+python3 scripts/verify-endpoint-behavior-e2e.py
 ```
 
 真实模型与真实 WebUI 的命令见 [developer-reference-zh-CN.md](developer-reference-zh-CN.md)

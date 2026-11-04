@@ -1,8 +1,10 @@
 package com.springairag.core.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.api.service.AbTestService;
 import com.springairag.core.entity.RagAbExperiment;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagAbExperimentRepository;
 import com.springairag.core.repository.RagAbResultRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -236,8 +238,9 @@ class AbTestServiceImplListingTest {
         void unknownIdIsRejected() {
             when(experimentRepository.findById(404L)).thenReturn(Optional.empty());
 
-            IllegalArgumentException thrown = assertThrows(
-                    IllegalArgumentException.class, () -> service.getExperiment(404L));
+            RagException thrown = assertThrows(
+                    RagException.class, () -> service.getExperiment(404L));
+            assertEquals(ErrorCode.NOT_FOUND, thrown.getErrorCodeEnum());
             assertTrue(thrown.getMessage().contains("404"),
                     "the message has to name the id that was not found");
         }

@@ -1,8 +1,10 @@
 package com.springairag.core.service;
 
 import com.springairag.api.service.AbTestService;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.entity.RagAbExperiment;
 import com.springairag.core.entity.RagAbResult;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagAbExperimentRepository;
 import com.springairag.core.repository.RagAbResultRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,6 +41,17 @@ class AbTestServiceImplTest {
     @BeforeEach
     void setUp() {
         abTestService = new AbTestServiceImpl(experimentRepository, resultRepository, new ObjectMapper());
+    }
+
+    @Test
+    void getExperiment_missing_returnsNotFound() {
+        // 契约声明 404。抛 IllegalArgumentException 会被统一异常处理器映射成 400。
+        when(experimentRepository.findById(99L)).thenReturn(Optional.empty());
+
+        RagException error = assertThrows(RagException.class,
+                () -> abTestService.getExperiment(99L));
+
+        assertEquals(ErrorCode.NOT_FOUND, error.getErrorCodeEnum());
     }
 
     // ==================== Create Experiment ====================
@@ -360,10 +373,10 @@ class AbTestServiceImplTest {
     @Test
     void recordResult_experimentNotFound() {
         when(experimentRepository.findById(99L)).thenReturn(Optional.empty());
-        when(resultRepository.existsBySessionIdAndExperimentId(any(), any())).thenReturn(false);
 
-        assertThrows(IllegalArgumentException.class, () ->
+        RagException error = assertThrows(RagException.class, () ->
                 abTestService.recordResult(99L, "control", "s1", "q", null, null));
+        assertEquals(ErrorCode.NOT_FOUND, error.getErrorCodeEnum());
     }
 
     @Test
@@ -449,8 +462,9 @@ class AbTestServiceImplTest {
     void updateExperiment_notFound_throws() {
         when(experimentRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThrows(IllegalArgumentException.class, () ->
+        RagException error = assertThrows(RagException.class, () ->
                 abTestService.updateExperiment(99L, new AbTestService.UpdateExperimentRequest()));
+        assertEquals(ErrorCode.NOT_FOUND, error.getErrorCodeEnum());
     }
 
     // ==================== Null Parameter Validation ====================
@@ -490,19 +504,22 @@ class AbTestServiceImplTest {
     @Test
     void startExperiment_notFound_throws() {
         when(experimentRepository.findById(99L)).thenReturn(Optional.empty());
-        assertThrows(IllegalArgumentException.class, () -> abTestService.startExperiment(99L));
+        RagException error = assertThrows(RagException.class, () -> abTestService.startExperiment(99L));
+        assertEquals(ErrorCode.NOT_FOUND, error.getErrorCodeEnum());
     }
 
     @Test
     void pauseExperiment_notFound_throws() {
         when(experimentRepository.findById(99L)).thenReturn(Optional.empty());
-        assertThrows(IllegalArgumentException.class, () -> abTestService.pauseExperiment(99L));
+        RagException error = assertThrows(RagException.class, () -> abTestService.pauseExperiment(99L));
+        assertEquals(ErrorCode.NOT_FOUND, error.getErrorCodeEnum());
     }
 
     @Test
     void stopExperiment_notFound_throws() {
         when(experimentRepository.findById(99L)).thenReturn(Optional.empty());
-        assertThrows(IllegalArgumentException.class, () -> abTestService.stopExperiment(99L));
+        RagException error = assertThrows(RagException.class, () -> abTestService.stopExperiment(99L));
+        assertEquals(ErrorCode.NOT_FOUND, error.getErrorCodeEnum());
     }
 
     // ==================== Helpers ====================

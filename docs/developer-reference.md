@@ -34,6 +34,19 @@ real SDKs. Actual provider-call counts detect framework/transport/SDK implicit r
 other Maven builds. Passing this controlled gate is not real-model quality evidence;
 see [the dedicated guide](upstream-client-recovery.md).
 
+Crash consistency and the endpoint behaviour runtime matrix (both belong to the
+nightly `resilience` job, bring their own isolated PostgreSQL and mock provider,
+and need no real-model secret):
+
+```bash
+python3 scripts/verify-crash-consistency-e2e.py   # real SIGKILL: embedding/upload/SSE/idempotency
+python3 scripts/verify-endpoint-behavior-e2e.py   # 195 endpoints x 401/400/404 + 21 success probes
+```
+
+The static matrix gate runs in the PR layer: `node scripts/verify-endpoint-behavior-matrix.mjs`.
+A newly documented endpoint with no matrix entry fails immediately. Convergence
+bounds and scenario details are in the [testing guide](testing-guide.md).
+
 ```bash
 python3 scripts/test-support/rag-backup-self-test.py
 python3 scripts/verify-dependency-recovery-e2e.py

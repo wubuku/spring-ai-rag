@@ -179,6 +179,19 @@ export const GATES = [
     selfTest: 'scripts/test-support/null-request-forwarding-self-test.mjs',
   },
 
+  // 端点行为矩阵。REST 文档与 OpenAPI 基线里出现的每一个端点都必须在
+  // `testdata/api-contract/endpoint-behavior-matrix.json` 有条目，记录
+  // 未认证 401、非法参数 400、不存在 404（或写明理由的合法例外）与成功 2xx
+  // 响应形状。规则是双向的：文档新增端点没有条目会失败，矩阵条目已不存在于
+  // 文档/OpenAPI 也会失败——否则一份只增不减的表迟早变成自我声明。
+  // 运行时探针（真实 PG + mock provider）由 nightly 的 resilience job 执行，
+  // 静态部分在 PR 层；两道一起才算完整覆盖。
+  {
+    gate: 'scripts/verify-endpoint-behavior-matrix.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/endpoint-behavior-matrix-self-test.mjs',
+  },
+
   // Batch 923. A script that selects Flyway's latest version and compares it
   // against a literal stops being true the moment someone adds a migration,
   // and then fails as if the product were broken.

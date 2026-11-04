@@ -106,7 +106,7 @@ class ApiKeyControllerRootGateTailTest {
                 java.util.UUID.randomUUID().toString());
 
         var response = controller().prepareRotation(
-                "rag_k_1", null, request);
+                "rag_k_1", null, request.getHeader("Idempotency-Key"), request);
 
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
     }

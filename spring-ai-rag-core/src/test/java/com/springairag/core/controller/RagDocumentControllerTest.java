@@ -320,10 +320,16 @@ class RagDocumentControllerTest {
     }
 
     @Test
-    void deleteDocument_requiresTheExpectedRevision() {
-        IllegalArgumentException thrown = assertThrows(
-                IllegalArgumentException.class, () -> controller.deleteDocument(1L, null));
-        assertTrue(thrown.getMessage().contains("expectedDocumentRevision"));
+    void deleteDocument_requiresTheExpectedRevision() throws Exception {
+        // 缺 revision 的 400 现在由 Spring 在进入方法前产生（@RequestParam 必填），
+        // 所以这里断言的是绑定契约，而不是控制器里的手工校验。
+        var method = RagDocumentController.class.getMethod(
+                "deleteDocument", Long.class, Long.class);
+        var revision = method.getParameters()[1]
+                .getAnnotation(org.springframework.web.bind.annotation.RequestParam.class);
+
+        assertNotNull(revision);
+        assertTrue(revision.required(), "缺 revision 必须在进入方法前就 400");
         // 缺 revision 时必须一步都不走，不能先删了再说。
         verify(documentMutationService, never()).hardDeleteLocal(anyLong(), anyLong());
     }

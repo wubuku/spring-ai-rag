@@ -302,13 +302,15 @@ public class ApiKeyController {
             @PathVariable String keyId,
             @Valid @RequestBody(required = false)
             ApiKeyRotationPrepareRequest body,
+            // 显式声明为必需头部，使 OpenAPI 与真实行为一致（缺失时同样 400）。
+            @RequestHeader("Idempotency-Key") String idempotencyHeader,
             HttpServletRequest request) {
         ResponseEntity<ErrorResponse> denied = requireEnvironmentRoot(request);
         if (denied != null) {
             return denied;
         }
         String idempotencyKey = IdempotencyKeyValidator.normalize(
-                Collections.list(request.getHeaders("Idempotency-Key")));
+                List.of(idempotencyHeader));
         if (idempotencyKey == null) {
             throw new RagException(
                     ErrorCode.IDEMPOTENCY_KEY_INVALID,

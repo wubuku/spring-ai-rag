@@ -1,7 +1,9 @@
 package com.springairag.core.service;
 
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.api.service.AbTestService;
 import com.springairag.core.entity.RagAbExperiment;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.entity.RagAbResult;
 import com.springairag.core.repository.RagAbExperimentRepository;
 import com.springairag.core.repository.RagAbResultRepository;
@@ -34,6 +36,12 @@ public class AbTestServiceImpl implements AbTestService {
      * for a million rows from.
      */
     private static final int MAX_PAGE_SIZE = 200;
+
+    private static RagException notFound(Long experimentId) {
+        // OpenAPI 声明 404；此前抛 IllegalArgumentException 被统一映射成 400。
+        return new RagException(ErrorCode.NOT_FOUND,
+                "Experiment not found: " + experimentId);
+    }
 
     private final RagAbExperimentRepository experimentRepository;
     private final RagAbResultRepository resultRepository;
@@ -78,7 +86,7 @@ public class AbTestServiceImpl implements AbTestService {
         }
         Objects.requireNonNull(request, "UpdateExperimentRequest must not be null");
         RagAbExperiment entity = experimentRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Experiment not found: " + id));
+                .orElseThrow(() -> notFound(id));
 
         if ("RUNNING".equals(entity.getStatus())) {
             throw new IllegalStateException("Cannot update a running experiment");
@@ -106,7 +114,7 @@ public class AbTestServiceImpl implements AbTestService {
             throw new IllegalArgumentException("Experiment id must not be null");
         }
         RagAbExperiment entity = experimentRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Experiment not found: " + id));
+                .orElseThrow(() -> notFound(id));
 
         if (!"DRAFT".equals(entity.getStatus()) && !"PAUSED".equals(entity.getStatus())) {
             throw new IllegalStateException("Can only start DRAFT or PAUSED experiments");
@@ -125,7 +133,7 @@ public class AbTestServiceImpl implements AbTestService {
             throw new IllegalArgumentException("Experiment id must not be null");
         }
         RagAbExperiment entity = experimentRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Experiment not found: " + id));
+                .orElseThrow(() -> notFound(id));
 
         if (!"RUNNING".equals(entity.getStatus())) {
             throw new IllegalStateException("Can only pause RUNNING experiments");
@@ -143,7 +151,7 @@ public class AbTestServiceImpl implements AbTestService {
             throw new IllegalArgumentException("Experiment id must not be null");
         }
         RagAbExperiment entity = experimentRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Experiment not found: " + id));
+                .orElseThrow(() -> notFound(id));
 
         entity.setStatus("COMPLETED");
         entity.setEndTime(ZonedDateTime.now());
@@ -181,7 +189,7 @@ public class AbTestServiceImpl implements AbTestService {
             throw new IllegalArgumentException("Experiment id must not be null");
         }
         RagAbExperiment entity = experimentRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Experiment not found: " + id));
+                .orElseThrow(() -> notFound(id));
         // Routed through the batch mapper so the count is fetched the same way
         // it is for a page of them, rather than by a second code path that
         // could report a zero nobody measured.
@@ -236,7 +244,7 @@ public class AbTestServiceImpl implements AbTestService {
             throw new IllegalArgumentException("Experiment id must not be null");
         }
         RagAbExperiment entity = experimentRepository.findById(experimentId)
-                .orElseThrow(() -> new IllegalArgumentException("Experiment not found: " + experimentId));
+                .orElseThrow(() -> notFound(experimentId));
 
         // Math.floorMod guarantees non-negative result [0,99], unlike Math.abs which overflows on Integer.MIN_VALUE
         int hash = Math.floorMod(Objects.hash(sessionId, experimentId), 100);
@@ -270,7 +278,7 @@ public class AbTestServiceImpl implements AbTestService {
         }
 
         RagAbExperiment experiment = experimentRepository.findById(experimentId)
-                .orElseThrow(() -> new IllegalArgumentException("Experiment not found: " + experimentId));
+                .orElseThrow(() -> notFound(experimentId));
 
         RagAbResult result = new RagAbResult();
         result.setExperiment(experiment);
@@ -299,7 +307,7 @@ public class AbTestServiceImpl implements AbTestService {
             throw new IllegalArgumentException("Experiment id must not be null");
         }
         RagAbExperiment experiment = experimentRepository.findById(experimentId)
-                .orElseThrow(() -> new IllegalArgumentException("Experiment not found: " + experimentId));
+                .orElseThrow(() -> notFound(experimentId));
 
         List<RagAbResult> results = resultRepository.findByExperimentId(experimentId);
         Map<String, List<RagAbResult>> resultsByVariant = results.stream()

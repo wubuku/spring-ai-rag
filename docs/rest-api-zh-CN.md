@@ -2677,8 +2677,7 @@ Batch 932 新增。此前 WebUI 的实验列表页调的就是这条路径，而
 
 ### `GET /api/v1/rag/ab/experiments/{id}`
 
-按 id 获取单个实验。实验不存在时返回 404（服务层抛
-`IllegalArgumentException("Experiment not found: {id}")`）。
+按 id 获取单个实验。实验不存在时返回 `404 NOT_FOUND`。
 
 Batch 932 新增，理由同上：详情页调的是这条路径，此前也没有处理器。
 
@@ -2861,7 +2860,9 @@ secret、错误正文或堆栈。
 
 ### `GET /api/v1/rag/alerts/slos/{sloName}`
 
-获取指定 SLO 的详情。
+获取指定 SLO 的详情，必填 query parameter `startDate`/`endDate`（ISO-8601
+date-time）。日期无法解析返回 `400`；`sloName` 无对应配置时仍返回 `200` 与零值状态，
+而不是 404。
 
 ### `POST /api/v1/rag/alerts/slos`
 
@@ -3479,6 +3480,7 @@ prompt、回答、文档正文或密钥。
 ### `GET /api/v1/rag/data-governance/erasures/{operationId}`
 
 返回同一 owner 可见的低敏擦除状态，包括已完成类别、剩余类别和稳定错误码。
+`operationId` 不存在（或不属于该 owner）返回 `404 NOT_FOUND`。
 
 ### `POST /api/v1/rag/data-governance/erasures/{operationId}/apply`
 

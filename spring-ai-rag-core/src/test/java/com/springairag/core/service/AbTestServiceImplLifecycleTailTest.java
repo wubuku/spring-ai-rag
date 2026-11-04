@@ -1,9 +1,11 @@
 package com.springairag.core.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.api.service.AbTestService;
 import com.springairag.core.entity.RagAbExperiment;
 import com.springairag.core.entity.RagAbResult;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagAbExperimentRepository;
 import com.springairag.core.repository.RagAbResultRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -115,9 +117,10 @@ class AbTestServiceImplLifecycleTailTest {
                 () -> service.updateExperiment(null,
                         new AbTestService.UpdateExperimentRequest()));
 
-        assertThrows(IllegalArgumentException.class,
+        RagException missing = assertThrows(RagException.class,
                 () -> service.updateExperiment(9L,
                         new AbTestService.UpdateExperimentRequest()));
+        assertEquals(ErrorCode.NOT_FOUND, missing.getErrorCodeEnum());
 
         RagAbExperiment running = experiment(1L, "RUNNING");
         when(experimentRepository.findById(1L))
@@ -182,8 +185,9 @@ class AbTestServiceImplLifecycleTailTest {
         assertThrows(IllegalArgumentException.class,
                 () -> service.getVariantForSession("s1", null));
         when(experimentRepository.findById(8L)).thenReturn(Optional.empty());
-        assertThrows(IllegalArgumentException.class,
+        RagException missing = assertThrows(RagException.class,
                 () -> service.getVariantForSession("s1", 8L));
+        assertEquals(ErrorCode.NOT_FOUND, missing.getErrorCodeEnum());
 
         String first = service.getVariantForSession("session-a", 7L);
         assertEquals(first, service.getVariantForSession("session-a", 7L));

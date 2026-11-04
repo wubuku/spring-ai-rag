@@ -355,12 +355,8 @@ public class RagDocumentController {
     @Timed(value = "rag.documents.delete", description = "Delete a document", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<DocumentDeleteResponse> deleteDocument(
             @PathVariable Long id,
-            @RequestParam(required = false) Long expectedDocumentRevision) {
+            @RequestParam Long expectedDocumentRevision) {
         requireDocumentAccess(id);
-        if (expectedDocumentRevision == null) {
-            throw new IllegalArgumentException(
-                    "expectedDocumentRevision is required for permanent deletion");
-        }
         DocumentMutationService.DeletedLocal deleted =
                 documentMutationService.hardDeleteLocal(
                         id, expectedDocumentRevision);

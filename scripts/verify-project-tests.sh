@@ -201,6 +201,19 @@ pass "Null-request forwarding self-test"
 node scripts/verify-null-request-forwarding.mjs
 pass "Null-request forwarding"
 
+# 端点行为矩阵：文档与 OpenAPI 里的每个端点都必须在矩阵中有条目。这条规则
+# 只能靠"清单对清单"来守，靠人记一定会漏——所以它进 PR 层，静态部分每次
+# 提交都跑；真实 PG + mock provider 的运行时探针在 nightly 的 resilience job。
+node scripts/test-support/endpoint-behavior-matrix-self-test.mjs >/dev/null || {
+  echo "Endpoint-behavior-matrix self-test failed; the gate may no longer reject anything." >&2
+  node scripts/test-support/endpoint-behavior-matrix-self-test.mjs >&2 || true
+  exit 1
+}
+pass "Endpoint-behavior-matrix self-test"
+
+node scripts/verify-endpoint-behavior-matrix.mjs
+pass "Endpoint behavior matrix"
+
 # A collaborator injected with @Autowired(required = false) claims it may be
 # absent. For all twelve of them the bean is an unconditional @Service, so the
 # null branch is unreachable in a running application — while seven genuinely

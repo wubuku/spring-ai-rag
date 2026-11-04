@@ -31,6 +31,18 @@ Maven/SDK构建仍须串行。两演练只操作自有隔离库，分别将私�
 断言每请求实际 provider 次数，防止框架/传输/SDK 隐式重试；与其他 Maven 构建严格串行。
 命令成功不代表真实模型质量已验证；详见[专项说明](upstream-client-recovery-zh-CN.md)。
 
+崩溃一致性与端点行为运行时矩阵（同属 nightly `resilience` job，自带隔离 PostgreSQL 与
+mock provider，不需要真实模型密钥）：
+
+```bash
+python3 scripts/verify-crash-consistency-e2e.py   # 真实 SIGKILL：嵌入任务/上传/SSE/幂等
+python3 scripts/verify-endpoint-behavior-e2e.py   # 195 端点 × 401/400/404 + 21 个成功探针
+```
+
+静态矩阵门禁在 PR 层：`node scripts/verify-endpoint-behavior-matrix.mjs`，
+文档或 OpenAPI 新增端点却缺少矩阵条目会直接失败。收敛上界与场景说明见
+[测试指南](testing-guide-zh-CN.md#nightly-失败通知)。
+
 ```bash
 python3 scripts/test-support/rag-backup-self-test.py
 python3 scripts/verify-dependency-recovery-e2e.py

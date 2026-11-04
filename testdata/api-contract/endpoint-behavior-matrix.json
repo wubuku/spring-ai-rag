@@ -1,0 +1,5454 @@
+{
+  "version": 1,
+  "source": [
+    "testdata/api-contract/openapi-baseline.json",
+    "docs/rest-api-zh-CN.md"
+  ],
+  "entries": [
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rag/alerts/silence-schedules/{name}",
+      "canonicalPath": "/api/v1/rag/alerts/silence-schedules/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 204,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "name",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rag/alerts/silence/{alertKey}",
+      "canonicalPath": "/api/v1/rag/alerts/silence/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 200,
+          "reason": "告警静默为幂等删除，不存在时仍返回 success=false"
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "alertKey",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rag/alerts/slos/configs/{sloName}",
+      "canonicalPath": "/api/v1/rag/alerts/slos/configs/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 204,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "sloName",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rag/api-keys/{keyId}",
+      "canonicalPath": "/api/v1/rag/api-keys/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 204,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "keyId",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rag/cache/invalidate",
+      "canonicalPath": "/api/v1/rag/cache/invalidate",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rag/chat/history/{sessionId}",
+      "canonicalPath": "/api/v1/rag/chat/history/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "sessionId",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rag/collections/{id}",
+      "canonicalPath": "/api/v1/rag/collections/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rag/collections/by-key",
+      "canonicalPath": "/api/v1/rag/collections/by-key",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rag/documents/{id}",
+      "canonicalPath": "/api/v1/rag/documents/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "expectedDocumentRevision"
+          ]
+        }
+      },
+      "successProbe": "document-delete",
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ],
+      "missingQuery": [
+        {
+          "name": "expectedDocumentRevision",
+          "value": "999999"
+        }
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rag/documents/batch",
+      "canonicalPath": "/api/v1/rag/documents/batch",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rag/documents/by-external-id",
+      "canonicalPath": "/api/v1/rag/documents/by-external-id",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey",
+            "externalId",
+            "sourceRevision"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rag/json-records/by-external-id",
+      "canonicalPath": "/api/v1/rag/json-records/by-external-id",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey",
+            "externalId",
+            "sourceRevision"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/rag/metrics/slow-queries",
+      "canonicalPath": "/api/v1/rag/metrics/slow-queries",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/ab/experiments",
+      "canonicalPath": "/api/v1/rag/ab/experiments",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/ab/experiments/{id}",
+      "canonicalPath": "/api/v1/rag/ab/experiments/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/ab/experiments/{id}/analysis",
+      "canonicalPath": "/api/v1/rag/ab/experiments/{}/analysis",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/ab/experiments/{id}/results",
+      "canonicalPath": "/api/v1/rag/ab/experiments/{}/results",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 200,
+          "reason": "结果查询对不存在实验返回空数组"
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/ab/experiments/{id}/variant",
+      "canonicalPath": "/api/v1/rag/ab/experiments/{}/variant",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "sessionId"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ],
+      "missingQuery": [
+        {
+          "name": "sessionId",
+          "value": "probe"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/ab/experiments/running",
+      "canonicalPath": "/api/v1/rag/ab/experiments/running",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/alerts/active",
+      "canonicalPath": "/api/v1/rag/alerts/active",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/alerts/history",
+      "canonicalPath": "/api/v1/rag/alerts/history",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "startDate",
+            "endDate"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/alerts/notification-deliveries",
+      "canonicalPath": "/api/v1/rag/alerts/notification-deliveries",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/alerts/silence",
+      "canonicalPath": "/api/v1/rag/alerts/silence",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/alerts/silence-schedules",
+      "canonicalPath": "/api/v1/rag/alerts/silence-schedules",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/alerts/silence-schedules/{name}",
+      "canonicalPath": "/api/v1/rag/alerts/silence-schedules/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "name",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/alerts/slos",
+      "canonicalPath": "/api/v1/rag/alerts/slos",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "startDate",
+            "endDate"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/alerts/slos/{sloName}",
+      "canonicalPath": "/api/v1/rag/alerts/slos/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 200,
+          "reason": "未配置的 SLO 返回零值状态，OpenAPI 也声明 200"
+        },
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "startDate",
+            "endDate"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "sloName",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "missingQuery": [
+        {
+          "name": "startDate",
+          "value": "2026-01-01T00:00:00Z"
+        },
+        {
+          "name": "endDate",
+          "value": "2026-01-02T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/alerts/slos/configs",
+      "canonicalPath": "/api/v1/rag/alerts/slos/configs",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/alerts/slos/configs/{sloName}",
+      "canonicalPath": "/api/v1/rag/alerts/slos/configs/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "sloName",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/alerts/stats",
+      "canonicalPath": "/api/v1/rag/alerts/stats",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "startDate",
+            "endDate"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/api-keys",
+      "canonicalPath": "/api/v1/rag/api-keys",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/api-keys/principals",
+      "canonicalPath": "/api/v1/rag/api-keys/principals",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/api-keys/rotations/{rotationId}",
+      "canonicalPath": "/api/v1/rag/api-keys/rotations/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "rotationId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/audit-logs",
+      "canonicalPath": "/api/v1/rag/audit-logs",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/auth/me",
+      "canonicalPath": "/api/v1/rag/auth/me",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/cache/stats",
+      "canonicalPath": "/api/v1/rag/cache/stats",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": "cache-stats",
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/chat/export/{sessionId}",
+      "canonicalPath": "/api/v1/rag/chat/export/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "sessionId",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/chat/history/{sessionId}",
+      "canonicalPath": "/api/v1/rag/chat/history/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "sessionId",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/chat/turns/{turnId}",
+      "canonicalPath": "/api/v1/rag/chat/turns/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "turnId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/client-errors/count",
+      "canonicalPath": "/api/v1/rag/client-errors/count",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/collections",
+      "canonicalPath": "/api/v1/rag/collections",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": "collection-list",
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/collections/{id}",
+      "canonicalPath": "/api/v1/rag/collections/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": "collection-get",
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/collections/{id}/documents",
+      "canonicalPath": "/api/v1/rag/collections/{}/documents",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/collections/{id}/export",
+      "canonicalPath": "/api/v1/rag/collections/{}/export",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/collections/by-key",
+      "canonicalPath": "/api/v1/rag/collections/by-key",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey"
+          ]
+        }
+      },
+      "successProbe": "collection-by-key",
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/collections/by-key/documents",
+      "canonicalPath": "/api/v1/rag/collections/by-key/documents",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/collections/by-key/export",
+      "canonicalPath": "/api/v1/rag/collections/by-key/export",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/collections/derivation-readiness",
+      "canonicalPath": "/api/v1/rag/collections/derivation-readiness",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/collections/derivation-readiness/documents",
+      "canonicalPath": "/api/v1/rag/collections/derivation-readiness/documents",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/collections/derivation-repairs/{repairId}",
+      "canonicalPath": "/api/v1/rag/collections/derivation-repairs/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "repairId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/collections/embedding-readiness",
+      "canonicalPath": "/api/v1/rag/collections/embedding-readiness",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/data-governance/erasures/{operationId}",
+      "canonicalPath": "/api/v1/rag/data-governance/erasures/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "operationId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/data-governance/policy",
+      "canonicalPath": "/api/v1/rag/data-governance/policy",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/document-processing-runs",
+      "canonicalPath": "/api/v1/rag/document-processing-runs",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/document-processing-runs/{runId}",
+      "canonicalPath": "/api/v1/rag/document-processing-runs/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "runId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/document-sync-runs",
+      "canonicalPath": "/api/v1/rag/document-sync-runs",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/document-sync-runs/{runId}",
+      "canonicalPath": "/api/v1/rag/document-sync-runs/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "runId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "missingQuery": [
+        {
+          "name": "collectionKey",
+          "value": "probe"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/document-sync-runs/{runId}/items",
+      "canonicalPath": "/api/v1/rag/document-sync-runs/{}/items",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "runId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "missingQuery": [
+        {
+          "name": "collectionKey",
+          "value": "probe"
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/documents",
+      "canonicalPath": "/api/v1/rag/documents",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": "document-list",
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/documents/{id}",
+      "canonicalPath": "/api/v1/rag/documents/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": "document-get",
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/documents/{id}/chunks/preview",
+      "canonicalPath": "/api/v1/rag/documents/{}/chunks/preview",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/documents/{id}/versions",
+      "canonicalPath": "/api/v1/rag/documents/{}/versions",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/documents/{id}/versions/{versionNumber}",
+      "canonicalPath": "/api/v1/rag/documents/{}/versions/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        {
+          "name": "versionNumber",
+          "schema": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/documents/by-external-id",
+      "canonicalPath": "/api/v1/rag/documents/by-external-id",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey",
+            "externalId"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/documents/embed-vector-status",
+      "canonicalPath": "/api/v1/rag/documents/embed-vector-status",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/documents/stats",
+      "canonicalPath": "/api/v1/rag/documents/stats",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/embedding-jobs",
+      "canonicalPath": "/api/v1/rag/embedding-jobs",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": "embedding-jobs-list",
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/embedding-jobs/{id}",
+      "canonicalPath": "/api/v1/rag/embedding-jobs/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/evaluation/feedback/history",
+      "canonicalPath": "/api/v1/rag/evaluation/feedback/history",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/evaluation/feedback/stats",
+      "canonicalPath": "/api/v1/rag/evaluation/feedback/stats",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "startDate",
+            "endDate"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/evaluation/feedback/type/{feedbackType}",
+      "canonicalPath": "/api/v1/rag/evaluation/feedback/type/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 200,
+          "reason": "按反馈类型查询，无数据时返回空数组"
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "feedbackType",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/evaluation/history",
+      "canonicalPath": "/api/v1/rag/evaluation/history",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/evaluation/metrics/aggregated",
+      "canonicalPath": "/api/v1/rag/evaluation/metrics/aggregated",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "startDate",
+            "endDate"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/evaluation/metrics/calculate",
+      "canonicalPath": "/api/v1/rag/evaluation/metrics/calculate",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "retrieved",
+            "relevant"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/evaluation/report",
+      "canonicalPath": "/api/v1/rag/evaluation/report",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "startDate",
+            "endDate"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/evaluation/runs/{runId}",
+      "canonicalPath": "/api/v1/rag/evaluation/runs/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "runId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/evaluation/runs/compare",
+      "canonicalPath": "/api/v1/rag/evaluation/runs/compare",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "leftRunId",
+            "rightRunId"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/evaluation/suites",
+      "canonicalPath": "/api/v1/rag/evaluation/suites",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/evaluation/suites/{suiteKey}",
+      "canonicalPath": "/api/v1/rag/evaluation/suites/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "suiteKey",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/files/preview",
+      "canonicalPath": "/api/v1/rag/files/preview",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "path"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/files/preview/{uuid}/default.html",
+      "canonicalPath": "/api/v1/rag/files/preview/{}/default.html",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "uuid",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/files/preview/html",
+      "canonicalPath": "/api/v1/rag/files/preview/html",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "path"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/files/raw",
+      "canonicalPath": "/api/v1/rag/files/raw",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "path"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/files/raw/{uuid}/{filename}",
+      "canonicalPath": "/api/v1/rag/files/raw/{}/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "uuid",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "filename",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/files/tree",
+      "canonicalPath": "/api/v1/rag/files/tree",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/health",
+      "canonicalPath": "/api/v1/rag/health",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": "health",
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/health/components",
+      "canonicalPath": "/api/v1/rag/health/components",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": "health-components",
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/integration-capabilities",
+      "canonicalPath": "/api/v1/rag/integration-capabilities",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/integration-observability",
+      "canonicalPath": "/api/v1/rag/integration-observability",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/json-records/{documentId}",
+      "canonicalPath": "/api/v1/rag/json-records/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "documentId",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/json-records/by-external-id",
+      "canonicalPath": "/api/v1/rag/json-records/by-external-id",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey",
+            "externalId"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/metrics",
+      "canonicalPath": "/api/v1/rag/metrics",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/metrics/models",
+      "canonicalPath": "/api/v1/rag/metrics/models",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/metrics/slo",
+      "canonicalPath": "/api/v1/rag/metrics/slo",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/metrics/slow-queries",
+      "canonicalPath": "/api/v1/rag/metrics/slow-queries",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/models",
+      "canonicalPath": "/api/v1/rag/models",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/models/{provider}",
+      "canonicalPath": "/api/v1/rag/models/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "provider",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/operations/{operationId}",
+      "canonicalPath": "/api/v1/rag/operations/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "operationId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/operations/{operationId}/result",
+      "canonicalPath": "/api/v1/rag/operations/{}/result",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "operationId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/retrieval-traces",
+      "canonicalPath": "/api/v1/rag/retrieval-traces",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/retrieval-traces/{traceId}",
+      "canonicalPath": "/api/v1/rag/retrieval-traces/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "traceId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/search",
+      "canonicalPath": "/api/v1/rag/search",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "query"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/rag/usage",
+      "canonicalPath": "/api/v1/rag/usage",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "GET",
+      "path": "/v1/models",
+      "canonicalPath": "/v1/models",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": [
+          "object",
+          "data"
+        ]
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": "openai-models"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/models/{id}",
+      "canonicalPath": "/v1/models/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": [
+          "id",
+          "object"
+        ]
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": "openai-model-get"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/rag/documents/{id}",
+      "canonicalPath": "/api/v1/rag/documents/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 400,
+          "reason": "请求体校验先于资源存在性，非法/缺省请求体先返回 400"
+        },
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": "document-update",
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/ab/experiments",
+      "canonicalPath": "/api/v1/rag/ab/experiments",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/ab/experiments/{id}/pause",
+      "canonicalPath": "/api/v1/rag/ab/experiments/{}/pause",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/ab/experiments/{id}/results",
+      "canonicalPath": "/api/v1/rag/ab/experiments/{}/results",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 400,
+          "reason": "请求体校验先于资源存在性，非法/缺省请求体先返回 400"
+        },
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/ab/experiments/{id}/start",
+      "canonicalPath": "/api/v1/rag/ab/experiments/{}/start",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/ab/experiments/{id}/stop",
+      "canonicalPath": "/api/v1/rag/ab/experiments/{}/stop",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/alerts/{alertId}/resolve",
+      "canonicalPath": "/api/v1/rag/alerts/{}/resolve",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 400,
+          "reason": "请求体校验先于资源存在性，非法/缺省请求体先返回 400"
+        },
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "alertId",
+          "schema": {
+            "type": "integer",
+            "format": "int64",
+            "exclusiveMinimum": 0
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/alerts/fire",
+      "canonicalPath": "/api/v1/rag/alerts/fire",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/alerts/notification-deliveries/{deliveryId}/retry",
+      "canonicalPath": "/api/v1/rag/alerts/notification-deliveries/{}/retry",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "deliveryId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/alerts/silence",
+      "canonicalPath": "/api/v1/rag/alerts/silence",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/alerts/silence-schedules",
+      "canonicalPath": "/api/v1/rag/alerts/silence-schedules",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 201,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/alerts/slos",
+      "canonicalPath": "/api/v1/rag/alerts/slos",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 201,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/api-keys",
+      "canonicalPath": "/api/v1/rag/api-keys",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/api-keys/{keyId}/rotate",
+      "canonicalPath": "/api/v1/rag/api-keys/{}/rotate",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 201,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "keyId",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/api-keys/{keyId}/rotations",
+      "canonicalPath": "/api/v1/rag/api-keys/{}/rotations",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "keyId",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "missingHeaders": [
+        {
+          "name": "Idempotency-Key",
+          "value": "probe-idempotency-key-0001"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/api-keys/rotations/{rotationId}/cancel",
+      "canonicalPath": "/api/v1/rag/api-keys/rotations/{}/cancel",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "rotationId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/api-keys/rotations/{rotationId}/complete",
+      "canonicalPath": "/api/v1/rag/api-keys/rotations/{}/complete",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "rotationId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/chat",
+      "canonicalPath": "/api/v1/rag/chat",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/chat/ask",
+      "canonicalPath": "/api/v1/rag/chat/ask",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": "chat-ask",
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/chat/stream",
+      "canonicalPath": "/api/v1/rag/chat/stream",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "text/event-stream",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": "chat-stream-sse",
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/client-errors",
+      "canonicalPath": "/api/v1/rag/client-errors",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 202,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/collections",
+      "canonicalPath": "/api/v1/rag/collections",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": "collection-create",
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/collections/{id}/clone",
+      "canonicalPath": "/api/v1/rag/collections/{}/clone",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ],
+      "missingQuery": [
+        {
+          "name": "collectionKey",
+          "value": "probe"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/collections/{id}/documents",
+      "canonicalPath": "/api/v1/rag/collections/{}/documents",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 400,
+          "reason": "请求体校验先于资源存在性，非法/缺省请求体先返回 400"
+        },
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/collections/{id}/restore",
+      "canonicalPath": "/api/v1/rag/collections/{}/restore",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/collections/by-key/documents",
+      "canonicalPath": "/api/v1/rag/collections/by-key/documents",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/collections/by-key/embedding-profile/operations",
+      "canonicalPath": "/api/v1/rag/collections/by-key/embedding-profile/operations",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 202,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/collections/by-key/purge",
+      "canonicalPath": "/api/v1/rag/collections/by-key/purge",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/collections/by-key/purge/async",
+      "canonicalPath": "/api/v1/rag/collections/by-key/purge/async",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 202,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/collections/by-key/purge/async/preview",
+      "canonicalPath": "/api/v1/rag/collections/by-key/purge/async/preview",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/collections/by-key/purge/preview",
+      "canonicalPath": "/api/v1/rag/collections/by-key/purge/preview",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/collections/by-key/restore",
+      "canonicalPath": "/api/v1/rag/collections/by-key/restore",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "collectionKey"
+          ]
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/collections/clone",
+      "canonicalPath": "/api/v1/rag/collections/clone",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/collections/derivation-repairs/apply",
+      "canonicalPath": "/api/v1/rag/collections/derivation-repairs/apply",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/collections/derivation-repairs/preview",
+      "canonicalPath": "/api/v1/rag/collections/derivation-repairs/preview",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/collections/import",
+      "canonicalPath": "/api/v1/rag/collections/import",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/data-governance/erasures/{operationId}/apply",
+      "canonicalPath": "/api/v1/rag/data-governance/erasures/{}/apply",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 400,
+          "reason": "请求体校验先于资源存在性，非法/缺省请求体先返回 400"
+        },
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "operationId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/data-governance/erasures/preview",
+      "canonicalPath": "/api/v1/rag/data-governance/erasures/preview",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/document-processing-runs/{runId}/cancel",
+      "canonicalPath": "/api/v1/rag/document-processing-runs/{}/cancel",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "runId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/document-processing-runs/{runId}/retry",
+      "canonicalPath": "/api/v1/rag/document-processing-runs/{}/retry",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "runId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/document-sync-runs",
+      "canonicalPath": "/api/v1/rag/document-sync-runs",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/document-sync-runs/{runId}/abort",
+      "canonicalPath": "/api/v1/rag/document-sync-runs/{}/abort",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "runId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "missingHeaders": [
+        {
+          "name": "X-RAG-Sync-Lease",
+          "value": "probe-idempotency-key-0001"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/document-sync-runs/{runId}/batch-upsert",
+      "canonicalPath": "/api/v1/rag/document-sync-runs/{}/batch-upsert",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 400,
+          "reason": "请求体校验先于资源存在性，非法/缺省请求体先返回 400"
+        },
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "runId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "missingHeaders": [
+        {
+          "name": "X-RAG-Sync-Lease",
+          "value": "probe-idempotency-key-0001"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/document-sync-runs/{runId}/complete",
+      "canonicalPath": "/api/v1/rag/document-sync-runs/{}/complete",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 400,
+          "reason": "请求体校验先于资源存在性，非法/缺省请求体先返回 400"
+        },
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "runId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "missingHeaders": [
+        {
+          "name": "X-RAG-Sync-Lease",
+          "value": "probe-idempotency-key-0001"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/document-sync-runs/{runId}/preview-missing",
+      "canonicalPath": "/api/v1/rag/document-sync-runs/{}/preview-missing",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "runId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "missingHeaders": [
+        {
+          "name": "X-RAG-Sync-Lease",
+          "value": "probe-idempotency-key-0001"
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents",
+      "canonicalPath": "/api/v1/rag/documents",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": "document-create",
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/{id}/disable",
+      "canonicalPath": "/api/v1/rag/documents/{}/disable",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 400,
+          "reason": "请求体校验先于资源存在性，非法/缺省请求体先返回 400"
+        },
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/{id}/embed",
+      "canonicalPath": "/api/v1/rag/documents/{}/embed",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/{id}/embed/stream",
+      "canonicalPath": "/api/v1/rag/documents/{}/embed/stream",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "text/event-stream",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/{id}/restore",
+      "canonicalPath": "/api/v1/rag/documents/{}/restore",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 400,
+          "reason": "请求体校验先于资源存在性，非法/缺省请求体先返回 400"
+        },
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/{id}/versions/{versionNumber}/restore",
+      "canonicalPath": "/api/v1/rag/documents/{}/versions/{}/restore",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 400,
+          "reason": "请求体校验先于资源存在性，非法/缺省请求体先返回 400"
+        },
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        {
+          "name": "versionNumber",
+          "schema": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/batch",
+      "canonicalPath": "/api/v1/rag/documents/batch",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/batch-upsert",
+      "canonicalPath": "/api/v1/rag/documents/batch-upsert",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/batch/create-and-embed",
+      "canonicalPath": "/api/v1/rag/documents/batch/create-and-embed",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/batch/embed",
+      "canonicalPath": "/api/v1/rag/documents/batch/embed",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/batch/embed/stream",
+      "canonicalPath": "/api/v1/rag/documents/batch/embed/stream",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/embed-vector-reembed",
+      "canonicalPath": "/api/v1/rag/documents/embed-vector-reembed",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/relocate",
+      "canonicalPath": "/api/v1/rag/documents/relocate",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/upload",
+      "canonicalPath": "/api/v1/rag/documents/upload",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "multipart/form-data",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "query",
+          "status": 400,
+          "omitted": [
+            "files"
+          ]
+        }
+      },
+      "successProbe": "document-upload",
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/upsert",
+      "canonicalPath": "/api/v1/rag/documents/upsert",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/embedding-jobs",
+      "canonicalPath": "/api/v1/rag/embedding-jobs",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/embedding-jobs/{id}/cancel",
+      "canonicalPath": "/api/v1/rag/embedding-jobs/{}/cancel",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/embedding-jobs/{id}/retry",
+      "canonicalPath": "/api/v1/rag/embedding-jobs/{}/retry",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/evaluation/answer-quality",
+      "canonicalPath": "/api/v1/rag/evaluation/answer-quality",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/evaluation/batch",
+      "canonicalPath": "/api/v1/rag/evaluation/batch",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/evaluation/evaluate",
+      "canonicalPath": "/api/v1/rag/evaluation/evaluate",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/evaluation/feedback",
+      "canonicalPath": "/api/v1/rag/evaluation/feedback",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/evaluation/runs",
+      "canonicalPath": "/api/v1/rag/evaluation/runs",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/evaluation/semantic",
+      "canonicalPath": "/api/v1/rag/evaluation/semantic",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/evaluation/semantic/batch",
+      "canonicalPath": "/api/v1/rag/evaluation/semantic/batch",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/evaluation/suites",
+      "canonicalPath": "/api/v1/rag/evaluation/suites",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/evaluation/suites/{suiteKey}/versions",
+      "canonicalPath": "/api/v1/rag/evaluation/suites/{}/versions",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 400,
+          "reason": "请求体校验先于资源存在性，非法/缺省请求体先返回 400"
+        },
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "suiteKey",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/evaluation/suites/{suiteKey}/versions/{version}/diagnose",
+      "canonicalPath": "/api/v1/rag/evaluation/suites/{}/versions/{}/diagnose",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 400,
+          "reason": "请求体校验先于资源存在性，非法/缺省请求体先返回 400"
+        },
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "suiteKey",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "version",
+          "schema": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/files/{uuid}/embed",
+      "canonicalPath": "/api/v1/rag/files/{}/embed",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 200,
+          "reason": "SSE 在流内以 event:error 表达文件不存在"
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "uuid",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/files/pdf",
+      "canonicalPath": "/api/v1/rag/files/pdf",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/files/pdf-to-rag",
+      "canonicalPath": "/api/v1/rag/files/pdf-to-rag",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/json-records/batch-upsert",
+      "canonicalPath": "/api/v1/rag/json-records/batch-upsert",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/json-records/search",
+      "canonicalPath": "/api/v1/rag/json-records/search",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/json-records/upsert",
+      "canonicalPath": "/api/v1/rag/json-records/upsert",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/models/compare",
+      "canonicalPath": "/api/v1/rag/models/compare",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/operations/{operationId}/cancel",
+      "canonicalPath": "/api/v1/rag/operations/{}/cancel",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 202,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "operationId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/operations/{operationId}/retry",
+      "canonicalPath": "/api/v1/rag/operations/{}/retry",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 202,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 404
+        },
+        "invalid": null
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "operationId",
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rag/search",
+      "canonicalPath": "/api/v1/rag/search",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": "search",
+      "pathParams": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "canonicalPath": "/v1/chat/completions",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": [
+          "choices"
+        ]
+      },
+      "probes": {
+        "missing": null,
+        "invalid": null
+      },
+      "successProbe": "openai-chat-completions"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/rag/ab/experiments/{id}",
+      "canonicalPath": "/api/v1/rag/ab/experiments/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 400,
+          "reason": "请求体校验先于资源存在性，非法/缺省请求体先返回 400"
+        },
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/rag/alerts/silence-schedules/{name}",
+      "canonicalPath": "/api/v1/rag/alerts/silence-schedules/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 400,
+          "reason": "请求体校验先于资源存在性，非法/缺省请求体先返回 400"
+        },
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "name",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/rag/alerts/slos/configs/{sloName}",
+      "canonicalPath": "/api/v1/rag/alerts/slos/configs/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 400,
+          "reason": "请求体校验先于资源存在性，非法/缺省请求体先返回 400"
+        },
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "sloName",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/rag/api-keys/principals/{principalId}/policy",
+      "canonicalPath": "/api/v1/rag/api-keys/principals/{}/policy",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 400,
+          "reason": "请求体校验先于资源存在性，非法/缺省请求体先返回 400"
+        },
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": [
+        {
+          "name": "principalId",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/rag/collections/{id}",
+      "canonicalPath": "/api/v1/rag/collections/{}",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": {
+          "status": 400,
+          "reason": "请求体校验先于资源存在性，非法/缺省请求体先返回 400"
+        },
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": "collection-update",
+      "pathParams": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/rag/collections/by-key",
+      "canonicalPath": "/api/v1/rag/collections/by-key",
+      "auth": "required",
+      "unauth": {
+        "status": 401
+      },
+      "success": {
+        "status": 200,
+        "contentType": "application/json",
+        "requiredFields": []
+      },
+      "probes": {
+        "missing": null,
+        "invalid": {
+          "kind": "json",
+          "status": 400
+        }
+      },
+      "successProbe": null,
+      "pathParams": []
+    }
+  ],
+  "successProbes": {
+    "collection-create": {
+      "method": "POST",
+      "path": "/api/v1/rag/collections",
+      "body": {
+        "collectionKey": "matrix-probe",
+        "name": "Matrix Probe"
+      },
+      "expect": {
+        "status": 200,
+        "requiredKeys": [
+          "id",
+          "collectionKey"
+        ]
+      },
+      "capture": {
+        "id": "collectionId",
+        "collectionKey": "collectionKey"
+      }
+    },
+    "collection-get": {
+      "method": "GET",
+      "path": "/api/v1/rag/collections/${collectionId}",
+      "expect": {
+        "status": 200,
+        "requiredKeys": [
+          "id"
+        ]
+      }
+    },
+    "collection-list": {
+      "method": "GET",
+      "path": "/api/v1/rag/collections?page=0&size=5",
+      "expect": {
+        "status": 200
+      }
+    },
+    "collection-by-key": {
+      "method": "GET",
+      "path": "/api/v1/rag/collections/by-key?collectionKey=${collectionKey}",
+      "expect": {
+        "status": 200,
+        "requiredKeys": [
+          "id"
+        ]
+      }
+    },
+    "collection-update": {
+      "method": "PUT",
+      "path": "/api/v1/rag/collections/${collectionId}",
+      "body": {
+        "name": "Matrix Probe Updated"
+      },
+      "expect": {
+        "status": 200
+      }
+    },
+    "document-create": {
+      "method": "POST",
+      "path": "/api/v1/rag/documents",
+      "body": {
+        "title": "matrix-probe",
+        "content": "matrix probe content",
+        "embeddingPolicy": "ASYNC"
+      },
+      "expect": {
+        "status": 200,
+        "requiredKeys": [
+          "id"
+        ]
+      },
+      "capture": {
+        "id": "documentId",
+        "documentRevision": "documentRevision"
+      }
+    },
+    "document-get": {
+      "method": "GET",
+      "path": "/api/v1/rag/documents/${documentId}",
+      "expect": {
+        "status": 200,
+        "requiredKeys": [
+          "id"
+        ]
+      },
+      "capture": {
+        "documentRevision": "documentRevision"
+      }
+    },
+    "document-list": {
+      "method": "GET",
+      "path": "/api/v1/rag/documents?page=0&size=5",
+      "expect": {
+        "status": 200
+      }
+    },
+    "document-update": {
+      "method": "PATCH",
+      "path": "/api/v1/rag/documents/${documentId}",
+      "body": {
+        "title": "matrix-probe-updated",
+        "expectedDocumentRevision": "${documentRevision}"
+      },
+      "expect": {
+        "status": 200
+      },
+      "capture": {
+        "documentRevision": "documentRevision"
+      }
+    },
+    "document-delete": {
+      "method": "DELETE",
+      "path": "/api/v1/rag/documents/${documentId}",
+      "query": {
+        "expectedDocumentRevision": "${documentRevision}"
+      },
+      "waitUntil": {
+        "path": "/api/v1/rag/documents/${documentId}",
+        "field": "processingStatus",
+        "notIn": [
+          "INDEXING",
+          "PROCESSING"
+        ],
+        "timeoutSeconds": 10
+      },
+      "expect": {
+        "status": 200
+      }
+    },
+    "document-upload": {
+      "method": "POST",
+      "path": "/api/v1/rag/documents/upload",
+      "multipart": {
+        "field": "files",
+        "filename": "matrix-probe.md",
+        "content": "# matrix probe\n\ncrash-free endpoint probe"
+      },
+      "expect": {
+        "status": 200
+      }
+    },
+    "search": {
+      "method": "POST",
+      "path": "/api/v1/rag/search",
+      "body": {
+        "query": "matrix probe"
+      },
+      "expect": {
+        "status": 200
+      }
+    },
+    "chat-ask": {
+      "method": "POST",
+      "path": "/api/v1/rag/chat/ask",
+      "body": {
+        "message": "matrix probe",
+        "sessionId": "matrix-probe-session"
+      },
+      "expect": {
+        "status": 200,
+        "requiredKeys": [
+          "answer"
+        ]
+      }
+    },
+    "chat-stream-sse": {
+      "method": "POST",
+      "path": "/api/v1/rag/chat/stream",
+      "body": {
+        "message": "matrix probe",
+        "sessionId": "matrix-probe-sse"
+      },
+      "expect": {
+        "status": 200,
+        "contentType": "text/event-stream"
+      }
+    },
+    "health": {
+      "method": "GET",
+      "path": "/api/v1/rag/health",
+      "expect": {
+        "status": 200,
+        "requiredKeys": [
+          "status"
+        ]
+      }
+    },
+    "health-components": {
+      "method": "GET",
+      "path": "/api/v1/rag/health/components",
+      "expect": {
+        "status": 200
+      }
+    },
+    "cache-stats": {
+      "method": "GET",
+      "path": "/api/v1/rag/cache/stats",
+      "expect": {
+        "status": 200
+      }
+    },
+    "embedding-jobs-list": {
+      "method": "GET",
+      "path": "/api/v1/rag/embedding-jobs?page=0&size=5",
+      "expect": {
+        "status": 200
+      }
+    },
+    "openai-models": {
+      "method": "GET",
+      "path": "/v1/models",
+      "expect": {
+        "status": 200,
+        "requiredKeys": [
+          "object",
+          "data"
+        ]
+      }
+    },
+    "openai-model-get": {
+      "method": "GET",
+      "path": "/v1/models/rag-default",
+      "expect": {
+        "status": 200,
+        "requiredKeys": [
+          "id",
+          "object"
+        ]
+      }
+    },
+    "openai-chat-completions": {
+      "method": "POST",
+      "path": "/v1/chat/completions",
+      "body": {
+        "model": "rag-default",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "matrix probe"
+          }
+        ]
+      },
+      "expect": {
+        "status": 200,
+        "requiredKeys": [
+          "choices"
+        ]
+      }
+    }
+  }
+}

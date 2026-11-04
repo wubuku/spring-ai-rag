@@ -28,6 +28,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -254,8 +255,15 @@ public class AlertController {
             @PathVariable String sloName,
             @RequestParam String startDate,
             @RequestParam String endDate) {
-        return ResponseEntity.ok(alertService.checkSlo(
-                sloName, ZonedDateTime.parse(startDate), ZonedDateTime.parse(endDate)));
+        try {
+            return ResponseEntity.ok(alertService.checkSlo(
+                    sloName, ZonedDateTime.parse(startDate),
+                    ZonedDateTime.parse(endDate)));
+        } catch (DateTimeParseException invalidDate) {
+            // 契约声明非法日期返回 400；不能让解析异常冒泡成 500。
+            throw new IllegalArgumentException(
+                    "startDate/endDate must be ISO-8601 date-time");
+        }
     }
 
     // ==================== SLO Config CRUD ====================

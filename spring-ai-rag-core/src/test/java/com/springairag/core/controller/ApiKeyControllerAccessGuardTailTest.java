@@ -243,7 +243,7 @@ class ApiKeyControllerAccessGuardTailTest {
 
         RagException error = assertThrows(RagException.class,
                 () -> controller.prepareRotation(
-                        "rag_k_1", null, request));
+                        "rag_k_1", null, "   ", request));
         assertEquals(ErrorCode.IDEMPOTENCY_KEY_INVALID,
                 error.getErrorCodeEnum());
     }
@@ -260,7 +260,7 @@ class ApiKeyControllerAccessGuardTailTest {
                 UUID.randomUUID().toString());
 
         ResponseEntity<?> replay = controller.prepareRotation(
-                "rag_k_1", null, request);
+                "rag_k_1", null, UUID.randomUUID().toString(), request);
         assertEquals(HttpStatus.OK, replay.getStatusCode());
         assertEquals("true",
                 replay.getHeaders().getFirst("X-RAG-Idempotent-Replay"));
@@ -273,7 +273,7 @@ class ApiKeyControllerAccessGuardTailTest {
         callerRole(ApiKeyRole.ADMIN);
         request.addHeader("Idempotency-Key", UUID.randomUUID().toString());
         ResponseEntity<?> created = controller.prepareRotation(
-                "rag_k_1", null, request);
+                "rag_k_1", null, UUID.randomUUID().toString(), request);
         assertEquals(HttpStatus.CREATED, created.getStatusCode());
     }
 }
