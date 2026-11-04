@@ -36,7 +36,16 @@ do not replace repeated real embedding/LLM quality runs. See [Upstream Failures 
 mvn clean compile test-compile
 python3 scripts/test-support/rag-backup-self-test.py
 python3 scripts/verify-dependency-recovery-e2e.py
+python3 scripts/verify-model-fallback-e2e.py
 ```
+
+`verify-model-fallback-e2e.py` runs a real process with a two-provider
+`models.json` and verifies primary/fallback routing: upstream 500 and timeout
+switch to the fallback, 401/404 do not switch silently, candidate and token
+budgets both prevent a fallback call, usage/cost land on the correct `model_ref`
+and `purpose` at each model's own price, and logs separate the primary failure
+from the fallback success. Evidence lives in `.verification/model-fallback/`;
+Docker and Maven are required, so it is not part of the default fast gate.
 
 This gate starts the actual service and its own pgvector container, covering embedding/rerank slow responses,
 429/503/disconnects, capacity isolation, mixed Search/Native/OpenAI JSON/SSE/import/explicit QA, hard-restart lease

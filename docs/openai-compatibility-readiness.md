@@ -8,9 +8,11 @@
 > **Code scope**: The current implementation includes Chat-turn reliability,
 > budget/data governance, the Starter Bean Graph, and the official SDK gate.
 > The linked current source and acceptance scripts are authoritative.
-> **Last verified**: 2026-10-16
+> **Last verified**: 2026-11-04
 > **Status**: `/v1/models` and `/v1/chat/completions` are implemented but
-> disabled by default. This document does not claim public production readiness.
+> disabled by default. The controlled preview now meets the enablement gate,
+> but the default stays off; this document does not claim public production
+> readiness.
 
 Documentation hub: [index.md](index.md). The callable contract and current
 configuration live in the [REST API reference](rest-api.md) and
@@ -372,3 +374,77 @@ completed; live API and configuration facts are maintained in the references.
   documentation together.
 - Never record real API keys, tokens, database passwords, or other secrets here.
 - Keep the English and Chinese versions synchronized.
+
+---
+
+## 11. 2026-11-04 Review: SDK End-to-End And Exposure Audit Decision
+
+### 11.1 Explicit Decision
+
+**Keep `rag.openai-compatibility.enabled=false` as the default. The controlled
+preview now meets the enablement gate, so a deployment may turn it on explicitly
+per §11.3 without client code changes and without relaxing authentication,
+quota, or ACL rules.**
+
+The reason is fail-safe defaults, not a protocol defect: enabling the flag adds a
+public `/v1` surface, while a deployment may still run legacy static/query
+authentication. Shipping the flag as enabled-by-default would expose
+unauthenticated compatibility endpoints in such deployments. "Can be enabled" and
+"enabled by default" are separate decisions; this review confirms only the former.
+
+### 11.2 Exposure Audit (`/v1` vs `/api`)
+
+| Concern | Finding | Evidence |
+|---------|---------|----------|
+| Authentication | `/v1` uses the same `ApiKeyAuthFilter`, registered on `"/api/*", "/v1/*"` with order `-10`; root mode accepts Bearer / `X-API-Key` only and rejects query secrets | `RagWebSecurityConfiguration.java` |
+| Capability | `ApiCapabilityFilter` covers `"/api/*", "/v1/*"`; the compatibility controller has a class-level `@ApiRoutePolicy`, and `POST /v1/chat/completions` is explicitly `READ` | `RagWebSecurityConfiguration.java`, `OpenAiCompatibilityController.java` |
+| Quota / rate limit | `RateLimitFilter` registers the same patterns and shares the authenticated stable principal across instances; store failure fails closed and `/v1` returns an OpenAI error envelope | `RateLimitFilter.java` |
+| Collection ACL | Body `rag.scope` and repeated `X-RAG-Collection-Key` are merged/conflict-checked, then delegated to the shared `CollectionRetrievalScopeResolver` plus `ApiKeyCollectionAccess.currentPolicy`; unauthorized keys return 403 and are not widened by `/v1` | `OpenAiRequestRetrievalScopeAdapter.java` |
+| Other filters | `PrincipalMdcFilter` and `IntegrationObservationFilter` use the same `"/api/*", "/v1/*"` patterns; no `/api`-only bypass exists | `RagWebSecurityConfiguration.java` |
+| SSE contract | Standard `chat.completion.chunk` sequence plus exact `[DONE]`; `rag` appears only in the finish chunk; post-header runtime failures still emit an OpenAI error envelope | `OpenAiCompatibilityController.java`, SDK gate |
+| Error body | Authentication, rate-limit, controller, and unclassified failures share the OpenAI error envelope and set `X-RAG-Failure-Class`; 5xx messages pass through `ErrorMessageSanitizer` and leak no stack traces or internal class names | `OpenAiCompatibilityExceptionHandler.java`, `FailureClassHttpSupport` |
+| Provider override | The request body has no `provider` field; `model` can only be a registered alias, and the server owns the candidate chain. Unknown fields and unsupported parameters (`temperature`, `tools`, `response_format`, ...) fail closed with `unsupported_parameter` instead of silently degrading | `OpenAiChatCompletionRequest.java`, `OpenAiChatRequestMapper.java`, `OpenAiModelAliasRegistry.java` |
+| Request bounds | Only the declared text-only subset (`n=1`, ...) is accepted; unknown `rag.scope` fields are rejected too | `OpenAiChatRequestMapper.java` |
+
+Conclusion: `/v1` has no separate authentication/quota/ACL implementation and no
+path that bypasses the `/api` filter chain. The only extra risk is the deployment
+choice of whether to open it, not the filter chain itself.
+
+### 11.3 Real SDK Evidence
+
+```bash
+OPENAI_SDK_E2E_RUN_ID=run-1793792297 ./scripts/verify-openai-sdk-e2e.sh --topology both
+```
+
+Result: **24 steps passed, 0 failed**
+(`.verification/openai-sdk-e2e/run-1793792297/summary.md`). Isolated PostgreSQL,
+a mock upstream, the Core standalone topology, and a Starter-only consumer all
+started; the official Python and Node OpenAI SDKs verified `/v1/models`, JSON,
+SSE, `[DONE]`, `Idempotency-Key` replay, invalid-model error envelopes, invalid
+credential authentication, and upstream-error envelopes in both topologies; with
+the feature flag off, `/v1` returned 404. Clients only change `base_url`, API key,
+and alias; no client code changes were required.
+
+### 11.4 Enablement Gate (all required)
+
+1. `rag.security.enabled=true` with an issued managed principal or a configured
+   environment root key; public networks must not rely on legacy static/query
+   authentication.
+2. At least one `rag.openai-compatibility.models` alias with explicit `mode`,
+   `memory`, and candidate chain; the alias binds no fixed Collection, and request
+   scope still converges through ACL.
+3. TLS termination and network ACL in the target deployment; the §4.2 subset is
+   accepted (text-only, `n=1`, no tools/sampling/structured output).
+4. Re-run `scripts/verify-openai-sdk-e2e.sh` and
+   `scripts/verify-openai-compatibility.sh` in the target environment; keep the
+   flag off if any step fails.
+5. Request quotas and LLM token/cost budgets are configured; `/v1` shares the same
+   budget and usage ledger as `/api`.
+
+### 11.5 Out Of Scope For This Review
+
+Legacy static/query shutdown, OAuth/OIDC identity federation, the full
+provider matrix, TLS/network isolation, operator recovery, and alerting/capacity
+runbooks remain deployment/production-readiness work; neither SDK success nor this
+exposure audit removes them. They also justify keeping the default off; they are
+not protocol defects.

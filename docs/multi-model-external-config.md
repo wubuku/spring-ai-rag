@@ -151,6 +151,41 @@ The response includes `defaultModel`, model-level `ref` values, normalized
 provider settings are missing. `AGENT` Chat requires
 `capabilities.toolCalling=true`.
 
+### Fallback Semantics And Budget Boundaries (real-process run, 2026-11-04)
+
+Candidate order is fixed: explicit `modelRef` (strict, no fallback) ->
+`chatModel.primary` -> `chatModel.fallbacks` -> the legacy default model when
+still configured. `UpstreamFailureClassifier` decides whether to advance:
+
+- **Retryable**: upstream 5xx / timeout / 429, classified as
+  `UPSTREAM_UNAVAILABLE`, `UPSTREAM_TIMEOUT`, or `UPSTREAM_RATE_LIMITED`; the log
+  records `reason=... retryable=true` and the next candidate is attempted.
+- **Non-retryable**: 401/403/404 credential or configuration errors are logged
+  as `retryable=false` and fail immediately. They **do not silently switch to a
+  fallback**, so a wrong credential or wrong model name cannot be masked as
+  "another model happened to work".
+- **Budget boundary**: a fallback is not a free retry. Every candidate call
+  passes through `ChatExecutionBudget`
+  (`rag.chat.execution.max-candidate-attempts`) and `BudgetedChatModel`
+  token/cost reservation; when the budget denies, no further candidate call is
+  made.
+- **Accounting**: every attempt writes a `rag_llm_usage_event` row with
+  `model_ref`, `purpose`, `outcome`, and `configured_cost` computed from that
+  model's own prices. A failed primary is `FAILED`; a successful fallback is
+  `SUCCEEDED`; costs never cross models.
+- **Log distinction**: primary failure is
+  `Chat candidate N/M failed (<ref>) reason=... retryable=...`; fallback success
+  is `Chat fallback succeeded: requested=..., resolved=...`.
+
+External `models.json` is now guaranteed to load before `ChatModelRouter` /
+`EmbeddingModelRouter` initialize (`@DependsOn("multiModelConfigLoader")`), so
+the "file parsed but routing still uses the old single-provider snapshot" failure
+mode cannot recur.
+
+Reproducible evidence: `python3 scripts/verify-model-fallback-e2e.py` (requires
+Docker and Maven; not part of the default fast gate). It covers a healthy primary,
+upstream 500, upstream timeout, upstream 401/404, candidate-budget exhaustion,
+token-budget denial, usage/cost attribution, and log assertions on a real process.
 
 ### Key-Name Validation (Important)
 

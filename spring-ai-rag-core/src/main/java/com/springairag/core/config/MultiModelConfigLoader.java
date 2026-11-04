@@ -100,7 +100,7 @@ public class MultiModelConfigLoader {
     private static final Set<String> KNOWN_KEYS = Set.copyOf(List.of(
             "models", "providers", "chatModel", "embeddingModel", "legacyCapabilities",
             "displayName", "baseUrl", "apiKey", "apiType", "enabled", "priority",
-            "id", "name", "type", "reasoning", "inputModalities", "cost", "contextWindow",
+            "id", "name", "type", "reasoning", "inputModalities", "cost", "input", "output", "contextWindow",
             "maxTokens", "dimension", "capabilities", "streaming", "toolCalling",
             "primary", "fallbacks"));
 

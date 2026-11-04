@@ -22,6 +22,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * Resolves configured {@code provider/modelId} references and legacy provider beans.
  */
 @Component
+// 外部 models.json 必须先于路由快照生效，否则会静默使用旧的单 provider 配置。
+@org.springframework.context.annotation.DependsOn("multiModelConfigLoader")
 public class ChatModelRouter {
 
     private static final Logger log = LoggerFactory.getLogger(ChatModelRouter.class);

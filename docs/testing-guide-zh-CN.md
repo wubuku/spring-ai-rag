@@ -33,7 +33,13 @@
 mvn clean compile test-compile
 python3 scripts/test-support/rag-backup-self-test.py
 python3 scripts/verify-dependency-recovery-e2e.py
+python3 scripts/verify-model-fallback-e2e.py
 ```
+
+`verify-model-fallback-e2e.py` 用真实进程和两个 provider 配置验证 `models.json` 主/备路由：
+上游 500 与超时切 fallback，401/404 不静默切换，候选预算与 token 预算都会阻止 fallback，
+usage/cost 按 `model_ref`、`purpose` 与各自价格归账，日志区分主失败和 fallback 成功。
+证据在 `.verification/model-fallback/`，需要 Docker 与 Maven，不进入默认快速门禁。
 
 专项启动真实服务和自有 pgvector 容器，覆盖 embedding/rerank 慢响应、429、503、断连、
 容量隔离、Search/Native/OpenAI JSON/SSE/导入/主动 QA 混载、强杀后 lease 接管、正常重启，

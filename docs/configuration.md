@@ -1998,4 +1998,6 @@ consumer does not need to scan `com.springairag`. `general.rag.enabled=false` re
 the complete disable boundary. The default value of
 `rag.openai-compatibility.enabled` is unchanged. Use
 `scripts/verify-openai-sdk-e2e.sh` for the external `/v1` client contract; do not
-infer service readiness from WebUI availability.
+infer service readiness from WebUI availability. The 2026-11-04 end-to-end SDK and
+exposure audit decision, plus the controlled enablement gate, are in
+[OpenAI compatibility readiness](openai-compatibility-readiness.md) §11.

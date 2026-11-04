@@ -6,8 +6,9 @@
 > 公网/多实例生产仍需完成的安全工作。
 > **代码范围**：当前实现包含 Chat turn 可靠性、预算/数据治理、Starter Bean Graph
 > 和官方 SDK 黑盒门禁；以本文链接的当前代码与验收脚本为准。
-> **最近复核**：2026-10-16
-> **状态**：`/v1/models` 与 `/v1/chat/completions` 已实现但默认关闭；本文不宣称公网生产就绪。
+> **最近复核**：2026-11-04
+> **状态**：`/v1/models` 与 `/v1/chat/completions` 已实现但默认关闭；受控预览已具备开启条件，
+> 默认值保持不变，本文不宣称公网生产就绪。
 
 文档总入口：[index-zh-CN.md](index-zh-CN.md)。当前可调用契约和配置以
 [REST API](rest-api-zh-CN.md) 与 [配置参考](configuration-zh-CN.md) 为准；旧目标设计
@@ -318,3 +319,63 @@ BGE-M3（1024 维），未假设 LongCat 提供 embedding；`max_tokens` 等未�
 - API 或配置落地后，同步更新 `rest-api*`、`configuration*` 和测试文档。
 - 不在本文记录真实 API Key、Token、数据库密码或其他 secret。
 - 中英文版本必须同步维护。
+
+---
+
+## 11. 2026-11-04 复核：SDK 全链路与暴露面评审结论
+
+### 11.1 明确决定
+
+**继续把 `rag.openai-compatibility.enabled` 默认设为 `false`；受控预览已满足开启门槛，
+部署方可以按 §11.3 显式开启，不需要修改客户端代码，也不需要放宽任何鉴权、配额或 ACL。**
+
+理由不是协议缺陷，而是默认值的 fail-safe 语义：开启即新增公开 `/v1` 面，而部署仍可能
+运行 legacy static/query 认证；若把开关改成默认开启，未配置 security 的环境会直接暴露
+兼容端点。因此“可以开启”与“默认开启”是两件事，本轮只确认前者，不降低默认安全约束。
+
+### 11.2 暴露面评审（`/v1` 与 `/api` 是否同一套约束）
+
+| 关注点 | 结论 | 代码/证据 |
+|--------|------|-----------|
+| 认证 | `/v1` 与 `/api` 使用同一个 `ApiKeyAuthFilter`，注册模式同为 `"/api/*", "/v1/*"`，顺序 `-10`；root 模式只接受 Bearer / `X-API-Key`，拒绝 query secret | `RagWebSecurityConfiguration.java` |
+| 能力 | `ApiCapabilityFilter` 同样覆盖 `"/api/*", "/v1/*"`；兼容 Controller 类级 `@ApiRoutePolicy`，`POST /v1/chat/completions` 显式 `READ` | `RagWebSecurityConfiguration.java`、`OpenAiCompatibilityController.java` |
+| 配额/限流 | `RateLimitFilter` 同样注册 `"/api/*", "/v1/*"`，按认证后的 stable principal 跨实例共享；限流存储故障 fail closed，且 `/v1` 返回 OpenAI 错误信封 | `RateLimitFilter.java` |
+| Collection ACL | body `rag.scope` 与重复 `X-RAG-Collection-Key` 先合并/冲突校验，再委托统一 `CollectionRetrievalScopeResolver` + `ApiKeyCollectionAccess.currentPolicy`；未授权 key 返回 403，不会因为走 `/v1` 放宽 | `OpenAiRequestRetrievalScopeAdapter.java` |
+| 其他过滤器 | `PrincipalMdcFilter`、`IntegrationObservationFilter` 也使用同一 `"/api/*", "/v1/*"` 模式；没有只针对 `/api` 的过滤器绕过路径 | `RagWebSecurityConfiguration.java` |
+| SSE 契约 | 标准 `chat.completion.chunk` 序列 + 精确 `[DONE]`；`rag` 只出现在 finish chunk；已建立 SSE 后的运行中失败仍发送 OpenAI error envelope | `OpenAiCompatibilityController.java`、SDK 门禁 |
+| 错误体 | 认证、限流、Controller、未归类异常统一 OpenAI error envelope，并设置 `X-RAG-Failure-Class`；5xx 消息经 `ErrorMessageSanitizer` 脱敏，不泄漏堆栈或内部类名 | `OpenAiCompatibilityExceptionHandler.java`、`FailureClassHttpSupport` |
+| provider 覆盖 | 请求体没有 `provider` 字段；`model` 只能是注册 alias，alias 在服务端解析候选链。未知字段、`temperature`/`tools`/`response_format` 等未支持参数一律 fail closed 返回 `unsupported_parameter`，不做静默降级 | `OpenAiChatCompletionRequest.java`、`OpenAiChatRequestMapper.java`、`OpenAiModelAliasRegistry.java` |
+| 请求体上限 | 仅 text-only messages、`n=1` 等已声明子集；`rag.scope` 的未知字段同样拒绝 | `OpenAiChatRequestMapper.java` |
+
+结论：`/v1` 没有独立的鉴权/配额/ACL 实现，也没有绕过 `/api` 侧过滤器的路径。该面唯一的
+额外风险来自“是否默认打开”这个部署选择，而不是过滤链本身。
+
+### 11.3 真实 SDK 证据
+
+```bash
+OPENAI_SDK_E2E_RUN_ID=run-1793792297 ./scripts/verify-openai-sdk-e2e.sh --topology both
+```
+
+结果为 **24 步全部通过、0 失败**（`.verification/openai-sdk-e2e/run-1793792297/summary.md`）：
+隔离 PostgreSQL、Mock 上游、Core standalone 与 Starter-only Consumer 均成功启动；官方
+Python / Node OpenAI SDK 在两种拓扑下分别验证 `/v1/models`、非流式 JSON、SSE、`[DONE]`、
+`Idempotency-Key` 重放、无效模型错误信封、无效凭据认证和上游错误信封；feature flag 关闭时
+`/v1` 返回 404。客户端只改 `base_url` / API key / alias，无需改代码。
+
+### 11.4 显式开启门槛（全部满足才可打开）
+
+1. `rag.security.enabled=true`，并已签发受管 principal 或配置 environment root key；公网
+   不得停留在 legacy static/query 认证模式。
+2. `rag.openai-compatibility.models` 至少配置一个 alias，显式声明 `mode`、`memory` 与
+   候选链；alias 不绑定固定 Collection，请求范围仍由 ACL 收敛。
+3. 在目标网络完成 TLS 终止与网络 ACL；接受 §4.2 的受控子集（纯文本、单候选、不支持
+   工具调用、采样与结构化输出）。
+4. 在目标环境重跑 `scripts/verify-openai-sdk-e2e.sh` 与
+   `scripts/verify-openai-compatibility.sh`；任一步失败则保持关闭。
+5. 已配置请求 quota 与 LLM token/cost 预算；`/v1` 与 `/api` 共用同一预算和 usage ledger。
+
+### 11.5 仍不在本轮范围内
+
+legacy static/query 关闭、OAuth/OIDC 身份 federation、目标 provider 全矩阵、TLS/网络隔离、
+operator recovery、告警与容量 runbook 仍属部署/生产 readiness，不由 SDK 通过或暴露面评审
+自动消除。它们也是“默认保持关闭”的运营理由，而不是协议层缺陷。

@@ -146,6 +146,34 @@ curl http://localhost:8081/api/v1/rag/models
 provider 配置缺失时还会包含 `unavailableReason`。`AGENT` Chat 要求
 `capabilities.toolCalling=true`。
 
+### Fallback 语义与预算边界（2026-11-04 真实进程实测）
+
+候选顺序固定为：显式 `modelRef`（严格，不 fallback）→ `chatModel.primary` →
+`chatModel.fallbacks` → legacy 默认模型（若仍配置）。切 fallback 的判定来自
+`UpstreamFailureClassifier`：
+
+- **可重试**：上游 5xx / 超时 / 429 等 `UPSTREAM_UNAVAILABLE`、`UPSTREAM_TIMEOUT`、
+  `UPSTREAM_RATE_LIMITED`，记录 `reason=... retryable=true` 后进入下一个候选。
+- **不可重试**：401/403/404 等凭据或配置错误，记录 `retryable=false` 并直接失败，
+  **不会静默切到 fallback**，避免把错误凭据或错误 model 名掩盖成“另一个模型可用”。
+- **预算边界**：fallback 不是“免费重试”。每次候选调用都经过
+  `ChatExecutionBudget`（`rag.chat.execution.max-candidate-attempts`）和
+  `BudgetedChatModel` 的 token/cost 预留；预算拒绝时不会再发起任何候选调用。
+- **归账**：每次尝试都写 `rag_llm_usage_event`，包含 `model_ref`、`purpose`、
+  `outcome` 与按该模型价格计算的 `configured_cost`。主模型失败行为 `FAILED`，fallback
+  成功行为 `SUCCEEDED`，成本不会串账。
+- **日志区分**：主失败为
+  `Chat candidate N/M failed (<ref>) reason=... retryable=...`，fallback 成功为
+  `Chat fallback succeeded: requested=..., resolved=...`。
+
+外部 `models.json` 现在保证在 `ChatModelRouter` / `EmbeddingModelRouter` 初始化之前
+加载（`@DependsOn("multiModelConfigLoader")`），不会出现“文件已读取但路由仍用旧的
+单 provider 快照”。
+
+可复现证据：`python3 scripts/verify-model-fallback-e2e.py`（需要 Docker 与 Maven，
+不在默认快速门禁内）。它用真实进程覆盖：健康主模型、上游 500、上游超时、上游
+401/404、候选预算耗尽、token 预算拒绝，以及 usage/cost 归账和日志断言。
+
 ### 键名校验（重要）
 
 JSON 键名一律使用 **camelCase**（`chatModel`、`embeddingModel`、`inputModalities`、
