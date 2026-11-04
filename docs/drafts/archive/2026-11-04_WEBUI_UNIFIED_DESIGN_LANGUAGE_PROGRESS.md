@@ -1,6 +1,6 @@
 # WebUI 统一设计语言实施进度
 
-> **对应规划**：[WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
+> **对应规划**：[2026-11-04_WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md](2026-11-04_WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
 > **日期**：2026-08-28（Slice 1）· 2026-10-02（Slice 2、Slice 3A）· 2026-10-03（Slice 5 图标收口）
 > **状态**：Slice 1、2、3A、3B-1/2/3、4A、4B 已交付，设计债务清零；Slice 5 图标统一收口已交付（Batch 760），其余 Slice 5 待开始
 > **工作区**：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`

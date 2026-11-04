@@ -6,7 +6,7 @@
 - 基线：`9bdcffef`
 - 工作区：实施完成，尚未执行最终 Git commit/push；不得使用 `git reset --hard`、`git stash` 或 `git clean`。
 - 当前阶段：代码、文档、自动化门禁、真实 PostgreSQL/LLM 验收和实施 `3/3` 检查已完成；待执行最终 release gate、Git commit/push，并确认工作区干净。
-- 规划入口：[NEXT_BATCH_CLIENT_GOVERNANCE_RELIABILITY_PLAN.md](NEXT_BATCH_CLIENT_GOVERNANCE_RELIABILITY_PLAN.md)
+- 规划入口：[2026-11-04_NEXT_BATCH_CLIENT_GOVERNANCE_RELIABILITY_PLAN.md](2026-11-04_NEXT_BATCH_CLIENT_GOVERNANCE_RELIABILITY_PLAN.md)
 
 ## 冻结范围
 

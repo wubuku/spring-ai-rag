@@ -40,25 +40,16 @@ Active plans are listed here and in `docs/index*`.
 
 - [WeKnora reference-project research and borrowing plan](WEKNORA_REFERENCE_RESEARCH.md)
   (Chinese; research draft, not an implementation commitment)
-- [WebUI unified design language research and implementation plan](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
-  (Chinese)
 - [Hardening batch loop plan](HARDENING_LOOP_PLAN.md) (Chinese): a recurring
   plan/implementation/acceptance loop focused on test hardening, WebUI UI/UX
   refactoring, and technical-debt cleanup; new features are out of scope for
   this stage.
-- [Client contract governance, data lifecycle, and reliability](NEXT_BATCH_CLIENT_GOVERNANCE_RELIABILITY_PLAN.md):
-  additive improvements for external-client API contracts, data governance, and reliability;
-  planning passed `3/3` and implementation is in progress.
-- [Client SDK, structured evidence, and recovery readiness](2026-10-16_CLIENT_SDK_EVIDENCE_READINESS_PLAN.md):
-  minimal external-client onboarding, additive OpenAI evidence fields, and disposable database recovery acceptance;
-  planning, implementation, and acceptance are complete; Git delivery remains.
-- [Client API real end-to-end, evidence commit, and acceptance reliability](NEXT_BATCH_CLIENT_API_E2E_EVIDENCE_PLAN.md)
-  (Chinese): fixes unassigned-document scope commits, real E2E cleanup, and reproducible SDK dependencies;
-  expands versioned real QA and external API regression; planning, implementation, and acceptance are complete;
-  Git delivery remains.
 - [Durable long-running operations, Embedding Profiles, client contracts, and quality drift](NEXT_BATCH_ASYNC_EMBEDDING_CLIENT_QUALITY_PLAN.md)
-  (Chinese): planning review `3/3` is complete; implementation covers async resource governance, Profile routing,
-  Client/OpenAI contract governance, and real-model quality drift baselines. Async Purge and live acceptance remain incomplete.
+  (Chinese): async purge, fixed-dimension Profile routing, and client contracts have landed;
+  remaining external blockers are MiniMax balance restoration plus key rotation, and
+  Git delivery has not started.
+- [Multi-tenancy status](MULTI_TENANCY_STATUS.md) (Chinese): read-only audit of the current
+  ACL and ownership boundary; gaps 1 and 2 were closed by V71 and the draft tracks the rest.
 The processing/recovery, citation/streaming, chunking-correctness, and default-feature/automatic-upgrade/recovery batches,
 including supplemental real-LLM acceptance, are in the
 [historical archive](archive/README.md).

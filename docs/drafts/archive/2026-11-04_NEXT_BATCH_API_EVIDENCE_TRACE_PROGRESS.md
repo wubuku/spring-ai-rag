@@ -1,6 +1,6 @@
 # Client API 兼容、运行时证据安全与逐请求 Trace 实施进度
 
-> 对应规划：[Client API 兼容、运行时证据安全与逐请求 Trace 实施规划](NEXT_BATCH_API_EVIDENCE_TRACE_PLAN.md)
+> 对应规划：[Client API 兼容、运行时证据安全与逐请求 Trace 实施规划](2026-11-04_NEXT_BATCH_API_EVIDENCE_TRACE_PLAN.md)
 >
 > 本文件是可恢复进度账本；稳定事实完成后提升到双语长青文档，并按 drafts 生命周期归档。
 

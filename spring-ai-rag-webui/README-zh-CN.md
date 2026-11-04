@@ -216,7 +216,7 @@ VITE_API_BASE=/api/v1/rag
 npm run dev          # 启动 Vite 开发服务器
 npm run build        # 生产构建（tsc + vite build）
 npm run lint         # ESLint + 类型检查 + 全部静态门禁（含设计系统自测）
-npm run lint:fix     # ESLint 自动修复
+npx eslint . --fix    # ESLint 自动修复
 npm run preview      # 本地预览生产构建
 npm run test:run     # Vitest 组件/单元测试
 npm run test:e2e:mock  # Playwright Mock 用例（不需要后端，CI 跑这条）

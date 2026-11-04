@@ -2,18 +2,24 @@
 
 > 只读调研：基于当前仓库代码、Flyway 迁移与 `docs/` 正式文档，未启动服务、未修改代码。
 > 行号指向调研时的仓库快照，供复核使用。
+>
+> **2026-11-04 复核**：V71 已补齐文件子系统与评估/反馈面的归属边界，本文第 4 节
+> 缺口 1、2 随之关闭；其余结论（无租户实体、无 RLS、ACL 只到 Collection）不变。
 
 ## 1. 结论
 
 **当前不支持真正意义上的多租户。** 全仓没有租户实体、`tenant_id` 字段或租户配置；
 没有租户层级、租户级配额、租户管理面，也没有数据库级行隔离（RLS）。
 
-现有能力是两层"部分隔离"：
+现有能力是三层"部分隔离"：
 
 1. **Collection 级 ACL**：API Key / 受管 principal 可限制到若干 Collection，Search、
    Chat、Document 列表、上传、PDF-to-RAG、导出在该白名单内收敛。
 2. **principal 级资源归属**：聊天历史、Spring AI memory、检索诊断、评估套件、
    用量与配额按 stable principal 隔离。
+3. **安全边界归属（V71 起）**：文件子系统、评估历史与用户反馈按
+   `owner_principal_id`（文件另加 `collection_id`）过滤；受限 principal 看不到
+   他人的历史行，遗留无归属行对受限 principal 不可见（fail-closed）。
 
 因此可用于"单实例 + 多业务 Key / 多知识库"场景，不能直接作为多租户平台。
 
@@ -37,6 +43,15 @@
   （`.../controller/RagChatController.java:L757-L772`）。
 - 配额按 principal 记账
   （`.../V48__managed_api_principals_and_shared_quota.sql:L74-L81`）。
+- 文件、反馈与评估历史带归属列
+  （`.../V71__security_boundary_ownership.sql:L14-L43`）：
+  `fs_files` / `fs_import_batches` 增加 `owner_principal_id` 与 `collection_id`，
+  `rag_user_feedback` / `rag_retrieval_evaluations` 增加 `owner_principal_id`。
+- 受限 key 的文件树与读取按"owner 或允许的 Collection"过滤
+  （`.../repository/FsFileRepository.java:L79-L104`）。
+- 评估历史与反馈历史在受限 principal 下按 owner 过滤
+  （`.../service/RetrievalEvaluationServiceImpl.java:L236-L283`、
+  `.../service/UserFeedbackServiceImpl.java:L150`）。
 
 ## 3. 证据
 
@@ -90,8 +105,8 @@
 
 | # | 缺口 | 证据 | 风险 |
 |---|------|------|------|
-| 1 | 文件子系统全局共享：`fs_files` 只有 `path` 主键与 mime，无 owner/collection；`/api/v1/rag/files/tree`、`/raw/*`、`/preview/*` 只认证、不校验 Collection ACL | `.../V20__add_fs_files.sql:L4-L16`；`.../controller/PdfImportController.java:L70-L73`、`:L841-L868`、`:L920-L932` | 任意具备 `RAG_READ` 的 Key 可从根目录枚举并下载全部上传文件，是当前最明确的跨 principal 泄露面 |
-| 2 | 评估/反馈为全局视图：`/evaluation/history`、`/evaluation/feedback/{stats,history,type}` 无 principal/Collection 过滤；`rag_user_feedback` 无 owner 字段 | `.../controller/EvaluationController.java:L196-L201`、`:L259-L264`、`:L274-L278`；`.../entity/RagUserFeedback.java:L35-L76` | 具备 `RAG_READ` 的 NORMAL principal 可读他人的 query、comment、sessionId |
+| 1 | ~~文件子系统全局共享~~ **V71 已修复**：`fs_files` / `fs_import_batches` 增加 `owner_principal_id` 与 `collection_id`；文件树、原始下载与预览对受限 key 按"owner 或允许的 Collection"过滤 | `.../V71__security_boundary_ownership.sql:L14-L31`；`.../repository/FsFileRepository.java:L79-L104`；回归：`scripts/verify-security-upgrade-path.py`（受限 key 看不到 V70 历史文件、root 仍可见） | 遗留无归属行对受限 key 不可见（fail-closed）；需要可见时用 `scripts/backfill-security-ownership.py`（默认 dry-run）显式回填 |
+| 2 | ~~评估/反馈为全局视图~~ **V71 已修复**：`rag_user_feedback` / `rag_retrieval_evaluations` 增加 `owner_principal_id`，受限 principal 的历史与统计只读自己的行 | `.../V71__security_boundary_ownership.sql:L34-L43`；`.../service/RetrievalEvaluationServiceImpl.java:L236-L283`；`.../service/UserFeedbackServiceImpl.java:L150` | 遗留无归属行对受限 key 不可见；root/不受限 key 仍保留全局视图，符合既有语义 |
 | 3 | 默认无认证：本地 `enabled=false`，未配 root 时整站开放 | `.../config/RagSecurityProperties.java:L19`；`.../filter/ApiKeyAuthFilter.java:L120-L124` | 多实例/多业务部署若漏配 root，等于零隔离 |
 | 4 | ACL 粒度只到 Collection，且为 CSV 字段、无数据库兜底 | `.../V24__api_key_allowed_collections.sql:L1-L6`；`.../security/ApiKeyCollectionAccess.java:L111-L124` | 新入口漏接 ACL 时无 RLS/约束兜底；无 ACL 的 NORMAL Key 全域可见 |
 | 5 | `collection_key` 全局唯一，无租户命名空间 | `.../entity/RagCollection.java:L16-L21`、`:L31` | 不同租户无法复用同一业务 key，补齐需迁移唯一约束与 by-key 路由 |
@@ -118,16 +133,28 @@
    实际只是 Collection 级 ACL。
 2. `docs/configuration-zh-CN.md:L1425` 的"按 API Key 限流 ... 适合多租户场景"只是限流
    建议，容易被读成租户能力。
-3. 正式文档尚未提示第 4 节缺口 1、2（文件子系统与评估/反馈面无 ACL 边界）。
+3. ~~正式文档尚未提示第 4 节缺口 1、2（文件子系统与评估/反馈面无 ACL 边界）。~~
+   2026-11-04 复核：V71 已修复该边界，正式文档按"API Key/principal + Collection ACL
+   + 资源归属"描述；本节保留为历史调研记录。
 4. `docs/2026-07-21_CODE_AUDIT_REPORT.md:L177`"无 tenantId/ownerId/workspace"是
-   V24 之前的历史结论，不代表当前 ACL 状态。
+   V24 之前的历史结论，不代表当前 ACL 状态；该报告已加历史声明。
 
 ## 6. 若要真多租户需要补的四层
 
 1. **数据层**：租户维度与复合唯一/索引（或 RLS），迁移 `collection_key` 等全局唯一约束。
 2. **认证上下文**：把租户绑定到 principal/token，并在请求上下文中传递。
-3. **数据面统一 ACL**：把过滤补齐到文件子系统与评估/反馈等聚合面，避免仅靠人工记得接。
+3. **数据面统一 ACL**：V71 已补齐文件、评估历史与反馈的归属过滤；要避免新入口
+   漏接，仍需 RLS 或统一 SQL fragment 兜底。
 4. **运营面**：租户级配额/用量、WebUI 租户选择与文档同步。
 
 在此之前，多租户部署的可行兜底是"每租户独立实例/独立数据库"，并强制配置
 `RAG_ROOT_API_KEY`、禁用 auth-disabled 路径。
+
+## 7. 现状更新记录
+
+| 日期 | 变更 | 证据 |
+|------|------|------|
+| 2026-11-04 | 缺口 1、2 关闭：文件、评估历史、反馈增加 owner/collection 归属并按 principal 过滤；遗留无归属行对受限 key fail-closed，可选用回填脚本 | `V71__security_boundary_ownership.sql`、`scripts/verify-security-upgrade-path.py`、`scripts/backfill-security-ownership.py` |
+
+仍未关闭：缺口 3（默认无认证）、4（ACL 只到 Collection、无 RLS 兜底）、
+5（`collection_key` 全局唯一）、6（无租户层级/租户级配额）。

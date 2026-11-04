@@ -6,9 +6,9 @@
 > **实施授权**：后续实施必须等待用户另行指示
 > **规划位置**：当前主工作区 `main`
 > **实施位置**：后续从届时最新 `origin/main` 创建专用分支和隔离 worktree
-> **未来进度文档**：实施开始时创建 `WEBUI_UNIFIED_DESIGN_LANGUAGE_PROGRESS.md`
-> **交付规则**：[规划、实施与验收工作流](../delivery-workflow-zh-CN.md)
-> **既有长青约束**：[WebUI 水平对齐指南](../webui-alignment-guidelines-zh-CN.md)
+> **未来进度文档**：实施开始时创建 `2026-11-04_WEBUI_UNIFIED_DESIGN_LANGUAGE_PROGRESS.md`
+> **交付规则**：[规划、实施与验收工作流](../../delivery-workflow-zh-CN.md)
+> **既有长青约束**：[WebUI 水平对齐指南](../../webui-alignment-guidelines-zh-CN.md)
 
 ## 1. 执行结论
 

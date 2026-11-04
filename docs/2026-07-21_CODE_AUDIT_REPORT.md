@@ -1,10 +1,11 @@
 # spring-ai-rag 全面代码审核报告
 
 > **状态：历史快照，已被后续实现取代。** 本报告保留 2026-07-21 审计当时的发现，
-> 正文中“Chat 不支持 Collection”“没有 Collection ACL”“仍为 SNAPSHOT”等结论已经过时。
-> 当前事实以 [项目上下文](project-context-zh-CN.md)、
+> 正文中“Chat 不支持 Collection”“没有 Collection ACL”“仍为 SNAPSHOT”“无 ownerId”
+> 等结论已经过时。当前事实以 [项目上下文](project-context-zh-CN.md)、
 > [架构文档](architecture-zh-CN.md) 和
-> [P0 实施记录](drafts/archive/2026-07-21_P0_IMPLEMENTATION_PROGRESS.md) 为准。
+> [P0 实施记录](drafts/archive/2026-07-21_P0_IMPLEMENTATION_PROGRESS.md) 为准；
+> 文件/评估/反馈面的归属边界见 [多租户现状](drafts/MULTI_TENANCY_STATUS.md)。
 >
 > **Purpose**: 基于代码与规划文档交叉验证的能力盘点；重点回答「高价值能力缺口」与「下一步做什么」。  
 > **Date**: 2026-07-21  
@@ -173,6 +174,13 @@
 - **工作量**：M
 
 #### 2.8 集合级 ACL / 多租户雏形
+
+> **2026-11-04 补注（当前事实）**：本节的"无 `ownerId`"结论对应 2026-07-21 快照。
+> 此后 V24 引入 Collection ACL，V71 为 `fs_files`、`fs_import_batches`、
+> `rag_user_feedback`、`rag_retrieval_evaluations` 增加 `owner_principal_id`
+> （文件另加 `collection_id`），文件与评估/反馈面已按 principal 过滤。
+> 仍未实现的是租户实体、租户级配额与 RLS；详见
+> [多租户现状](drafts/MULTI_TENANCY_STATUS.md)。
 
 - **缺口**：无 `tenantId`/`ownerId`/workspace；API Key 角色不隔离数据。
 - **价值**：SaaS 化与企业落地前提。

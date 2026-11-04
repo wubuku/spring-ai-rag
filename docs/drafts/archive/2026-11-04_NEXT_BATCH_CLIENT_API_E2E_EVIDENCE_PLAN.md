@@ -1,7 +1,7 @@
 # Client API 真实端到端、证据提交与验收可靠性改进规划
 
 > 中文规划。实施与本规划同步记录在
-> [进度账本](NEXT_BATCH_CLIENT_API_E2E_EVIDENCE_PROGRESS.md)。
+> [进度账本](2026-11-04_NEXT_BATCH_CLIENT_API_E2E_EVIDENCE_PROGRESS.md)。
 
 ## 1. 状态与基线
 

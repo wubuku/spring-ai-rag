@@ -299,6 +299,13 @@ check_business_client_discoverability() {
   done
 }
 
+check_docs_code_truth() {
+  # 文档里被复制的事实（迁移范围、端口、profile、维度、脚本名、npm 脚本、
+  # REST 端点、rag.* 配置键、模块目录）逐项对回源码/脚本。
+  node scripts/test-support/docs-code-truth-self-test.mjs
+  node scripts/verify-docs-code-truth.mjs
+}
+
 check_project_invariants() {
   local latest_migration
   latest_migration="$(
@@ -536,6 +543,7 @@ run_check "Tracked text files contain no NUL bytes" check_tracked_text_cleanline
 run_check "Bilingual heading structure" check_bilingual_heading_structure
 run_check "Chinese documents carry no untranslated English" check_chinese_translation
 run_check "Documentation integrity self-test" check_docs_integrity_self_test
+run_check "Docs-code truth reconciliation" check_docs_code_truth
 run_check "Business-client integration discoverability" check_business_client_discoverability
 run_check "Project invariants" check_project_invariants
 run_check "Documented scripts and commands" check_scripts_and_commands

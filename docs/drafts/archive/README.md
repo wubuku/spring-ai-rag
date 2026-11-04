@@ -30,6 +30,15 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
 
 ## Main Historical Topics
 
+- Batches archived on 2026-11-04 (plan and progress kept together):
+  [Client SDK, structured evidence, and recovery](2026-10-16_CLIENT_SDK_EVIDENCE_READINESS_PLAN.md) ·
+  [Client API real end-to-end and evidence](2026-11-04_NEXT_BATCH_CLIENT_API_E2E_EVIDENCE_PLAN.md) ·
+  [Client contract governance, data lifecycle, and reliability](2026-11-04_NEXT_BATCH_CLIENT_GOVERNANCE_RELIABILITY_PLAN.md) ·
+  [QA workbench and PDF](2026-11-04_NEXT_BATCH_QA_WORKBENCH_PDF_PLAN.md) ·
+  [API compatibility, runtime evidence, and per-request trace](2026-11-04_NEXT_BATCH_API_EVIDENCE_TRACE_PLAN.md) ·
+  [LLM budget and data governance](2026-11-04_LLM_BUDGET_AND_DATA_GOVERNANCE_PLAN.md) ·
+  [WebUI unified design language](2026-11-04_WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md).
+
 - Upstream failure classification, budgeted retries, Client recovery, and same-call diagnostics:
   [plan](2026-10-18_UPSTREAM_CLIENT_RECOVERY_PLAN.md) and
   [implementation, API/SDK/two-node/dev acceptance, and real-model quality limits](2026-10-18_UPSTREAM_CLIENT_RECOVERY_PROGRESS.md)

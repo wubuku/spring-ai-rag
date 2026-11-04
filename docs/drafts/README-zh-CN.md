@@ -34,17 +34,13 @@
 
 - [WeKnora 参考项目调研与借鉴规划](WEKNORA_REFERENCE_RESEARCH.md)：记录对参考项目的代码级调研、
   与当前能力的差距判断和候选实施路线；仅为活跃调研草案，不代表已承诺实施。
-- [WebUI 统一设计语言调研与实施规划](WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md)
 - [加固循环批次规划](HARDENING_LOOP_PLAN.md)：持续循环执行测试加固、WebUI UI/UX
   重构与技术债务处理；本阶段不把新功能作为重点。
-- [Client 契约治理、数据生命周期与可靠性边界](NEXT_BATCH_CLIENT_GOVERNANCE_RELIABILITY_PLAN.md)：
-  面向外部 Client 的 API 契约、数据治理和可靠性增量改进；规划已通过 `3/3`，正在实施。
-- [Client SDK、结构化证据与生产恢复验收](2026-10-16_CLIENT_SDK_EVIDENCE_READINESS_PLAN-zh-CN.md)：
-  面向外部 Client 的最小 SDK 接入、OpenAI 增量证据字段和隔离数据库恢复验收；规划、实施与验收已完成，剩余 Git 交付。
-- [Client API 真实端到端、证据提交与验收可靠性改进](NEXT_BATCH_CLIENT_API_E2E_EVIDENCE_PLAN.md)：
-  修复未归属文档的默认范围提交、真实 E2E 清理与 SDK 依赖复现问题，并扩展版本化真实 QA 和外部 API 回归；规划、实施与验收已完成，剩余 Git 交付。
 - [持久化长任务、多 Embedding Profile、Client 契约与质量漂移](NEXT_BATCH_ASYNC_EMBEDDING_CLIENT_QUALITY_PLAN.md)：
-  规划连续 `3/3` 已通过，正在实施长任务资源治理、固定维度 Profile 路由、Client/OpenAI 契约治理和真实模型质量漂移基线；异步 Purge、外部实时验收及最终复核仍未完成。
+  异步 Purge、固定维度 Profile 路由与 Client 契约已落地；剩余外部阻塞是 MiniMax 账户额度
+  恢复后补真实拒答/answer-contract 证据，以及用户轮换曾暴露的 key，尚未完成 Git 交付。
+- [多租户现状调研](MULTI_TENANCY_STATUS.md)：只读盘点当前 ACL/归属边界与多租户缺口；
+  缺口 1、2 已在 V71 关闭，保留为持续跟踪现状的调研稿。
 
 前三批文档处理恢复、引用/流式安全、分块正确性与诊断、默认启用与自动升级、故障后无人值守恢复，以及补充真实 LLM 验收已归档至
 [历史规划归档](archive/README-zh-CN.md)。

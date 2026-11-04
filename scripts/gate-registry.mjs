@@ -629,6 +629,14 @@ export const GATES = [
     kind: 'gate',
     selfTest: 'scripts/test-support/zh-translation-self-test.mjs',
   },
+  // 文档里复制的事实（迁移范围、端口、profile、维度、脚本名、npm 脚本、
+  // REST 端点、rag.* 配置键、模块目录）逐项对回源码/脚本。自检用构造输入
+  // 证明每条规则既能放行也能拒绝，而不是只在干净仓库上跑过一次。
+  {
+    gate: 'scripts/verify-docs-code-truth.mjs',
+    kind: 'gate',
+    selfTest: 'scripts/test-support/docs-code-truth-self-test.mjs',
+  },
 
   // Entry points in their own right. Both aggregate the gates above, so the only
   // thing missing for them is a CI step — the same single blocker.

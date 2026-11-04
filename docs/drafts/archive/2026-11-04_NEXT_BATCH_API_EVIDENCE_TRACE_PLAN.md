@@ -8,8 +8,8 @@
 >
 > **基线提交**：`3482d702 feat: add QA evaluation workbench and bounded PDF import`。
 >
-> **近距离规范**：[规划、实施与验收工作流](../delivery-workflow-zh-CN.md)、[项目上下文](../project-context-zh-CN.md)、
-> [REST API](../rest-api-zh-CN.md)、[SSE 协议](../SSE-PROTOCOL.md)、[测试指南](../testing-guide-zh-CN.md)。
+> **近距离规范**：[规划、实施与验收工作流](../../delivery-workflow-zh-CN.md)、[项目上下文](../../project-context-zh-CN.md)、
+> [REST API](../../rest-api-zh-CN.md)、[SSE 协议](../../SSE-PROTOCOL.md)、[测试指南](../../testing-guide-zh-CN.md)。
 
 ## 1. 执行摘要
 

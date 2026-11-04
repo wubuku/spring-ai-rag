@@ -1,6 +1,6 @@
 # Client API 真实端到端、证据提交与验收可靠性改进进度
 
-> 对应规划：[实施规划](NEXT_BATCH_CLIENT_API_E2E_EVIDENCE_PLAN.md)。
+> 对应规划：[实施规划](2026-11-04_NEXT_BATCH_CLIENT_API_E2E_EVIDENCE_PLAN.md)。
 
 ## 状态
 

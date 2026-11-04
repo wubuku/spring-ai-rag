@@ -2,7 +2,7 @@
 
 > 状态：规划已冻结，实施与验收已完成；Git 交付前保留本文件作为可恢复的实施依据。
 > 基线：`9bdcffef`（`main`，2026-10-15）
-> 进度账本：[NEXT_BATCH_CLIENT_GOVERNANCE_RELIABILITY_PROGRESS.md](NEXT_BATCH_CLIENT_GOVERNANCE_RELIABILITY_PROGRESS.md)
+> 进度账本：[2026-11-04_NEXT_BATCH_CLIENT_GOVERNANCE_RELIABILITY_PROGRESS.md](2026-11-04_NEXT_BATCH_CLIENT_GOVERNANCE_RELIABILITY_PROGRESS.md)
 
 ## 1. 执行摘要
 
@@ -32,8 +32,8 @@
 - Flyway 当前最高版本为 `V63`。本批默认不新增表和列，因此默认不需要迁移；如实施中发现
   必须改变 schema，先暂停代码实施，补写迁移/回滚设计并将规划计数重置为 `0/3`。
 - 项目约束、测试命令、迁移规则和 API 兼容原则以
-  [AGENTS.md](../../AGENTS.md)、[delivery-workflow-zh-CN.md](../delivery-workflow-zh-CN.md)、
-  [testing-guide-zh-CN.md](../testing-guide-zh-CN.md) 为准。
+  [AGENTS.md](../../../AGENTS.md)、[delivery-workflow-zh-CN.md](../../delivery-workflow-zh-CN.md)、
+  [testing-guide-zh-CN.md](../../testing-guide-zh-CN.md) 为准。
 
 ### 2.2 已有外部契约能力
 
@@ -96,7 +96,7 @@
 ### 3.2 非目标
 
 - 不在本批实现 OAuth/OIDC、独立 tenant hierarchy、billing、token hard limit 或 Redis；
-  这些仍按 [TODO-zh-CN.md](../TODO-zh-CN.md) 中的独立规划处理。
+  这些仍按 [TODO-zh-CN.md](../../TODO-zh-CN.md) 中的独立规划处理。
 - 不实现新的 Collection 召回 `EACH_COLLECTION` 策略。
 - 不删除或改名任何 deprecated numeric field/route，不强制调用方改用新字段。
 - 不把 LLM judge 放入普通 Chat 请求路径；claim-level semantic judge 若实施，只能是后续

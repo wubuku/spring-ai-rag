@@ -8542,7 +8542,7 @@
   它要包的东西 `Layout` 已经在包，而各页容器**确实需要不同**——
   Chat 是 `max-width: 900px` 的居中阅读列、Settings `700px`、
   Files 是 `height: 100%` 弹性布局。把三者塞进同一个壳是**回退而不是改进**。
-- 因此把 `WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md` 的退出条件**改写成现在真实成立
+- 因此把 `archive/2026-11-04_WEBUI_UNIFIED_DESIGN_LANGUAGE_PLAN.md` 的退出条件**改写成现在真实成立
   且有门禁守护的事实**（并附上实测数据与理由），PROGRESS 表同步更新。
   **一笔被 defer 了十个批次的债，靠"先量再判"在第二批就解决了。**
 

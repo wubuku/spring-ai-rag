@@ -37,10 +37,10 @@
 
 近距离参考：
 
-- [质量默认值](../quality-defaults-zh-CN.md)
-- [评测实现](../../spring-ai-rag-core/src/main/java/com/springairag/core/evaluation/EvaluationSuiteService.java)
-- [Chat 执行结果](../../spring-ai-rag-core/src/main/java/com/springairag/core/chat/ChatExecutionResult.java)
-- [Citation 校验](../../spring-ai-rag-core/src/main/java/com/springairag/core/evaluation/CitationValidator.java)
+- [质量默认值](../../quality-defaults-zh-CN.md)
+- [评测实现](../../../spring-ai-rag-core/src/main/java/com/springairag/core/evaluation/EvaluationSuiteService.java)
+- [Chat 执行结果](../../../spring-ai-rag-core/src/main/java/com/springairag/core/chat/ChatExecutionResult.java)
+- [Citation 校验](../../../spring-ai-rag-core/src/main/java/com/springairag/core/evaluation/CitationValidator.java)
 
 ### 2.2 文档处理工作台
 
@@ -50,9 +50,9 @@
 
 近距离参考：
 
-- [Run Controller](../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/DocumentProcessingRunController.java)
-- [Run DTO](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/DocumentProcessingRunResponse.java)
-- [Documents 页面](../../spring-ai-rag-webui/src/pages/Documents.tsx)
+- [Run Controller](../../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/DocumentProcessingRunController.java)
+- [Run DTO](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/DocumentProcessingRunResponse.java)
+- [Documents 页面](../../../spring-ai-rag-webui/src/pages/Documents.tsx)
 
 ### 2.3 PDF 导入
 
@@ -62,10 +62,10 @@
 
 近距离参考：
 
-- [PDF 导入](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/PdfImportService.java)
-- [Marker 转换器](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/pdf/MarkerPdfConverter.java)
-- [PDFBox 转换器](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/pdf/PdfBoxConverter.java)
-- [PDF 配置](../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagPdfProperties.java)
+- [PDF 导入](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/PdfImportService.java)
+- [Marker 转换器](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/pdf/MarkerPdfConverter.java)
+- [PDFBox 转换器](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/pdf/PdfBoxConverter.java)
+- [PDF 配置](../../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagPdfProperties.java)
 
 ## 3. 对外/持久化契约
 

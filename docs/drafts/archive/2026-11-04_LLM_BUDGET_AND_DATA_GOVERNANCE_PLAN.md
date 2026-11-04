@@ -1,7 +1,7 @@
 # 下一批实施规划：LLM 预算预留/硬限制与统一数据治理
 
 > 状态：规划已完成并已实施；规划检查与实施前置门禁均已通过。实施结果和最后收尾证据见
-> [LLM_BUDGET_AND_DATA_GOVERNANCE_PROGRESS.md](LLM_BUDGET_AND_DATA_GOVERNANCE_PROGRESS.md)。
+> [2026-11-04_LLM_BUDGET_AND_DATA_GOVERNANCE_PROGRESS.md](2026-11-04_LLM_BUDGET_AND_DATA_GOVERNANCE_PROGRESS.md)。
 > 本规划面向外部 Client API 服务形态；WebUI 只作为辅助验证，不作为本批完成依据。
 
 ## 1. 执行结论

@@ -219,7 +219,7 @@ VITE_API_BASE=/api/v1/rag
 npm run dev          # Start Vite dev server
 npm run build        # Production build (tsc + vite build)
 npm run lint         # ESLint + typecheck + every static policy gate (incl. design-system self-tests)
-npm run lint:fix     # ESLint auto-fix
+npx eslint . --fix    # ESLint auto-fix
 npm run preview      # Preview production build locally
 npm run test:run     # Vitest component/unit tests
 npm run test:e2e:mock  # Playwright Mock suite (no backend; this is what CI runs)

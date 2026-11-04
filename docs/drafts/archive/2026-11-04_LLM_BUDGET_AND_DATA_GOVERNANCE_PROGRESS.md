@@ -5,7 +5,7 @@
 - 分支：`main`
 - 基线：`001300f1 feat: add client consumer contract kit`
 - 当前阶段：代码实施、集成验证和回归验收已完成，等待最终 Git 交付。
-- 规划入口：[LLM_BUDGET_AND_DATA_GOVERNANCE_PLAN.md](LLM_BUDGET_AND_DATA_GOVERNANCE_PLAN.md)
+- 规划入口：[2026-11-04_LLM_BUDGET_AND_DATA_GOVERNANCE_PLAN.md](2026-11-04_LLM_BUDGET_AND_DATA_GOVERNANCE_PLAN.md)
 - 恢复限制：不得使用 `git reset --hard`、`git stash` 或 `git clean`。
 
 ## 冻结范围
