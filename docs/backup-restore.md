@@ -83,6 +83,75 @@ Traffic gates include health/Flyway, active embedding profile, original-byte has
 deleted fixtures, scoped API-key read/write and Collection isolation, history, Native/OpenAI JSON/SSE and actual
 consumer contracts. Define RPO from the backup schedule and measure RTO in drills; one local run is not a production SLA.
 
+## Backup Type And Write Consistency
+
+- **Logical backup**: `rag-backup.py` runs `pg_dump` into a custom archive containing schema,
+  data, sequences and extension declarations. It is not a physical volume snapshot,
+  incremental backup or PITR. Restore applies SQL in one transaction, so a failure rolls back
+  completely and never leaves a half-restored database.
+- **Quiescence requirement**: the tool requires explicit `--quiesced`. It is an operator
+  assertion that application writers and background workers are stopped; the tool never stops
+  services itself. The database dump is an MVCC-consistent point either way; quiescing makes
+  task, lease and deletion state explainable at the recovery point. **The supported entry point
+  does not offer online backup**; omitting `--quiesced` is rejected.
+- **Writes in progress**: if you bypass the tool and run `pg_dump` against an active database,
+  the database snapshot is still point-in-time consistent and contains no torn rows (for example,
+  a document row without its derived rows). Application-level tasks may nevertheless sit in an
+  intermediate state (a created document whose embedding job has not settled). The restored
+  deployment must let existing lease/reconciliation take over; this is not a claim of RPO=0.
+  `verify-backup-restore-drill.py` proves the database-level no-torn-row property with concurrent
+  writes plus a native logical snapshot, and also proves the official tool rejects non-quiesced
+  backup.
+
+## Restore Verification Checklist
+
+`verify-backup-restore-drill.py` asserts the following on real PostgreSQL + pgvector:
+
+1. **Table-by-table content**: row counts and content digests for every public table (documents,
+   chunks, vectors, Collections, evaluation suite/version/run/case result, feedback,
+   `fs_files`/import batch, idempotency operations, sync history, failed jobs, processing
+   run/stage, audit log) match exactly;
+2. **Migration history**: `flyway_schema_history.installed_rank` starts at 1 and is contiguous,
+   with the same row count;
+3. **Vector index**: the HNSW index exists, `indisvalid/indisready` are true, and a real
+  1024-dimension `EXPLAIN` uses an index scan rather than a sequential scan;
+4. **Serviceability**: the same application version starts on the restored database and passes
+   health, search, chat, document-by-id and feedback-history calls;
+5. **Restore boundary**: the target is a fresh empty database, distinct from the source, and
+   the source is never modified during restore.
+
+## Deletion Completeness And Cascade Scope
+
+`verify-deletion-integrity.py` deletes each family on a real database and scans the whole
+schema for orphans:
+
+| Deleted object | Cascaded or retained |
+|----------------|----------------------|
+| Local document hard delete | chunks, `rag_embeddings` and vector columns, versions, embedding/local index state, embedding jobs, processing run/stage, feedback/chat source references, idempotency receipts, repair ledger (cascade or reference cleanup) |
+| External document source delete | source tombstone (`enabled=false`), immediately invisible to retrieval; physical removal is done by Collection purge |
+| Collection permanent purge | documents, chunks, vectors, feedback, audit rows, idempotency operations, repair previews, **sync run/item**, operation slots; the Collection row remains as a purged tombstone |
+| Feedback | `rag_user_feedback_document` cascades |
+| Evaluation suite | version → run → case result cascade |
+| Upload file / import batch | deleting the `fs_files` entry file cascades the batch pointing at it; deleting a batch does not delete the file body (file library is independent) |
+
+Known non-deletion items and retention policy:
+
+- `rag_audit_log`: Collection purge removes audit rows scoped to that Collection; other audit
+  rows follow the existing retention policy and are not removed by a single-document delete.
+- `fs_files`: uploaded files belong to the file library. Collection purge and import-batch
+  deletion never guess file ownership from paths. Delete files explicitly when required
+  (there is no public deletion API today; the audit script uses controlled SQL to verify the
+  FK direction).
+- Sync history run/item: the item's `document_id` is set to NULL after hard document deletion
+  (source sync trail retained); Collection purge deletes the whole run and its items.
+- `rag_document_relocated_addresses.document_id` is set to NULL, retaining the address marker.
+
+Rebuild with the same id / idempotency key / lease: explicitly reusing a deleted document id
+does not bring back old chunks or vectors; reusing an `Idempotency-Key` after its target
+document was deleted clears the stale receipt and creates a new document (no permanent 409);
+a failure in any item of a batch delete rolls back the whole transaction, so retry converges
+without a half-deleted state.
+
 ## Reproducible Isolated Drill
 
 ```bash
@@ -90,15 +159,18 @@ mvn clean compile test-compile
 python3 scripts/test-support/rag-backup-self-test.py
 python3 scripts/verify-dependency-recovery-e2e.py
 python3 scripts/verify-backup-restore-drill.py   # real data + pg_dump/pg_restore single pass
+python3 scripts/verify-deletion-integrity.py     # per-family delete + orphan/rebuild/atomicity audit
 ```
 
-`verify-backup-restore-drill.py` seeds real documents and vectors through the demo with
-the mock provider, quiesces the app, runs a full backup via `scripts/rag-backup.py`,
-restores into a second fresh database, compares document count, vector count and
-dimensions, collections, migration history, and a content fingerprint, then starts the
-app on the restored database and runs health and search. It drops both temporary
-databases on exit; `--keep` retains them. All temporary databases use the
-`rag_backup_drill_*` prefix.
+`verify-backup-restore-drill.py` seeds real documents, vectors, evaluation/feedback/file/task
+data through the demo with the mock provider, quiesces the app, runs a full backup via
+`scripts/rag-backup.py`, restores into a second fresh database, compares row counts and content
+digests for every table, checks Flyway continuity and the HNSW `EXPLAIN` plan, then starts the
+app on the restored database and runs health, search and chat. It drops all temporary databases
+on exit; `--keep` retains them. Temporary databases use the `rag_backup_drill_*` prefix.
+`verify-deletion-integrity.py` uses `rag_delete_drill_*` and covers per-family deletion,
+whole-database orphan scans, same-id/idempotency rebuild, batch failure rollback and capacity
+counter recovery.
 
 The drill creates only its own PostgreSQL container/databases, uses controlled upstreams, actually dumps/restores,
 compares all table contents and checks files/vectors/permissions/deletions and external HTTP. It also exercises faults,

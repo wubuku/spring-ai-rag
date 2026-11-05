@@ -73,6 +73,62 @@ python3 scripts/rag-backup.py restore /secure/backups/rag-20261018 --ack-isolate
 Scoped API Key 读写和 Collection 隔离、历史、Native/OpenAI JSON/SSE，以及实际客户端契约。
 按实际备份频率定义 RPO，按演练测量 RTO，不把单次测试耗时作为生产 SLA。
 
+## 备份类型与写入一致性
+
+- **逻辑备份**：`rag-backup.py` 调用 `pg_dump` 生成 custom archive，包含 schema、数据、
+  序列与扩展声明；它不是物理卷快照、增量备份或 PITR。恢复通过单事务 SQL 应用，
+  失败整体回滚，不会留下半恢复库。
+- **停写要求**：工具要求显式 `--quiesced`。这是操作者对"已停止业务写入与后台 worker"
+  的确认，工具不会替你停服务。DB 快照本身是 MVCC 一致点；停写是为了让任务、租约、
+  删除状态与业务恢复点可解释。**官方入口不支持"在线备份"**；不带 `--quiesced` 会被拒绝。
+- **写入进行中的语义**：若绕过工具直接对活跃库执行 `pg_dump`，数据库层仍是单点一致
+  快照，不会出现"主表已写入、派生行缺失"的撕裂行；但应用级任务可能停在中间状态
+  （如已建文档但嵌入 job 尚未结算）。这类不完整业务状态由恢复后的 lease/reconciliation
+  接管，不能据此声称 RPO=0。`verify-backup-restore-drill.py` 用并发写入 + 原生逻辑快照
+  验证了数据库层无半写行，同时验证官方工具拒绝非静写入口。
+
+## 恢复验证清单
+
+`verify-backup-restore-drill.py` 在真实 PostgreSQL + pgvector 上逐项断言：
+
+1. **逐表内容**：public schema 全部表的行数与内容摘要（含文档、chunk、向量、Collection、
+   评估 suite/version/run/case result、反馈、`fs_files`/import batch、幂等操作、同步历史、
+   失败 job、处理 run/stage、审计日志）完全一致；
+2. **迁移历史**：`flyway_schema_history.installed_rank` 从 1 开始且连续，行数一致；
+3. **向量索引**：HNSW 索引存在、`indisvalid/indisready` 为真；用真实 1024 维数据执行
+   `EXPLAIN`，确认走 Index Scan 而不是 Seq Scan；
+4. **服务可用**：用恢复库启动同版本应用，跑 health、检索、chat 提问、按原 ID 读文档
+   与反馈历史，证明恢复库可直接服务；
+5. **恢复边界**：恢复到全新空库、目标库与源库不同、恢复前不改写任何源数据。
+
+## 删除完整性与级联范围
+
+`verify-deletion-integrity.py` 对真实库逐类删除并做全库孤儿扫描：
+
+| 删除对象 | 级联/保留 |
+|----------|-----------|
+| 本地文档永久删除 | chunk、`rag_embeddings` 与向量列、版本、embedding/local index state、embedding job、处理 run/stage、反馈/会话来源引用、幂等凭证、修复台账级联或解除引用 |
+| 外部文档源端删除 | 源端 tombstone（`enabled=false`），检索立即不可见；物理清除交给 Collection 永久清理 |
+| Collection 永久清理 | 文档、chunk、向量、反馈、审计行、幂等操作、修复预览、**同步 run/item**、操作槽位；Collection 行保留为已清理 tombstone |
+| 反馈 | `rag_user_feedback_document` 级联删除 |
+| 评估 suite | version → run → case result 级联删除 |
+| upload 文件 / import batch | 删除 `fs_files` 入口文件会级联删除指向它的 batch；删除 batch 不删除文件本体（文件库独立保留） |
+
+已知不删项与保留策略：
+
+- `rag_audit_log`：Collection 清理会删除该 Collection 范围内的审计行；其他审计按既有
+  保留策略保留，不随单篇文档删除而消失。
+- `fs_files`：上传文件属于文件库，Collection 清理与 import batch 删除都不按路径猜测
+  删除文件本体；需要清除时单独删除文件（当前无公开删除 API，审计脚本用受控 SQL 验证
+  外键方向）。
+- 同步历史 run/item：item 的 `document_id` 在文档永久删除后置空（保留源端同步轨迹）；
+  Collection 永久清理会删除整条 run 及其 item。
+- 迁移地址 `rag_document_relocated_addresses` 的 `document_id` 置空，保留地址映射标记。
+
+同 id / 同幂等键 / 同 lease 重建：删除后显式复用旧 document id 不会带回旧 chunk/向量；
+同一 `Idempotency-Key` 在目标文档已删除后会清理失效凭证并重新创建（不再永久 409）；
+批量删除任一条失败时整个事务回滚，可原样重试收敛，不留半删状态。
+
 ## 可重复隔离演练
 
 ```bash
@@ -80,12 +136,15 @@ mvn clean compile test-compile
 python3 scripts/test-support/rag-backup-self-test.py
 python3 scripts/verify-dependency-recovery-e2e.py
 python3 scripts/verify-backup-restore-drill.py   # 真实数据 + pg_dump/pg_restore 单轮演练
+python3 scripts/verify-deletion-integrity.py     # 逐类删除 + 全库孤儿/重建/原子性审计
 ```
 
-`verify-backup-restore-drill.py` 用 demo + mock provider 在临时库写入真实文档与向量，
-停写后调用 `scripts/rag-backup.py` 做全量备份，恢复到另一个全新库，逐项比对文档数、
-向量数与维度、collection、迁移历史和内容指纹，再用恢复库启动应用跑 health 与 search。
-默认结束即删除两个临时库，`--keep` 保留现场。临时库固定前缀 `rag_backup_drill_*`。
+`verify-backup-restore-drill.py` 用 demo + mock provider 在临时库写入真实文档、向量、
+评估/反馈/文件/任务数据，停写后调用 `scripts/rag-backup.py` 做全量备份，恢复到另一个
+全新库，逐表比对行数与内容摘要、Flyway 连续性与 HNSW `EXPLAIN` 计划，再用恢复库启动
+应用跑 health、search 与 chat。默认结束即删除全部临时库，`--keep` 保留现场。临时库固定
+前缀 `rag_backup_drill_*`。`verify-deletion-integrity.py` 使用 `rag_delete_drill_*` 前缀，
+逐类删除后做全库孤儿扫描、同 id/幂等键重建、批量失败回滚与容量计数回正。
 
 演练只创建自己的 PostgreSQL 容器/临时库，使用受控上游，真实执行 dump/restore、逐表内容对账、
 文件/向量/权限/删除与外部 HTTP 检查；额外覆盖故障、混合负载、强杀/正常重启和恢复负例。

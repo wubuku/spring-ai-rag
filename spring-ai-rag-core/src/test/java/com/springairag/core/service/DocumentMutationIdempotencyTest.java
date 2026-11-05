@@ -222,6 +222,41 @@ class DocumentMutationIdempotencyTest {
     }
 
     @Test
+    void succeededOperationWithDeletedDocumentIsReusedInsteadOfPermanentlyConflicting() {
+        StubJdbc stateful = new StubJdbc() {
+            @Override
+            public int update(String sql, Object... args) {
+                if (sql.contains("DELETE FROM rag_document_idempotency_operations")) {
+                    // 文档删除后 SET NULL 的失效凭证被清理，下一次 INSERT 可成功。
+                    this.insertResult = 1;
+                }
+                return super.update(sql, args);
+            }
+        };
+        Map<String, Object> staleRow = new java.util.HashMap<>();
+        staleRow.put("request_fingerprint", "fingerprint-sha");
+        staleRow.put("status", "SUCCEEDED");
+        staleRow.put("result_document_id", null);
+        staleRow.put("expired", false);
+        stateful.insertResult = 0;
+        stateful.queryRows = List.of(staleRow);
+
+        DocumentMutationService serviceWithStateful = newService(stateful);
+
+        Object reservation = org.springframework.test.util.ReflectionTestUtils
+                .invokeMethod(serviceWithStateful, "reserveIdempotency",
+                        "idem-key", "CREATE_LOCAL", "fingerprint-sha");
+
+        // 失效凭证被删除后重新预留：没有旧文档可重放，也不应永久 409。
+        assertEquals(null, org.springframework.test.util.ReflectionTestUtils
+                .getField(reservation, "replayDocumentId"));
+        assertEquals("db:key-42", org.springframework.test.util.ReflectionTestUtils
+                .getField(reservation, "owner"));
+        assertTrue(stateful.executedSql.stream().anyMatch(sql ->
+                sql.contains("DELETE FROM rag_document_idempotency_operations")));
+    }
+
+    @Test
     void inProgressOperationIsRejectedAsStillRunning() {
         Map<String, Object> inProgressRow = new java.util.HashMap<>();
         inProgressRow.put("request_fingerprint", "fingerprint-sha");

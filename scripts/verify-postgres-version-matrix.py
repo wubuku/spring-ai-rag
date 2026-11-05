@@ -2,7 +2,7 @@
 """PostgreSQL/pgvector 版本支持矩阵探针（真实容器 + 全量迁移）。
 
 对每个版本启动一个真实 `pgvector/pgvector:pgN` 容器，按 Flyway 顺序执行
-V1–V73 全部迁移，然后验证与版本相关的关键路径：
+V1–V74 全部迁移，然后验证与版本相关的关键路径：
 
 1. `vector` 扩展存在，版本不低于 HNSW 所需的最低版本；
 2. 迁移建出的 HNSW 索引有效，`hnsw.ef_search` 可用；
@@ -135,7 +135,7 @@ def probe(version: str, keep: bool) -> dict:
             psql(container, migration.read_text(encoding="utf-8"), single_transaction=True)
         facts["migration_count"] = len(migrations)
         facts["migration_seconds"] = round(time.monotonic() - started, 2)
-        check("全量迁移 V1–V73 执行成功", len(migrations) == 73,
+        check("全量迁移 V1–V74 执行成功", len(migrations) == 74,
               f"{len(migrations)} files applied")
 
         ext_version = psql(

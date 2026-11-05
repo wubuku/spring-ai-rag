@@ -236,16 +236,16 @@ export function runSelfTest() {
   expect('非迁移文件被忽略', latestMigrationNumber(['notes.sql', 'V2__x.sql']), 2);
 
   expect('当前范围一致时不报错', findStaleFlywayRanges({
-    docs: [{ file: 'AGENTS.md', text: 'Flyway 当前 V1–V73' }],
-    latest: 73,
+    docs: [{ file: 'AGENTS.md', text: 'Flyway 当前 V1–V74' }],
+    latest: 74,
   }), []);
   expect('当前范围漂移时报错', findStaleFlywayRanges({
     docs: [{ file: 'AGENTS.md', text: 'Flyway 当前 V1–V34' }],
-    latest: 73,
+    latest: 74,
   }).length, 1);
   expect('历史叙述不报错', findStaleFlywayRanges({
     docs: [{ file: 'docs/testing-guide.md', text: 'Batch 900 当时执行 Flyway V1-V52' }],
-    latest: 73,
+    latest: 74,
   }), []);
 
   expect('事实齐全时通过', findMissingFacts({

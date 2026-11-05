@@ -143,7 +143,8 @@ mvn clean package -DskipTests
 | 并发延迟基准与退化门禁 | `./scripts/run-concurrency-benchmark.py`；`./scripts/verify-performance-baseline.py --run --profile quick` | 真实 PostgreSQL + mock，并发 1/8/32 下的向量/混合检索、文档创建、上传解析、embedding 管线与导出：吞吐与 p50/p95/p99 对比 `scripts/testdata/performance-baseline.json`；p95 ≤ 2.5×、p99 ≤ 3×、吞吐 ≥ 0.3×，并叠加宽松绝对上限 |
 | 慢 SQL 与执行计划 | `./scripts/verify-query-plans.py --docker` | 一次性 pgvector 容器开启 `pg_stat_statements`：40 轮检索 + 10 次导出后的 top SQL；断言 `vector_ann` 使用 HNSW、`rag_embeddings` 无 Seq Scan，导出与标题关键词走索引 |
 | 长时间 soak | `./scripts/run-bounded-soak.py --minutes 12 --pid <pid> --dsn <dsn>` | 12 分钟混合负载，每 15 s 采样线程/堆/RSS/FD/DB 连接/GC；首尾 1/4 中位数比值门禁（1.5× + 绝对上限），单调爬升即失败；nightly 跑 10 分钟短版 |
-| 备份恢复演练 | `./scripts/verify-backup-restore-drill.py` | 真实数据写入 → 停写 → `rag-backup.py backup` → 校验 → 恢复到全新库 → 文档/向量/collection/迁移历史/内容指纹比对 → 恢复库直接 health+search |
+| 备份恢复演练 | `./scripts/verify-backup-restore-drill.py` | 真实数据写入 → 停写 → `rag-backup.py backup` → 校验 → 恢复到全新库 → 全表行数/内容摘要、Flyway 连续性、HNSW `EXPLAIN` 比对 → 恢复库直接 health+search+chat；并发写入的原生快照验证无半写行 |
+| 删除完整性审计 | `./scripts/verify-deletion-integrity.py` | 逐类删除文档/Collection/文件/import batch/评估/反馈 → 全库孤儿扫描 → 同 id/幂等键重建 → 批量失败回滚 → 统计与容量计数回正 |
 | 安全边界全入口回归 | `./scripts/verify-security-boundary.py` | 真实 PostgreSQL + mock provider：受限 NORMAL key 对 search/chat/collections/upload/PDF-to-RAG/files tree·raw·preview/evaluation/feedback 的跨 Collection 与跨 principal 断言；路径穿越拒绝；root 全局视图不变 |
 | 浏览器安全头与注入面 | `./scripts/verify-browser-security-headers-e2e.py` | 真实进程 + 真实 Chromium：`/webui/`、API、SSE、错误响应的 CSP/nosniff/Referrer-Policy/X-Frame-Options/Permissions-Policy；HTTP 无 HSTS、`X-Forwarded-Proto: https` 有 HSTS；页面加载、聊天 SSE、上传、搜索、导出不被 CSP 阻断；内联 `<script>` 与 `onclick` 注入被拒绝并触发 `securitypolicyviolation`；含 `<script>` 的模型输出按文本呈现 |
 | 资源饱和与降级语义 | `./scripts/verify-resource-saturation-e2e.py` | 一次性 pgvector 容器 + 真实进程：池耗尽 → 503 `DATABASE_UNAVAILABLE` + `Retry-After: 5`（有界排队非挂死）、慢查询 → 504 `DATABASE_TIMEOUT`、数据库停止/恢复后无需重启自动回 200、无连接泄漏、健康检查 DOWN→UP |
@@ -1446,7 +1447,7 @@ rollup 和数据库 tombstone 事实。持久化证据只包含状态、模型�
 范围实现具备 DTO、Resolver、ACL、SQL fragment、Vector/Full-text provider、
 Chat/Search/JSON、MockMvc、OpenAPI、WebUI 和 PostgreSQL 覆盖。真实
 PostgreSQL/Testcontainers 测试会启动 `pgvector/pgvector:pg16`，从空 schema 执行
-Flyway V1-V73，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
+Flyway V1-V74，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
 
 ```bash
 TESTCONTAINERS_RYUK_DISABLED=true \
@@ -1487,7 +1488,7 @@ WebUI 验收覆盖三种模式、多选、服务端 Collection 搜索和分页�
 ### JSONB 结构化记录验收门禁
 
 JSONB 实现同时具备 Mock HTTP/Service 覆盖和真实 PostgreSQL/Testcontainers 测试。后者会
-启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V73，并验证 JSONB round-trip、
+启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V74，并验证 JSONB round-trip、
 嵌套 `payloadContains`、V34 GIN planner、仅更新 payload 的版本记录、相同描述下不同
 记录共存以及级联清理：
 
@@ -1540,7 +1541,7 @@ TESTCONTAINERS_RYUK_DISABLED=true mvn -pl spring-ai-rag-starter -am test \
 脚本默认启动隔离 PostgreSQL、Mock 上游、Core standalone 和不主动扫描
 `com.springairag` 的 Starter Consumer，并用官方 Python SDK `2.14.0` 与 Node SDK
 `7.34.0` 在两种拓扑下验证 models、JSON、SSE、幂等重放、错误信封和认证。它还确认
-外部 Starter Consumer 执行 Flyway V1–V73 后可提供同一 `/v1` 客户端契约；隔离服务还会
+外部 Starter Consumer 执行 Flyway V1–V74 后可提供同一 `/v1` 客户端契约；隔离服务还会
 实际运行 Native/OpenAI consumer HTTP contract 和基于临时 PostgreSQL 的异步 Collection
 Purge 生命周期。结果位于 `.verification/openai-sdk-e2e/<run-id>/summary.md`，默认不产生真实模型费用。
 

@@ -158,7 +158,8 @@ migrations, concurrency paths, backup tooling, or HTTP contracts.
 | Concurrency latency baseline and regression gate | `./scripts/run-concurrency-benchmark.py`; `./scripts/verify-performance-baseline.py --run --profile quick` | real PostgreSQL + mock at concurrency 1/8/32 for vector/hybrid search, document create, upload parse, embedding pipeline and export: throughput plus p50/p95/p99 against `scripts/testdata/performance-baseline.json`; p95 ≤ 2.5×, p99 ≤ 3×, throughput ≥ 0.3×, with wide absolute caps |
 | Slow SQL and query plans | `./scripts/verify-query-plans.py --docker` | disposable pgvector container with `pg_stat_statements`: top SQL after 40 retrieval rounds + 10 exports; asserts `vector_ann` uses HNSW and `rag_embeddings` is not Seq Scanned, and export/title keyword paths hit their indexes |
 | Long soak | `./scripts/run-bounded-soak.py --minutes 12 --pid <pid> --dsn <dsn>` | 12-minute mixed load sampling threads/heap/RSS/FDs/DB connections/GC every 15 s; first/last-quarter median gate (1.5× + absolute cap), monotonic growth fails; nightly runs the 10-minute short form |
-| Backup/restore drill | `./scripts/verify-backup-restore-drill.py` | seed real data → quiesce → `rag-backup.py backup` → verify → restore into a fresh DB → compare documents/vectors/collections/migration history/content fingerprint → health+search on the restored DB |
+| Backup/restore drill | `./scripts/verify-backup-restore-drill.py` | seed real data → quiesce → `rag-backup.py backup` → verify → restore into a fresh DB → compare every table's row count/digest, Flyway continuity and HNSW `EXPLAIN` → health+search+chat on the restored DB; concurrent-write native snapshot proves no torn rows |
+| Deletion integrity audit | `./scripts/verify-deletion-integrity.py` | delete documents/Collection/files/import batch/evaluation/feedback → whole-database orphan scan → same-id/idempotency rebuild → batch failure rollback → stats and capacity counters return to normal |
 | Security boundary full-entry regression | `./scripts/verify-security-boundary.py` | real PostgreSQL + mock provider: restricted NORMAL key cannot cross Collections or principals across search/chat/collections/upload/PDF-to-RAG/files tree·raw·preview/evaluation/feedback; path traversal rejected; root keeps the global view |
 | Browser security headers and injection surface | `./scripts/verify-browser-security-headers-e2e.py` | real process + real Chromium: CSP/nosniff/Referrer-Policy/X-Frame-Options/Permissions-Policy on `/webui/`, API, SSE, and error responses; no HSTS over HTTP and HSTS with `X-Forwarded-Proto: https`; page load, chat SSE, upload, search, and export remain usable under CSP; inline `<script>` and `onclick` injections are rejected and raise `securitypolicyviolation`; model output containing `<script>` renders as text |
 | Resource saturation and degradation | `./scripts/verify-resource-saturation-e2e.py` | disposable pgvector container + real process: pool exhaustion → 503 `DATABASE_UNAVAILABLE` + `Retry-After: 5` (bounded queueing, not a hang), slow query → 504 `DATABASE_TIMEOUT`, database stop/start recovers to 200 without a restart, no connection leak, health DOWN→UP |
@@ -1668,7 +1669,7 @@ between arithmetic commands and `set -e`.
 The scope implementation has DTO, resolver, ACL, SQL-fragment, vector/full-text
 provider, Chat/Search/JSON, MockMvc, OpenAPI, WebUI, and PostgreSQL coverage.
 The real PostgreSQL/Testcontainers test starts `pgvector/pgvector:pg16`, runs
-Flyway V1-V73 from an empty schema, and exercises the vector query with actual
+Flyway V1-V74 from an empty schema, and exercises the vector query with actual
 PostgreSQL `bigint[]` bindings:
 
 ```bash
@@ -1718,7 +1719,7 @@ caught it.
 
 The JSONB implementation has both mocked HTTP/service coverage and a real
 PostgreSQL/Testcontainers test. The latter starts `pgvector/pgvector:pg16`,
-executes Flyway V1-V73 from an empty database, and verifies JSONB round-trip,
+executes Flyway V1-V74 from an empty database, and verifies JSONB round-trip,
 nested `payloadContains`, V34 GIN planner use, payload-only versioning,
 identical descriptions with distinct records, and cascade cleanup:
 
@@ -1774,7 +1775,7 @@ The script starts isolated PostgreSQL, the mock upstream, a Core standalone serv
 and a Starter consumer that does not scan `com.springairag`. Official Python SDK
 `2.14.0` and Node SDK `7.34.0` verify models, JSON, SSE, idempotency replay, error
 envelopes, and authentication against both topologies. It also proves that the
-external Starter consumer can run Flyway V1–V73 and expose the same `/v1` client
+external Starter consumer can run Flyway V1–V74 and expose the same `/v1` client
 contract. The isolated topology additionally exercises the live Native/OpenAI
 consumer contract and async Collection Purge HTTP lifecycle against its temporary
 PostgreSQL database. Evidence is written to

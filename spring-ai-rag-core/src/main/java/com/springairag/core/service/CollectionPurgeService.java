@@ -1675,6 +1675,11 @@ public class CollectionPurgeService {
         deleteByIds("rag_derivation_repair_previews", "id", current.repairIds());
         deleteByIds("rag_document_idempotency_operations", "id",
                 current.idempotencyIds());
+        // 永久清理必须连同同步历史一起删除：run 行仍指向已退役 Collection，
+        // 会留下源端 externalId/指纹与失败轨迹。item 由 run 外键级联删除。
+        jdbcTemplate.update(
+                "DELETE FROM rag_document_sync_runs WHERE collection_id = ?",
+                preview.collectionId());
         if (!current.documentIds().isEmpty()) {
             jdbcTemplate.update("DELETE FROM rag_embeddings WHERE document_id IN ("
                     + placeholders(current.documentIds().size()) + ")",

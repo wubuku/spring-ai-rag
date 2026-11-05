@@ -1594,9 +1594,24 @@ public class DocumentMutationService {
                     "Idempotency-Key was already used for another request");
         }
         Number result = (Number) row.get("result_document_id");
-        if ("SUCCEEDED".equals(row.get("status")) && result != null) {
-            return new IdempotencyReservation(
-                    owner, operationType, keyHash, result.longValue());
+        if ("SUCCEEDED".equals(row.get("status"))) {
+            if (result != null) {
+                return new IdempotencyReservation(
+                        owner, operationType, keyHash, result.longValue());
+            }
+            // 成功记录的目标文档已被永久删除时，result_document_id 会被
+            // ON DELETE SET NULL 置空。此时继续把它当成"进行中"会永久
+            // 返回 409，让同一 Idempotency-Key 无法重建内容。清理这条
+            // 失效凭证后重新预留，避免把旧操作状态带到新文档。
+            jdbcTemplate.update("""
+                    DELETE FROM rag_document_idempotency_operations
+                    WHERE owner_principal_id = ?
+                      AND operation_type = ?
+                      AND idempotency_key_hash = ?
+                      AND status = 'SUCCEEDED'
+                      AND result_document_id IS NULL
+                    """, owner, operationType, keyHash);
+            return reserveIdempotency(rawKey, operationType, fingerprint);
         }
         throw new DocumentRevisionConflictException(
                 "An operation with this Idempotency-Key is still in progress");
