@@ -386,14 +386,15 @@ Fixes and before/after:
    identifier group MRR 0.792 to 0.917; table-cell 0.909 to 1.000; short 0.667 to
    0.800. q-id-02 ranks first in the keyword-only channel (MRR 1.000), and the
    adjacent-identifier interference in q-id-02/q-id-05 is gone.
-   Residual and rollback decision: the TXT group MRR moves from 0.812 to 0.750, all
+   Residual and rollback decision: the TXT group MRR moves from 0.812 to 0.750 and
+   nDCG@10 from 0.858 to 0.815, all
    from a symmetric RRF tie in q-zh-08 (`txt-utf8-zh` and `txt-gbk-zh` are two
    encodings of the same content, each slightly stronger in a different channel, so
    near-equal weighted RRF sums flip the order). The paraphrase-zh group MRR moves
    from 0.440 to 0.302 because q-para-03 has no literal overlap with its answer and
    a Chinese chunk with 3/5 coverage is inserted one rank above. Neither is a
    systematic regression: Chinese aggregate MRR moves from 0.768 to 0.800, English
-   from 0.925 to 0.950, and overall hybrid MRR/nDCG improve. Reverting OR would
+   from 0.912 to 0.950, and overall hybrid MRR/nDCG improve. Reverting OR would
    also discard the +0.698 keyword-only R@10 gain, so this FTS change is not rolled
    back. Cross-language paraphrase still relies on vectors; the keyword channel does
    not pretend to solve it.
