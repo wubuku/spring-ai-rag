@@ -25,8 +25,15 @@ export MODELS_CONFIG_FILE=file:/etc/spring-ai/models.json
   can override the Chat provider and routing even when the normal
   `SPRING_AI_OPENAI_*` variables are correct. Check the startup log and
   `GET /api/v1/rag/models` after changing it. For a direct provider smoke
-  without an external registry, unset `MODELS_CONFIG_FILE` or point it to a
-  nonexistent file for that process.
+  without an external registry, unset `MODELS_CONFIG_FILE` or set the explicit
+  sentinel `MODELS_CONFIG_FILE=none` (`off`, `disabled` and `-` are accepted
+  too). The sentinel makes the startup log print
+  `disables the external registry; using YAML config only`.
+- The common "I configured LongCat but another provider answered" case is
+  exactly this: a checked-in `.dev/models.json` still declares siliconflow as
+  primary with an unresolved key placeholder. Use `MODELS_CONFIG_FILE=none` for
+  the LongCat path in `scripts/start-real-e2e-server.sh` rather than relying on a
+  file being absent by accident.
 
 ## Complete Example
 
@@ -150,6 +157,41 @@ The response includes `defaultModel`, model-level `ref` values, normalized
 `capabilities`, availability, and an `unavailableReason` when credentials or
 provider settings are missing. `AGENT` Chat requires
 `capabilities.toolCalling=true`.
+
+### Measured base-url composition (LongCat, 2026-11-05)
+
+LongCat's OpenAI-compatible base is `https://api.longcat.chat/openai`, configured
+**without** `/v1`. Spring AI sends `POST /openai/v1/chat/completions`, i.e. it
+always appends a `/v1` segment instead of using the last segment of the base.
+Configuring `.../openai/v1` therefore produces `/openai/v1/v1/chat/completions`
+and fails. The real E2E harness guards this composition: the proxy in
+`scripts/verify-real-llm-failure-e2e.py` records and asserts the actual request
+path.
+
+MiniMax does not use the OpenAI-compatible client; its path is determined by the
+MiniMax Spring AI implementation. The same Chat injection point and request body
+are reused, and only `LLM_PROVIDER` configuration changes — no business code.
+
+### Measured provider matrix (2026-11-05)
+
+| Capability | LongCat (`LongCat-2.5`) | MiniMax (`MiniMax-M2.7`) |
+|---|---|---|
+| Wire protocol | OpenAI-compatible `apiType=openai-completions` | Anthropic Messages `apiType=anthropic-messages` |
+| Actual request path | `POST /openai/v1/chat/completions` | `POST /anthropic/v1/messages` |
+| Non-stream chat | Passed | Same code path; this run blocked by account quota |
+| SSE streaming | Passed (non-empty content + `done`) | Same code path; no real answer obtained |
+| AGENT tool calling + citations | Passed (real retrieval with `sourceHandle`/`citationId`) | **Unsupported**: `capabilities.tool-calling=false` |
+| 429 meaning | Rate limit; recoverable with bounded retry | Token Plan quota exhausted (`rate_limit_error`, code 2056); retry cannot help |
+
+MiniMax produced no successful sample this run because the real upstream returned
+429 for an exhausted `Token Plan` quota
+(`已达到 Token Plan 用量上限：请升级 Token Plan 套餐或购买积分补充用量。 (2056)`),
+not because of an incompatibility in this repository. The harness sanitizes and
+truncates that upstream body into `failureDetails.upstreamMessage`, which
+distinguishes a plain rate limit from quota exhaustion instead of reporting one
+generic 429. After topping up the quota, re-run `--providers minimax` to complete
+the success sample; the nightly `real-llm-longcat` job is unaffected by MiniMax
+quota.
 
 ### Fallback Semantics And Budget Boundaries (real-process run, 2026-11-04)
 

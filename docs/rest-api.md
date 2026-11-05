@@ -2323,7 +2323,7 @@ Generate embedding vectors for a specified document.
 
 On upstream failure the response is still `200`, but `status=FAILED` and it carries
 `failureClass`, `failureDetails` (`origin`/`reason`/`retryable`/`retryAfterMs`/
-`upstreamStatus`) and `retryable`, mirrored in the `X-RAG-Failure-Class` header.
+`upstreamStatus`/`upstreamMessage`) and `retryable`, mirrored in the `X-RAG-Failure-Class` header.
 Commit-time version or Collection races return `409 CONFLICT` instead of a
 stack-trace 500. Existing vectors remain untouched.
 

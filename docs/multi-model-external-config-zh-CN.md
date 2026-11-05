@@ -23,7 +23,13 @@ export MODELS_CONFIG_FILE=file:/etc/spring-ai/models.json
 - 该文件成功加载后会完整替换 YAML 模型注册表，因此本地过期文件可能在
   `SPRING_AI_OPENAI_*` 正确时仍覆盖 Chat provider 和路由。修改后应检查启动日志及
   `GET /api/v1/rag/models`。如果希望在一次直接 provider smoke 中不使用外部注册表，
-  请对该进程取消设置 `MODELS_CONFIG_FILE`，或将其指向不存在的文件。
+  请对该进程取消设置 `MODELS_CONFIG_FILE`，或显式写成哨兵值
+  `MODELS_CONFIG_FILE=none`（同样接受 `off` / `disabled` / `-`）。哨兵值会让启动日志
+  打印 `disables the external registry; using YAML config only`。
+- 常见的“明明配了 LongCat 却走了别的 provider”就是这样发生的：仓库里的
+  `.dev/models.json` 仍然声明 primary 为 siliconflow，而 key 是未解析占位。
+  `scripts/start-real-e2e-server.sh` 的 LongCat 路径请使用
+  `MODELS_CONFIG_FILE=none`，不要依赖“文件不存在”这种隐性条件。
 
 ## 完整示例
 
@@ -145,6 +151,35 @@ curl http://localhost:8081/api/v1/rag/models
 响应包含 `defaultModel`、模型级 `ref`、规范化 `capabilities` 和可用状态；当凭据或
 provider 配置缺失时还会包含 `unavailableReason`。`AGENT` Chat 要求
 `capabilities.toolCalling=true`。
+
+### base-url 实际拼接（LongCat 2026-11-05 实测）
+
+LongCat 的 OpenAI 兼容 base 是 `https://api.longcat.chat/openai`，配置里**不带** `/v1`。
+Spring AI 发出的是 `POST /openai/v1/chat/completions`——也就是说它固定再拼一段 `/v1`，
+而不是直接使用 base 的最后一段。配置若写成 `.../openai/v1`，实际会变成
+`/openai/v1/v1/chat/completions` 并失败。这个拼接由真实端到端脚本的代理路径断言守护：
+`scripts/verify-real-llm-failure-e2e.py` 会记录并校验真实请求路径。
+
+MiniMax 走的不是 OpenAI 兼容客户端，路径由 MiniMax 自己的 Spring AI 实现决定；
+同一个 Chat 注入点、同一个请求体，只换 `LLM_PROVIDER` 配置，业务代码不变。
+
+### Provider 实测矩阵（2026-11-05）
+
+| 能力 | LongCat（`LongCat-2.5`） | MiniMax（`MiniMax-M2.7`） |
+|---|---|---|
+| 接入协议 | OpenAI 兼容 `apiType=openai-completions` | Anthropic Messages `apiType=anthropic-messages` |
+| 实际请求路径 | `POST /openai/v1/chat/completions` | `POST /anthropic/v1/messages` |
+| 非流式 Chat | 通过 | 代码路径一致；本次被账户额度阻断（见下） |
+| SSE 流式 | 通过（内容非空 + `done` 收口） | 代码路径一致；本次未取得真实回答 |
+| AGENT 工具调用 + 引用 | 通过（真实触发检索，带 `sourceHandle`/`citationId`） | **不支持**：`capabilities.tool-calling=false` |
+| 429 语义 | 频率限流；有界重试可恢复 | 账户 Token Plan 额度耗尽（`rate_limit_error`，错误码 2056），重试不可恢复 |
+
+MiniMax 这次没有拿到成功样本，原因是真实上游 429：账户 `Token Plan` 用量上限
+（`已达到 Token Plan 用量上限：请升级 Token Plan 套餐或购买积分补充用量。 (2056)`），
+不是本仓兼容性问题。脚本把这条上游正文经脱敏、截断后写入
+`failureDetails.upstreamMessage`，因此能区分“普通限流”和“配额耗尽”，不会笼统报成
+同一个 429。充值额度后重跑 `--providers minimax` 即可补齐成功样本；
+nightly 的 `real-llm-longcat` 不受 MiniMax 额度影响。
 
 ### Fallback 语义与预算边界（2026-11-04 真实进程实测）
 

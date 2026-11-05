@@ -16,6 +16,9 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 
 public final class UpstreamResponseErrorHandler implements ResponseErrorHandler {
+    /** 只保留一小段错误正文用于诊断，避免把大响应或请求回显带进异常/日志。 */
+    private static final int MAX_ERROR_BODY_BYTES = 1024;
+
     @Override
     public boolean hasError(ClientHttpResponse response) throws IOException {
         return response.getStatusCode().isError();
@@ -23,26 +26,45 @@ public final class UpstreamResponseErrorHandler implements ResponseErrorHandler 
 
     @Override
     public void handleError(URI url, HttpMethod method, ClientHttpResponse response) throws IOException {
-        throw failure(response.getStatusCode(), response.getHeaders());
+        throw failure(response.getStatusCode(), response.getHeaders(), readBody(response));
     }
 
     public static ExchangeFilterFunction webClientFilter() {
         return (request, next) -> next.exchange(request).flatMap(response -> {
             if (!response.statusCode().isError()) return Mono.just(response);
-            var error = failure(response.statusCode(), response.headers().asHttpHeaders());
-            return response.releaseBody().onErrorResume(ignored -> Mono.empty()).then(Mono.error(error));
+            return response.bodyToMono(String.class)
+                    .defaultIfEmpty("")
+                    .onErrorResume(ignored -> Mono.just(""))
+                    .map(body -> truncate(body.getBytes(StandardCharsets.UTF_8)))
+                    .defaultIfEmpty(new byte[0])
+                    .flatMap(body -> Mono.error(
+                            failure(response.statusCode(), response.headers().asHttpHeaders(), body)));
         });
     }
 
-    private static RestClientResponseException failure(HttpStatusCode status, HttpHeaders source) {
+    private static byte[] readBody(ClientHttpResponse response) throws IOException {
+        try (var body = response.getBody()) {
+            return body.readNBytes(MAX_ERROR_BODY_BYTES);
+        }
+    }
+
+    private static byte[] truncate(byte[] body) {
+        if (body.length <= MAX_ERROR_BODY_BYTES) return body;
+        byte[] copy = new byte[MAX_ERROR_BODY_BYTES];
+        System.arraycopy(body, 0, copy, 0, MAX_ERROR_BODY_BYTES);
+        return copy;
+    }
+
+    private static RestClientResponseException failure(HttpStatusCode status, HttpHeaders source,
+                                                       byte[] body) {
         HttpHeaders headers = new HttpHeaders();
         String wait = source.getFirst("Retry-After");
         if (wait != null && wait.length() <= 128) headers.set("Retry-After", wait);
         if (status.is5xxServerError()) {
             return HttpServerErrorException.create(status, "Upstream service failed",
-                    headers, new byte[0], StandardCharsets.UTF_8);
+                    headers, body, StandardCharsets.UTF_8);
         }
         return HttpClientErrorException.create(status, "Upstream request rejected",
-                headers, new byte[0], StandardCharsets.UTF_8);
+                headers, body, StandardCharsets.UTF_8);
     }
 }

@@ -8,18 +8,47 @@ not a global gate blocking healthy models; refusals remain normal outcomes and e
 ## Compatibility and Defaults
 
 Classification and protections are enabled by default, without migration or operator configuration.
-Existing HTTP statuses, error/code, failureClass and JSON/SSE envelopes remain stable. Unclassified native
-errors remain 500; OpenAI-compatible errors remain 503. HTTP200 alone never proves an SSE answer succeeded.
-See the [Client Kit](client-contract-kit.md) for existing coarse failure classes.
+Existing HTTP statuses, error/code, failureClass and JSON/SSE envelopes remain stable. Recognized upstream
+failures are no longer emitted as 500 (see the mapping below); unclassified exceptions keep the existing
+contract: 500 for native and 503 for the OpenAI-compatible layer. HTTP200 alone never proves an SSE answer
+succeeded. See the [Client Kit](client-contract-kit.md) for existing coarse failure classes.
+
+### Upstream failure HTTP contract (measured with real LongCat calls)
+
+| Upstream failure | Native `/api/v1/rag/chat/ask` | `X-RAG-Failure-Class` | `failureDetails.reason` | OpenAI-compatible |
+|---|---|---|---|---|
+| 429 (upstream `Retry-After: 2`) | 429 | RATE_LIMITED | UPSTREAM_RATE_LIMITED | 503 with `Retry-After` passed through |
+| 500 / 503 | 503 | DEPENDENCY_UNAVAILABLE | UPSTREAM_UNAVAILABLE | 503 |
+| Read timeout | 504 | TIMEOUT | UPSTREAM_TIMEOUT | 503 |
+| Connection reset/close | 503 | DEPENDENCY_UNAVAILABLE | UPSTREAM_CONNECTION | 503 |
+| Upstream disconnect after SSE start | 200 + `error` terminal event | — | UPSTREAM_RESPONSE_INVALID | 200 + `error` event |
+| Upstream 401/403 | 503 | LLM_UNAVAILABLE | UPSTREAM_AUTHENTICATION / UPSTREAM_REJECTED | 503 |
+
+429 and 5xx still use bounded retries (attempts, backoff bound and deadline all apply) instead of failing
+immediately. `Retry-After` is honored only when the wait fits safely, and the final error response echoes
+a client-acceptable `Retry-After`.
+
+`failureDetails.upstreamMessage` carries the real reason extracted from the upstream error body: masked,
+control characters removed, whitespace collapsed and truncated to 300 characters (for example MiniMax's
+`rate_limit_error ... Token Plan quota ... (2056)`). It only appears when a body can be extracted; it is a
+new optional `NON_NULL` field and does not change existing field semantics. It separates distinct root
+causes that share one status code, such as a plain rate limit versus quota exhaustion. Even without a
+body, ordinary 429/5xx/timeout failures still carry `reason`, `upstreamStatus` and `retryable`.
+
+Evidence is produced by
+[testing-guide.md](testing-guide.md#real-model-failure-budget-and-provider-neutrality).
+
 
 Error objects add `failureDetails`:
 
 ```json
-{"origin":"UPSTREAM","reason":"UPSTREAM_RATE_LIMITED","retryable":true,"retryAfterMs":2000,"upstreamStatus":429}
+{"origin":"UPSTREAM","reason":"UPSTREAM_RATE_LIMITED","retryable":true,"retryAfterMs":2000,"upstreamStatus":429,"upstreamMessage":"…masked real reason…"}
 ```
 
 Origins are UPSTREAM/REQUEST/SERVICE. Reasons contain no provider bodies, URLs or credentials.
-Native JSON and SSE expose it in their error object; OpenAI exposes it inside error. Older snapshots may omit it.
+`upstreamMessage` is a separate optional field: a masked, control-character-stripped, 300-character
+truncation of the upstream error body. Native JSON and SSE expose it in their error object; OpenAI
+exposes it inside error. Older snapshots may omit it.
 Provider401/403 must not become caller authentication failures. Safety words in plain text do not prove policy refusal.
 
 ## Reasons and Execution Decisions

@@ -39,9 +39,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code RagChatControllerKeyedSseTest#streamFailsOperationWhenPreparedChainFails}
  * 钉住，缺的是这最后一段。
  *
- * <p>状态码维持 500 是有意的：一个被拒的是 <strong>provider 的</strong>凭据，
- * 不是调用方的，回 401 会告诉一个 API 客户端"你的 key 坏了"——而它没坏。
- * 上游失败该不该走 502/503 是契约问题，记在账本上等拍板，不在这里决定。
+ * <p>状态码不再维持 500：provider 凭据被拒是本部署的问题，不是调用方的，
+ * 所以绝不回 401/403；统一映射为 503 {@code LLM_UNAVAILABLE}，并用
+ * {@code failureDetails.reason=UPSTREAM_AUTHENTICATION} 说明真实原因。
+ * 这样客户端能按 {@code X-RAG-Failure-Class=DEPENDENCY_UNAVAILABLE} 做有界重试，
+ * 也不会把 provider 故障误读成服务端 bug。
  */
 class UpstreamProviderFailureStatusTest {
 
@@ -69,36 +71,35 @@ class UpstreamProviderFailureStatusTest {
     }
 
     /** Spring AI 对 provider 回的 401 造出来的那个异常。 */
-    private static RuntimeException providerRejectedTheKey() {
-        return new RuntimeException(
+    private static org.springframework.ai.retry.NonTransientAiException providerRejectedTheKey() {
+        return new org.springframework.ai.retry.NonTransientAiException(
                 "401 - {\"code\":30014,\"data\":null,\"message\":\"Token is invalid.\"}",
                 null);
     }
 
     @Test
-    void aProvider401_answers500_becauseThisBranchNeverDecidedItWasA401() {
+    void aProvider401_answers503_withTheProviderStatusOnlyInDetails() {
         ResponseEntity<ErrorResponse> response =
                 handler.handleException(providerRejectedTheKey(), request);
         ErrorResponse body = response.getBody();
 
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
         assertNotNull(body);
-        assertEquals("INTERNAL_ERROR", body.getError());
-        // 关键的一条：那个 401 是**消息的一部分**，不是状态。
+        assertEquals("LLM_UNAVAILABLE", body.getError());
+        assertNotNull(body.getFailureDetails());
+        assertEquals("UPSTREAM_AUTHENTICATION", body.getFailureDetails().reason());
+        assertEquals(401, body.getFailureDetails().upstreamStatus());
+        // 关键的一条：那个 401 是**消息的一部分**，不是对外状态。
         assertFalse(String.valueOf(body.getStatus()).startsWith("401"),
                 () -> "the detail leaked into the status: " + body.getStatus());
     }
 
     /**
-     * 日志必须自己说出状态码。
-     *
-     * <p>这条不是断言格式好看——是断言它<strong>不能再被读成另一种东西</strong>。
-     * 原来的 {@code "Request failed: {}"} 让 provider 的 401 正好落在状态码该在的
-     * 位置上，而这就是那批误诊断的起点。状态码被点名之后，detail 里再出现数字
-     * 就只是 detail 了。
+     * 日志必须把 provider 状态码放在命名清楚的字段里，不能再让它看起来像
+     * 本服务对外的 HTTP 状态。
      */
     @Test
-    void theLogLineNamesTheStatusSoTheDetailCannotBeMistakenForIt() {
+    void theLogLineNamesTheStatusAndUpstreamStatusSeparately() {
         handler.handleException(providerRejectedTheKey(), request);
 
         String errorLine = appender.list.stream()
@@ -107,9 +108,11 @@ class UpstreamProviderFailureStatusTest {
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("expected an ERROR line"));
 
-        assertTrue(errorLine.contains("status=500"),
+        assertTrue(errorLine.contains("status=503"),
                 () -> "the log does not name the status: " + errorLine);
-        assertTrue(errorLine.contains("detail=401 - {"),
-                () -> "the provider's own status is not carried as detail: " + errorLine);
+        assertTrue(errorLine.contains("reason=UPSTREAM_AUTHENTICATION"),
+                () -> "the log does not name the reason: " + errorLine);
+        assertTrue(errorLine.contains("upstreamStatus=401"),
+                () -> "the provider's own status is not carried as a distinct field: " + errorLine);
     }
 }

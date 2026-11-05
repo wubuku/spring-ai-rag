@@ -34,6 +34,29 @@ class UpstreamFailureClassifierTest {
         assertFalse(details.toString().contains("secret"));
     }
 
+    @ParameterizedTest
+    @CsvSource({"401,UPSTREAM_AUTHENTICATION,false", "403,UPSTREAM_AUTHENTICATION,false",
+            "429,UPSTREAM_RATE_LIMITED,true", "503,UPSTREAM_UNAVAILABLE,true",
+            "504,UPSTREAM_TIMEOUT,true"})
+    void springAiExceptionsCarryTheirStatusInTheMessagePrefix(int status, String reason, boolean retryable) {
+        var error = new org.springframework.ai.retry.NonTransientAiException(
+                status + " - {\"code\":30014,\"message\":\"provider said no\"}");
+        var details = UpstreamFailureClassifier.classify(error);
+        assertEquals("UPSTREAM", details.origin());
+        assertEquals(reason, details.reason());
+        assertEquals(retryable, details.retryable());
+        assertEquals(status, details.upstreamStatus());
+    }
+
+    @Test
+    void messageDigitsAreNotGuessedWhenTheyAreNotAStatusPrefix() {
+        var error = new org.springframework.ai.retry.NonTransientAiException(
+                "provider failed with code 404 in body");
+        var details = UpstreamFailureClassifier.classify(error);
+        assertEquals("UPSTREAM_REJECTED", details.reason());
+        assertNull(details.upstreamStatus());
+    }
+
     @Test
     void timeoutCauseOverridesNetworkWrapperWithoutReadingText() {
         var details = UpstreamFailureClassifier.classify(new ResourceAccessException("opaque", new SocketTimeoutException()));
@@ -94,6 +117,23 @@ class UpstreamFailureClassifierTest {
         assertEquals("UPSTREAM_UNAVAILABLE", details.reason());
         assertTrue(details.retryable());
         assertEquals(503, details.upstreamStatus());
+    }
+
+    @Test
+    void upstreamErrorMessageIsSanitizedTruncatedAndNotLeakingSecrets() {
+        var body = ("{\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\","
+                + "\"message\":\"已达到 Token Plan 用量上限, 请升级套餐 (2056)\"},"
+                + "\"authorization\":\"Bearer sk-very-secret-key\","
+                + "\"padding\":\"" + "x".repeat(600) + "\"}")
+                .getBytes(StandardCharsets.UTF_8);
+        var failure = new RestClientResponseException("429", HttpStatusCode.valueOf(429),
+                "429", new HttpHeaders(), body, StandardCharsets.UTF_8);
+
+        var details = UpstreamFailureClassifier.classify(failure);
+        assertNotNull(details.upstreamMessage());
+        assertTrue(details.upstreamMessage().contains("Token Plan"));
+        assertFalse(details.upstreamMessage().contains("sk-very-secret-key"));
+        assertTrue(details.upstreamMessage().length() <= 303);
     }
 
     @Test

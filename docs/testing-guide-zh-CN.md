@@ -380,11 +380,11 @@ workflow 里，而不是靠人记得：
 | 层 | 触发 | 工作流 | 包含 | 不包含 |
 |----|------|--------|------|--------|
 | PR 快层 | push `main`/`develop`、PR → `main`；同分支新提交自动取消旧运行 | `.github/workflows/ci.yml` | `mvn test`（含 `OpenApiContractTest` 与 `WebUiRouteContract`）、`verify-project-tests.sh`、`verify-project-docs.sh`、Flyway 迁移清单校验、WebUI lint/单测/覆盖率阈值/构建/Mock E2E | gated PostgreSQL、真实模型、goldenset、soak、`*-real.spec.ts` |
-| 长跑层 | 每日 18:00 UTC（北京时间 02:00）与手动 `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL（31 套件）、上游/Embedding 故障模式（受控 provider + 隔离 PG，无需真实模型）、崩溃一致性（真实 `SIGKILL`）与端点行为运行时矩阵（受控 provider + 隔离 PG）、真实 LLM smoke + goldenset + 检索回归、并发延迟基准与执行计划门禁、有界 soak（含线程/堆/连接/FD 趋势）、无需人工 fixture 的真实 WebUI spec | 需要预置告警/投递 ID 的 `alerts-real`、需要 rerank fixture 的 `rerank-document-diversity-real` |
+| 长跑层 | 每日 18:00 UTC（北京时间 02:00）与手动 `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL（31 套件）、上游/Embedding 故障模式（受控 provider + 隔离 PG，无需真实模型）、崩溃一致性（真实 `SIGKILL`）与端点行为运行时矩阵（受控 provider + 隔离 PG）、真实 LLM smoke + goldenset + 检索回归（MiniMax）、LongCat 真实 smoke + 失败语义/预算（`real-llm-longcat`）、并发延迟基准与执行计划门禁、有界 soak（含线程/堆/连接/FD 趋势）、无需人工 fixture 的真实 WebUI spec | 需要预置告警/投递 ID 的 `alerts-real`、需要 rerank fixture 的 `rerank-document-diversity-real` |
 
 PR 层的时间预算由 job 级 `timeout-minutes` 固定（backend 45、webui 30）。gated IT
 本地约 9–19 分钟，放在 PR 层会把反馈时间拖到 20 分钟以上，所以它只在 nightly 跑；
-nightly 的每个 job 各自有超时（90/60/60/60/30/75 分钟），互相不阻塞。
+nightly 的每个 job 各自有超时（90/60/60/60/75/30/75 分钟），互相不阻塞。
 
 故障模式 job（`failure-modes`）跑两条脚本：
 `python3 scripts/verify-upstream-recovery-e2e.py`（chat 500/429/超时/连接中断/畸形响应/SSE 断流、
@@ -408,6 +408,37 @@ controlled provider，不读取真实模型密钥，因此不需要放在 PR 层
 
 两条脚本都自带隔离 PostgreSQL 与 controlled provider，不需要 secret。
 
+### 真实模型失败、预算与 provider 中立性
+
+`python3 scripts/verify-real-llm-failure-e2e.py` 是**真实调用**层：默认不进 PR 快层，
+只有 `REAL_LLM_FAILURE_E2E=1` 或 `--run` 才执行，否则打印 `SKIP` 并以 0 退出。密钥只从
+`.env` 读取，脚本不打印 key/Authorization；日志只保留路径、状态与上游错误体前 200 字节。
+它用 `scripts/start-real-e2e-server.sh` 在 20000–29999 随机端口起独立实例，并自建一次性
+数据库，不占用 8081/18081。
+
+覆盖：
+
+- 真实非流式、SSE（内容非空 + `evidenceAssessment` 终态）与 AGENT 工具调用（带来源引用）。
+- `base-url` 实测：`https://api.longcat.chat/openai` 被 Spring AI 拼成
+  `/openai/v1/chat/completions`；配置仍不带 `/v1`。
+- 失败注入仍转发真实上游：本地故障代理把 429/5xx/超时/断流注入到真实请求链路，
+  断言 HTTP 状态、`X-RAG-Failure-Class`、`failureDetails`、`Retry-After` 与有界重试；
+  另测客户端 abort 后同会话可继续、SSE 上游断流走 error 终态。
+- 预算：`RAG_CHAT_CONTEXT_FALLBACKCONTEXTWINDOW` 缩到 7000 触发
+  `CHAT_CONTEXT_BUDGET_EXCEEDED`（请求体上限 10000 字符，9600 个汉字约 6.4k token，
+  扣除输出预留/安全边际后越过窗口）；`RAG_CHAT_EXECUTION_MAXMODELCALLS=1` + AGENT 触发
+  `CHAT_BUDGET_EXHAUSTED`，两者都必须带可诊断 message，不能变成空回复。
+- provider 中立性：同一批 HTTP 请求分别对 LongCat 与 MiniMax 执行，只换配置，不改业务代码。
+
+LongCat 实测基线（2026-11-05，`LongCat-2.5`）：非流式、SSE、AGENT 引用全部通过；
+429 一次在约 4s 内重试成功；持续 429 在 2 次尝试后返回 429 + `Retry-After`；
+503/500 映射 503；读超时（20s 读 + 2 次尝试）约 41s 后映射 504；连接重置映射 503；
+SSE 断流在约 8s 内给出 error 终态。失败响应同时带上脱敏、截断后的
+`failureDetails.upstreamMessage`（例如 MiniMax 的配额耗尽原因），因此不会把
+“限流”“配额耗尽”“凭据失效”混成同一个笼统 429。失败分类与 HTTP 契约见
+[upstream-client-recovery-zh-CN.md](upstream-client-recovery-zh-CN.md#上游失败的-http-契约longcat-真实调用实测)。
+
+
 Flyway 的**应用**校验放在 nightly 的 gated PostgreSQL：那里会真正启动 Spring Boot
 并执行迁移。PR 层只校验迁移清单结构（命名、重复版本号），因为 `mvn test` 不启动
 数据库，在空库里查 `flyway_schema_history` 只会得到假报警。
@@ -427,17 +458,17 @@ CI 的 backend checkout 使用 `fetch-depth: 0`，PR 上把 `DOCS_DIFF_BASE` 设
   被当作可接受的常态。WebKit 曾出现"一个浏览器进程跑到约第 58 个 BrowserContext
   时首次导航永久卡死"，根因在进程级资源而非断言，已用 project 分片强制重启浏览器
   进程消除（见「WebKit 分片」）；`openProtectedPage` 的换页重试与 CI `retries`
-  都已删除，不再用重试掩盖。真实模型 smoke 里的 OpenAI-compatible JSON 断言仍允许
-  一次有界重试——那是网络抖动，不是测试基建。
+  都已删除，不再用重试掩盖。真实模型 smoke 里的 OpenAI-compatible JSON 与 Native SSE
+  断言各允许一次有界重试——那是模型拒答/网络抖动的非确定性，不是测试基建。
 - artifact 保留 14–30 天：`backend-test-results`、`backend-gate-logs`、
   `jacoco-reports`、`webui-playwright-report`、`nightly-gated-it`、
-  `nightly-failure-modes`、`nightly-resilience`、`nightly-real-llm`、`nightly-soak`、
-  `nightly-webui-real`。下载：
+  `nightly-failure-modes`、`nightly-resilience`、`nightly-real-llm`、
+  `nightly-real-llm-longcat`、`nightly-soak`、`nightly-webui-real`。下载：
   `gh run list --workflow=nightly.yml`，然后 `gh run download <run-id>`。
 
 ### Nightly 失败通知（Issue 自动化）
 
-nightly 的红色只出现在 Actions 页面，没人会每天看。`report` job 在六个检查 job
+nightly 的红色只出现在 Actions 页面，没人会每天看。`report` job 在七个检查 job
 之后运行（`if: always()`），把结果汇总到一个固定标题的追踪 issue：
 
 - 标题固定为 `[Nightly] Long-running layer failing`；失败的 run 只会**更新**这个
@@ -585,17 +616,20 @@ Secret 注入、service container、缓存命中和 artifact 上传属于 GitHub
 本地按上面的命令逐步复现，不要用“YAML 能解析”推断 CI 一定通过。若 nightly 的
 `MINIMAX_API_KEY`（或 `SPRING_AI_MINIMAX_API_KEY`）、`RAG_EMBEDDING_API_KEY` 与
 `RAG_ROOT_API_KEY` 没有配置，真实模型 / soak / 真实 WebUI job 会明确失败并点名
-缺哪一项，而不是静默跳过。具体用途、轮换与停用方式见下节。
+缺哪一项，而不是静默跳过。`real-llm-longcat` 是例外：缺 `LONGCAT_API_KEY` 时写
+`::notice::` 与 step summary 后显式 skip（不伪装成通过），配置后自动执行。
+具体用途、轮换与停用方式见下节。
 
 ### 仓库 Secrets 运维
 
-真实模型 / 真实 WebUI 依赖三个 repository secret：
+真实模型 / 真实 WebUI 依赖以下 repository secret：
 
 | Secret | 用途 | 缺失时 |
 |--------|------|--------|
 | `SPRING_AI_MINIMAX_API_KEY`（兼容旧名 `MINIMAX_API_KEY`） | real-llm 与 webui-real 的聊天模型 | `Verify required secrets` 步骤明确失败并点名 |
-| `RAG_EMBEDDING_API_KEY` | real-llm 与 webui-real 的嵌入模型 | 同上 |
-| `RAG_ROOT_API_KEY` | soak / 真实 WebUI 脚本的鉴权头 | webui job 会临时生成；soak 仍会失败 |
+| `LONGCAT_API_KEY`（兼容旧名 `SPRING_AI_OPENAI_API_KEY`） | `real-llm-longcat` 的聊天模型 | 该 job 写 `::notice::` + step summary 后显式 skip |
+| `RAG_EMBEDDING_API_KEY` | real-llm / real-llm-longcat / webui-real 的嵌入模型 | 对应 job 失败（LongCat 为 skip） |
+| `RAG_ROOT_API_KEY` | soak / 真实 WebUI 脚本的鉴权头 | webui / LongCat job 会临时生成；soak 仍会失败 |
 
 **事实基线**：仓库最初没有任何 Actions secret（`gh api repos/<owner>/<repo>/actions/secrets`
 返回 `total_count: 0`），这三个值是后续为真实模型 nightly 首次配置的（2026-11-03）。
@@ -605,6 +639,7 @@ Secret 注入、service container、缓存命中和 artifact 上传属于 GitHub
 
 ```bash
 gh secret set SPRING_AI_MINIMAX_API_KEY --repo <owner>/<repo> < /path/to/minimax.key
+gh secret set LONGCAT_API_KEY --repo <owner>/<repo> < /path/to/longcat.key
 gh secret set RAG_EMBEDDING_API_KEY --repo <owner>/<repo> < /path/to/embedding.key
 gh secret set RAG_ROOT_API_KEY --repo <owner>/<repo> < /path/to/root.key
 ```
@@ -614,8 +649,8 @@ gh secret set RAG_ROOT_API_KEY --repo <owner>/<repo> < /path/to/root.key
 
 临时停用（三选一）：
 
-- 删除 secret：`gh secret delete <NAME> --repo <owner>/<repo>`。nightly 会按设计
-  红着失败并点名缺失项，而不是静默跳过。
+- 删除 secret：`gh secret delete <NAME> --repo <owner>/<repo>`。MiniMax/Embedding
+  相关 job 会按设计红着失败并点名缺失项；`LONGCAT_API_KEY` 缺失则显式 skip。
 - 注释 `nightly.yml` 的 `schedule` 块，保留 `workflow_dispatch` 以便手动跑。
 - 改 `cron`（UTC），例如改成每周一次 `0 18 * * 0`。
 

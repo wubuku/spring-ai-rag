@@ -348,7 +348,8 @@ public class GlobalExceptionHandler {
         // Set human-readable title without triggering the builder's title() side effect
         body.setTitle(code.getTitle());
         body.setTraceId(requestTraceId(request));
-        body.setFailureDetails(com.springairag.core.resilience.UpstreamFailureClassifier.classify(e));
+        var failureDetails = com.springairag.core.resilience.UpstreamFailureClassifier.classify(e);
+        body.setFailureDetails(failureDetails);
         ResponseEntity.BodyBuilder builder = ApiKeyRotationHttpPolicy.apply(
                         ResponseEntity.status(code.getHttpStatus()),
                         request)
@@ -360,6 +361,10 @@ public class GlobalExceptionHandler {
         } else if (e.getRetryAfterSeconds() != null) {
             builder.header(HttpHeaders.RETRY_AFTER,
                     Integer.toString(e.getRetryAfterSeconds()));
+        } else if (failureDetails.retryAfterMs() != null) {
+            // 幂等重放的上游失败也要透传上游给的 Retry-After。
+            builder.header(HttpHeaders.RETRY_AFTER, Integer.toString(
+                    Math.max(1, (int) Math.ceil(failureDetails.retryAfterMs() / 1000.0))));
         }
         return builder.body(body);
     }
@@ -375,8 +380,29 @@ public class GlobalExceptionHandler {
         String safeMessage = ErrorMessageSanitizer.sanitize(rawMessage);
         var details = com.springairag.core.resilience.UpstreamFailureClassifier.classify(e);
         if ("UPSTREAM".equals(details.origin())) {
+            // 上游失败不是调用方请求错误：继续回 500 会让客户端把“provider 挂了”
+            // 当成“服务端 bug”，也无法按 Failure-Class 做有界重试。这里改成
+            // 503/504/429 三类稳定语义，并保留分类原因与 upstreamStatus，
+            // 让调用方能区分“换 provider / 退避重试 / 裁剪上下文”。
+            ErrorCode code = com.springairag.core.resilience.UpstreamFailureClassifier.errorCode(details);
+            HttpStatus status = HttpStatus.valueOf(code.getHttpStatus());
             safeMessage = ErrorMessageSanitizer.sanitize(
-                    "Model provider request failed: " + details.reason());
+                    "Model provider request failed: " + details.reason()
+                            + (details.upstreamStatus() != null
+                            ? " (upstream HTTP " + details.upstreamStatus() + ")"
+                            : "")
+                            + (details.upstreamMessage() != null && !details.upstreamMessage().isBlank()
+                            ? ": " + details.upstreamMessage()
+                            : ""));
+            Integer retryAfterSeconds = details.retryAfterMs() == null ? null
+                    : Math.max(1, (int) Math.ceil(details.retryAfterMs() / 1000.0));
+            log.error("Upstream request failed: status={}, reason={}, upstreamStatus={}, retryable={}, upstreamMessage={}",
+                    status.value(), details.reason(), details.upstreamStatus(), details.retryable(),
+                    details.upstreamMessage());
+            ResponseEntity<ErrorResponse> response = buildResponse(
+                    status, code.name(), safeMessage, request, retryAfterSeconds);
+            response.getBody().setFailureDetails(details);
+            return response;
         }
         // Batch 920. The status is named in the line rather than left implicit.
         // It used to read `Request failed: {message}` and nothing else — and for
@@ -387,16 +413,9 @@ public class GlobalExceptionHandler {
         // afterwards. It did not know: this branch always answers 500, and the
         // number in front was never the status. Chasing that reading cost a full
         // batch of misdiagnosis before it was pinned by a test.
-        //
-        // The status stays 500, and that is deliberate: a rejected *provider*
-        // credential is this deployment's problem, not the caller's, so 401
-        // would tell an API client its own key is bad when it is not. Whether
-        // upstream failures deserve 502/503 instead is a contract question
-        // tracked in the ledger rather than decided here.
-        if ("UPSTREAM".equals(details.origin())) log.error("Request failed: status={}, detail={}", 500, safeMessage);
-        else log.error("Request failed: status={}, detail={}", 500, safeMessage, e);
+        log.error("Request failed: status={}, detail={}", 500, safeMessage, e);
         ResponseEntity<ErrorResponse> response = buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", safeMessage, request);
-        response.getBody().setFailureDetails(com.springairag.core.resilience.UpstreamFailureClassifier.classify(e));
+        response.getBody().setFailureDetails(details);
         return response;
     }
 

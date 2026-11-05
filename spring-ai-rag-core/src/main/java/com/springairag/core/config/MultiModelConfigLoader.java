@@ -33,6 +33,13 @@ public class MultiModelConfigLoader {
 
     private static final Logger log = LoggerFactory.getLogger(MultiModelConfigLoader.class);
 
+    /**
+     * 显式关闭外部模型注册表的哨兵值。`.env` 无法通过“留空”撤销一个已经写入的值，
+     * 而文件路径不存在又会按 fail-closed 拒绝启动；用 {@code none}/{@code off}/
+     * {@code disabled}/{@code -} 表达“本次运行只使用 YAML 配置”。
+     */
+    private static final Set<String> DISABLED_VALUES = Set.of("none", "off", "disabled", "-");
+
     private final MultiModelProperties properties;
 
     @Autowired
@@ -45,6 +52,11 @@ public class MultiModelConfigLoader {
         String configFile = properties.getConfigFile();
         if (configFile == null || configFile.isBlank()) {
             log.info("app.models.configFile not set; using YAML config only");
+            return;
+        }
+        if (DISABLED_VALUES.contains(configFile.trim().toLowerCase(java.util.Locale.ROOT))) {
+            log.info("app.models.configFile='{}' disables the external registry; using YAML config only",
+                    configFile);
             return;
         }
 

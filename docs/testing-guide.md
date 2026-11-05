@@ -426,12 +426,12 @@ of in someone's memory:
 | Layer | Trigger | Workflow | Includes | Excludes |
 |-------|---------|----------|----------|----------|
 | PR fast | push to `main`/`develop`, PR to `main`; a newer commit cancels the stale run | `.github/workflows/ci.yml` | `mvn test` (including `OpenApiContractTest` and `WebUiRouteContract`), `verify-project-tests.sh`, `verify-project-docs.sh`, Flyway migration inventory, WebUI lint/unit/coverage thresholds/build/mock E2E | gated PostgreSQL, real models, goldenset, soak, `*-real.spec.ts` |
-| Long-running | daily 18:00 UTC (02:00 Asia/Shanghai) and manual `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL (33 suites), upstream/embedding failure modes (controlled provider + isolated PG, no real models), crash consistency (real `SIGKILL`) and the endpoint behaviour runtime matrix (controlled provider + isolated PG), real LLM smoke + goldenset + retrieval regression, concurrency latency baseline and query-plan gates, bounded soak with thread/heap/connection/FD trends, real WebUI specs that need no manual fixtures | `alerts-real` (needs preset alert/delivery IDs) and `rerank-document-diversity-real` (needs a rerank fixture) |
+| Long-running | daily 18:00 UTC (02:00 Asia/Shanghai) and manual `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL (33 suites), upstream/embedding failure modes (controlled provider + isolated PG, no real models), crash consistency (real `SIGKILL`) and the endpoint behaviour runtime matrix (controlled provider + isolated PG), real LLM smoke + goldenset + retrieval regression (MiniMax), real LongCat smoke + failure semantics/budgets (`real-llm-longcat`), concurrency latency baseline and query-plan gates, bounded soak with thread/heap/connection/FD trends, real WebUI specs that need no manual fixtures | `alerts-real` (needs preset alert/delivery IDs) and `rerank-document-diversity-real` (needs a rerank fixture) |
 
 The PR layer is bounded by job-level `timeout-minutes` (backend 45, webui 30).
 Gated IT takes about 9–19 minutes locally; keeping it in the PR layer would push
 feedback past twenty minutes, so it runs only in nightly. Each nightly job has
-its own timeout (90/60/60/60/30/75 minutes) and they do not block each other.
+its own timeout (90/60/60/60/75/30/75 minutes) and they do not block each other.
 
 The failure-modes job runs `python3 scripts/verify-upstream-recovery-e2e.py`
 (chat 500/429/timeout/connection drop/malformed response/SSE truncation, history
@@ -463,6 +463,48 @@ The resilience job runs two scripts:
 Both scripts carry their own isolated PostgreSQL and controlled provider, so
 neither needs a secret.
 
+### Real-Model Failure, Budget and Provider Neutrality
+
+`python3 scripts/verify-real-llm-failure-e2e.py` is the **real-call** layer: it
+stays out of the PR fast layer and runs only with `REAL_LLM_FAILURE_E2E=1` or
+`--run`; otherwise it prints `SKIP` and exits 0. Secrets come only from `.env`,
+and the script never prints keys or `Authorization`; logs keep only paths,
+statuses and the first 200 bytes of an upstream error body. It starts an
+isolated instance through `scripts/start-real-e2e-server.sh` on a random
+20000–29999 port and creates its own one-off database, so it never touches
+8081/18081.
+
+Coverage:
+
+- Real non-stream chat, SSE (non-empty content plus an `evidenceAssessment`
+  terminal event) and AGENT tool calling with cited sources.
+- Measured `base-url` composition: `https://api.longcat.chat/openai` becomes
+  `/openai/v1/chat/completions`; configuration must still omit `/v1`.
+- Fault injection still forwards real upstream requests: a local fault proxy
+  injects 429/5xx/timeout/truncation into the real chain and asserts HTTP status,
+  `X-RAG-Failure-Class`, `failureDetails`, `Retry-After` and bounded retries.
+  It also checks that a client abort leaves no dangling turn and that an
+  upstream SSE disconnect ends with an error terminal event.
+- Budgets: shrinking `RAG_CHAT_CONTEXT_FALLBACKCONTEXTWINDOW` to 7000 triggers
+  `CHAT_CONTEXT_BUDGET_EXCEEDED` (the request body caps at 10,000 characters, and
+  9,600 CJK characters are about 6.4k tokens, which exceeds the window after the
+  output reserve and safety margin); `RAG_CHAT_EXECUTION_MAXMODELCALLS=1` plus
+  AGENT triggers `CHAT_BUDGET_EXHAUSTED`. Both must carry a diagnostic message
+  and never degrade to an empty answer.
+- Provider neutrality: the same HTTP requests run against LongCat and MiniMax;
+  only configuration changes, not business code.
+
+LongCat baseline (2026-11-05, `LongCat-2.5`): non-stream, SSE and AGENT citations
+all passed; one 429 retried and succeeded in about 4 s; a persistent 429 returned
+429 with `Retry-After` after 2 attempts; 503/500 mapped to 503; a read timeout
+(20 s read, 2 attempts) mapped to 504 after about 41 s; a connection reset mapped
+to 503; an SSE truncation produced an error terminal event in about 8 s. Failure
+responses also carry a masked, truncated `failureDetails.upstreamMessage` (for
+example MiniMax's quota-exhaustion reason), so "rate limit", "quota exhausted"
+and "bad credentials" are not collapsed into one generic 429. See
+[upstream-client-recovery.md](upstream-client-recovery.md#upstream-failure-http-contract-measured-with-real-longcat-calls)
+for the failure-class and HTTP contract.
+
 Flyway **application** is verified in nightly's gated PostgreSQL, where Spring Boot
 actually starts and runs the migrations. The PR layer only checks the migration
 inventory (naming, duplicate versions), because `mvn test` starts no database and
@@ -488,20 +530,21 @@ without that variable, they still scan the working tree).
   root cause is process-level, not an assertion, and it is now removed by
   sharding WebKit into separate projects that restart the browser (see
   "WebKit sharding"). The `openProtectedPage` page-swap retry and the CI
-  `retries` setting are gone. The OpenAI-compatible JSON assertion in the
-  real-model smoke still gets one bounded retry — that is network jitter, not
-  test infrastructure.
+  `retries` setting are gone. The OpenAI-compatible JSON and native SSE
+  assertions in the real-model smoke each get one bounded retry — that is
+  model-refusal/network non-determinism, not test infrastructure.
 - Artifacts are retained for 14–30 days: `backend-test-results`,
   `backend-gate-logs`, `jacoco-reports`, `webui-playwright-report`,
   `nightly-gated-it`, `nightly-failure-modes`, `nightly-resilience`,
-  `nightly-real-llm`, `nightly-soak`, `nightly-webui-real`.
+  `nightly-real-llm`, `nightly-real-llm-longcat`, `nightly-soak`,
+  `nightly-webui-real`.
   Download with `gh run list --workflow=nightly.yml` and
   `gh run download <run-id>`.
 
 ### Nightly Failure Notification (Issue Automation)
 
 A red nightly run only shows up on the Actions page, which nobody checks daily.
-The `report` job runs after the six check jobs (`if: always()`) and folds the
+The `report` job runs after the seven check jobs (`if: always()`) and folds the
 result into a single tracking issue with a fixed title:
 
 - The title is always `[Nightly] Long-running layer failing`. A failing run only

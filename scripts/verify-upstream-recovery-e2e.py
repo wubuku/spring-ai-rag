@@ -43,7 +43,7 @@ class Acceptance(BASE.Acceptance):
                                        (503, 'UPSTREAM_UNAVAILABLE'), (504, 'UPSTREAM_TIMEOUT')):
                     self.fault('chat', status=status, retryAfter='2' if status == 429 else None)
                     before = self.state()['chat']['calls']
-                    response_status, _, body = self.call_chat(native, stream)
+                    response_status, headers, body = self.call_chat(native, stream)
                     if stream:
                         assert response_status == 200 and ('event:error' in body.replace('event: ', 'event:') if native else '[DONE]' in body), body
                         frames = [json.loads(line[5:].strip()) for line in body.splitlines()
@@ -52,9 +52,18 @@ class Acceptance(BASE.Acceptance):
                         assert len(errors) == 1, body
                         details = errors[0]['failureDetails']
                     else:
-                        assert response_status == (500 if native else 503), body
+                        # 原生接口：上游失败不再回 500（超时→504，限流→429，其余→503）。
+                        # OpenAI 兼容接口契约固定把上游故障收敛为 503 service_unavailable。
+                        expected = (504 if status == 504 else 429 if status == 429 else 503) if native else 503
+                        assert response_status == expected, (response_status, body)
                         report = json.loads(body)
                         details = report['failureDetails'] if native else report['error']['failureDetails']
+                        if native:
+                            assert headers.get('X-RAG-Failure-Class') == (
+                                'TIMEOUT' if expected == 504 else
+                                'RATE_LIMITED' if expected == 429 else 'DEPENDENCY_UNAVAILABLE'), headers
+                            if status == 429:
+                                assert headers.get('Retry-After') == '2', headers
                     assert details['reason'] == reason and details['upstreamStatus'] == status, details
                     assert details['retryable'] == (status in (429, 500, 503, 504)), details
                     assert self.state()['chat']['calls'] == before + 1, 'provider-level retry escaped application budget'
@@ -70,7 +79,7 @@ class Acceptance(BASE.Acceptance):
                 self.fault('chat', badJson=False, disconnect=True)
                 before = self.state()['chat']['calls']
                 response_status, _, body = self.call_chat(native, stream)
-                assert response_status == (200 if stream else 500 if native else 503), body
+                assert response_status == (200 if stream else 503), body
                 assert 'UPSTREAM_CONNECTION' in body, body
                 assert self.state()['chat']['calls'] == before + 1, 'transport silently replayed a disconnected POST'
                 self.fault('chat', disconnect=False)
@@ -117,8 +126,9 @@ class Acceptance(BASE.Acceptance):
             except urllib.error.HTTPError as error:
                 response = error
             with response:
-                assert response.status == 500
-                snapshots.append(json.loads(response.read())['failureDetails'])
+                raw = response.read()
+                assert response.status == 503, (response.status, raw)
+                snapshots.append(json.loads(raw)['failureDetails'])
         assert snapshots[0] == snapshots[1] and snapshots[1]['reason'] == 'UPSTREAM_AUTHENTICATION'
         assert self.state()['chat']['calls'] == before + 1, 'terminal failure replay invoked provider again'
         self.record('keyed failure replay preserves classification without another provider call')
@@ -142,7 +152,7 @@ class Acceptance(BASE.Acceptance):
         self.fault('chat', status=200)
         assert self.sql("SELECT count(*) FROM rag_llm_budget_reservation WHERE state='RESERVED'") == '0'
         self.fault('chat', status=503)
-        assert self.call_chat(True, False, residue_session)[0] == 500
+        assert self.call_chat(True, False, residue_session)[0] == 503
         history_after = int(self.sql(
             "SELECT count(*) FROM rag_chat_history WHERE session_id='%s'" % residue_session))
         assert history_after == history_before, 'failed turn wrote a partial chat history row'
@@ -168,12 +178,18 @@ class Acceptance(BASE.Acceptance):
                 self.fault('chat', status=status, retryAfter=None)
                 before = self.state()['chat']['calls']
                 response_status, _, body = self.call_chat(native, False)
-                assert response_status == (500 if native else 503), body
+                assert response_status == 503, body
                 assert self.state()['chat']['calls'] == before + expected, 'configured attempt limit was not enforced'
             self.fault('chat', status=429, retryAfter='8')
             before = self.state()['chat']['calls']
-            _, _, body = self.call_chat(native, False)
+            status, headers, body = self.call_chat(native, False)
             assert 'UPSTREAM_RATE_LIMITED' in body, body
+            if native:
+                assert status == 429, body
+            else:
+                assert status == 503, body
+            # 上游的 Retry-After 必须透传（原生与兼容层都是）。
+            assert headers.get('Retry-After') == '8', headers
             assert self.state()['chat']['calls'] == before + 1, 'retry happened earlier than provider Retry-After'
             self.fault('chat', status=200, retryAfter=None)
             assert self.call_chat(native, False)[0] == 200

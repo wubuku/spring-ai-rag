@@ -263,6 +263,175 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  # 真实模型 provider 中立性：同一套注入点分别用 MiniMax（上面的 real-llm）
+  # 与 LongCat（本 job）跑真实调用。LongCat 这条链路覆盖：
+  #   - 非流式 / SSE / AGENT 工具调用+引用
+  #   - 真实 429/5xx/超时/断流/客户端中断的失败分类（本地故障代理转发真实上游）
+  #   - base-url 拼接实测、预算诊断
+  # 没有 LONGCAT_API_KEY 时不会静默通过：写 notice + step summary 后显式 skip。
+  # 真实调用有成本，因此只放在 nightly，不进 PR 快层。
+  real-llm-longcat:
+    name: Real LLM smoke and failure semantics (LongCat)
+    if: github.event_name == 'schedule' || inputs.debug_report_failure != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      LLM_PROVIDER: openai
+      SPRING_AI_OPENAI_API_KEY: ${{ secrets.LONGCAT_API_KEY || secrets.SPRING_AI_OPENAI_API_KEY }}
+      SPRING_AI_OPENAI_BASE_URL: ${{ vars.SPRING_AI_OPENAI_BASE_URL || 'https://api.longcat.chat/openai' }}
+      SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL: ${{ vars.SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL || 'LongCat-2.5' }}
+      RAG_EMBEDDING_API_KEY: ${{ secrets.RAG_EMBEDDING_API_KEY }}
+      RAG_EMBEDDING_BASE_URL: ${{ vars.RAG_EMBEDDING_BASE_URL || 'https://api.siliconflow.cn' }}
+      RAG_EMBEDDING_MODEL: BAAI/bge-m3
+      RAG_EMBEDDING_DIMENSIONS: '1024'
+      RAG_ROOT_API_KEY: ${{ secrets.RAG_ROOT_API_KEY }}
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DATABASE: rag_nightly_longcat
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      PGPASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/rag_nightly_longcat
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      BASE_URL: http://127.0.0.1:18081
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Check LongCat credentials
+        run: |
+          if [ -z "${SPRING_AI_OPENAI_API_KEY:-}" ] || [ -z "${RAG_EMBEDDING_API_KEY:-}" ]; then
+            echo "LONGCAT_READY=false" >> "$GITHUB_ENV"
+            echo "::notice::LongCat real-LLM layer skipped: missing repository secret LONGCAT_API_KEY (or SPRING_AI_OPENAI_API_KEY) / RAG_EMBEDDING_API_KEY."
+            {
+              echo "## LongCat real-LLM layer skipped"
+              echo ""
+              echo "Missing repository secret(s); this is an explicit skip, not a pass:"
+              [ -n "${SPRING_AI_OPENAI_API_KEY:-}" ] || echo "- \`LONGCAT_API_KEY\` (or \`SPRING_AI_OPENAI_API_KEY\`)"
+              [ -n "${RAG_EMBEDDING_API_KEY:-}" ] || echo "- \`RAG_EMBEDDING_API_KEY\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "LONGCAT_READY=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build modules into local repository
+        if: env.LONGCAT_READY == 'true'
+        run: mvn -q -B -DskipTests install
+
+      - name: Create isolated database
+        if: env.LONGCAT_READY == 'true'
+        run: |
+          psql -h localhost -U postgres -d postgres -c "CREATE DATABASE rag_nightly_longcat" 2>/dev/null || true
+          psql -h localhost -U postgres -d rag_nightly_longcat -c "CREATE EXTENSION IF NOT EXISTS vector"
+          psql -h localhost -U postgres -d rag_nightly_longcat -c "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+          if psql -h localhost -U postgres -d rag_nightly_longcat \
+              -c "CREATE EXTENSION IF NOT EXISTS pg_jieba"; then
+            echo "pg_jieba: available"
+          else
+            echo "pg_jieba: unavailable (optional; fulltext falls back to pg_trgm)"
+          fi
+
+      - name: Materialize .env for repository scripts
+        if: env.LONGCAT_READY == 'true'
+        run: |
+          umask 077
+          : > .env
+          for name in \
+            LLM_PROVIDER \
+            SPRING_AI_OPENAI_API_KEY SPRING_AI_OPENAI_BASE_URL SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL \
+            RAG_EMBEDDING_API_KEY RAG_EMBEDDING_BASE_URL RAG_EMBEDDING_MODEL RAG_EMBEDDING_DIMENSIONS \
+            RAG_ROOT_API_KEY \
+            POSTGRES_HOST POSTGRES_PORT POSTGRES_DATABASE POSTGRES_USER POSTGRES_PASSWORD \
+            SPRING_DATASOURCE_URL SPRING_DATASOURCE_USERNAME SPRING_DATASOURCE_PASSWORD; do
+            value="${!name:-}"
+            [ -z "$value" ] || printf '%s=%s\n' "$name" "$value" >> .env
+          done
+          if [ -z "${RAG_ROOT_API_KEY:-}" ]; then
+            printf 'RAG_ROOT_API_KEY=%s\n' "$(openssl rand -hex 32)" >> .env
+          fi
+          # 真实失败验收脚本需要 root key 发起请求；只写入 runner 的 .env。
+          printf 'RAG_API_KEY=%s\n' "$(sed -n 's/^RAG_ROOT_API_KEY=//p' .env | tail -1)" >> .env
+
+      - name: Start backend
+        if: env.LONGCAT_READY == 'true'
+        run: |
+          set -euo pipefail
+          ./scripts/start-real-e2e-server.sh > "$RUNNER_TEMP/start-server.log" 2>&1
+          SERVER_PID="$(sed -n 's/^PID //p' "$RUNNER_TEMP/start-server.log" | tail -1)"
+          if [ -z "$SERVER_PID" ]; then
+            echo "::error::Backend did not report a PID; see start-server.log artifact."
+            exit 1
+          fi
+          echo "SERVER_PID=$SERVER_PID" >> "$GITHUB_ENV"
+          echo "Backend PID: $SERVER_PID"
+
+      - name: Real LongCat smoke
+        if: always() && env.LONGCAT_READY == 'true'
+        run: |
+          set -o pipefail
+          mkdir -p .verification/nightly
+          ./scripts/real-llm-e2e-smoke.sh 2>&1 | tee .verification/nightly/longcat-smoke.log
+
+      - name: Real LongCat failure semantics and budgets
+        if: always() && env.LONGCAT_READY == 'true'
+        run: |
+          set -o pipefail
+          mkdir -p .verification/nightly
+          python3 scripts/verify-real-llm-failure-e2e.py --run --providers openai 2>&1 \
+            | tee .verification/nightly/longcat-failure-e2e.log
+
+      - name: Stop backend
+        if: always() && env.LONGCAT_READY == 'true'
+        run: |
+          if [ -n "${SERVER_PID:-}" ]; then
+            kill "$SERVER_PID" 2>/dev/null || true
+          fi
+
+      - name: Failure diagnostics summary
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p .verification/nightly
+          node .github/scripts/ci-summary.mjs --surefire \
+            | tee .verification/nightly/summary.md
+
+      - name: Upload LongCat evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-real-llm-longcat
+          path: |
+            ${{ runner.temp }}/start-server.log
+            .verification/nightly/
+            .verification/real-llm-failure-e2e/
+            /tmp/spring-ai-rag-real-e2e.log
+          if-no-files-found: warn
+          retention-days: 30
+
   real-llm:
     name: Real LLM smoke, goldenset and retrieval regression
     if: github.event_name == 'schedule' || inputs.debug_report_failure != true
@@ -863,7 +1032,7 @@ jobs:
   # 检查 job（不产生模型调用），用 [TEST] 标题走一遍真实的创建/更新/评论路径。
   report:
     name: Nightly status report
-    needs: [gated-postgres, failure-modes, resilience, real-llm, soak, webui-real]
+    needs: [gated-postgres, failure-modes, resilience, real-llm, real-llm-longcat, soak, webui-real]
     if: always() && (github.event_name == 'schedule' || inputs.debug_report_failure == true)
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -890,6 +1059,7 @@ jobs:
           RESULT_FAILURE_MODES: ${{ needs.failure-modes.result }}
           RESULT_RESILIENCE: ${{ needs.resilience.result }}
           RESULT_REAL_LLM: ${{ needs.real-llm.result }}
+          RESULT_REAL_LLM_LONGCAT: ${{ needs.real-llm-longcat.result }}
           RESULT_SOAK: ${{ needs.soak.result }}
           RESULT_WEBUI: ${{ needs.webui-real.result }}
           NIGHTLY_DEBUG: ${{ inputs.debug_report_failure == true }}

@@ -9,6 +9,7 @@ import com.springairag.core.logging.ErrorMessageSanitizer;
 import com.springairag.core.openai.OpenAiProtocolException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -96,13 +97,19 @@ public class OpenAiCompatibilityExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<OpenAiErrorResponse> handleUnexpected(
             Exception error) {
-        return errorResponse(HttpStatus.SERVICE_UNAVAILABLE.value(), "service_unavailable")
-                .body(OpenAiErrorResponse.of(
+        var details = com.springairag.core.resilience.UpstreamFailureClassifier.classify(error);
+        ResponseEntity.BodyBuilder builder =
+                errorResponse(HttpStatus.SERVICE_UNAVAILABLE.value(), "service_unavailable");
+        if (details.retryAfterMs() != null) {
+            // 上游给过 Retry-After 就透传，OpenAI 兼容层也不吞掉退避信号。
+            builder.header(HttpHeaders.RETRY_AFTER, Integer.toString(
+                    Math.max(1, (int) Math.ceil(details.retryAfterMs() / 1000.0))));
+        }
+        return builder.body(OpenAiErrorResponse.of(
                         "The RAG service is temporarily unavailable",
                         "server_error",
                         null,
-                        "service_unavailable").withFailureDetails(
-                                com.springairag.core.resilience.UpstreamFailureClassifier.classify(error)));
+                        "service_unavailable").withFailureDetails(details));
     }
 
     private ResponseEntity.BodyBuilder errorResponse(int status, String errorCode) {

@@ -1992,7 +1992,7 @@ tombstone 端点操作，不能使用本地 PATCH/disable/restore/permanent-dele
 为指定文档生成 embedding 向量。
 
 上游故障时仍返回 `200`，但响应体 `status=FAILED`，并带 `failureClass`、`failureDetails`
-（`origin`/`reason`/`retryable`/`retryAfterMs`/`upstreamStatus`）与 `retryable`；同时回写
+（`origin`/`reason`/`retryable`/`retryAfterMs`/`upstreamStatus`/`upstreamMessage`）与 `retryable`；同时回写
 `X-RAG-Failure-Class` 头。提交阶段遇到版本或 Collection 并发冲突返回 `409 CONFLICT`，
 不会返回堆栈型 500。旧向量保持不变。
 

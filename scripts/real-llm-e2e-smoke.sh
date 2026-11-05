@@ -559,12 +559,16 @@ fi
 if [[ "$SKIP_STREAM" != "1" ]]; then
   step "6) Chat stream (REAL LLM, sample)"
   set +e
-  curl -s -N "${API_AUTH_ARGS[@]}" -X POST "$API/chat/stream" \
-    -H 'Content-Type: application/json' \
-    -d "{\"message\":\"Using only the selected release-verification document, return the release verification code exactly and cite it with the provided source handle, for example [c1]. The code begins with REAL_E2E_.\",\"maxResults\":5,\"useHybridSearch\":true,\"useRerank\":true,\"collectionKeys\":[\"${COLLECTION_KEY}\"],\"documentIds\":[$DOC_ID]}" \
-    --max-time 180 \
-    -o /tmp/rag-e2e-stream.txt
-  python3 - <<'PY'
+  # 真实模型对“逐字重复验证码”可能偶发拒答（安全策略/非确定性），
+  # 这里做一次有界重试；重试仍失败才算真失败。
+  stream_rc=1
+  for attempt in 1 2; do
+    curl -s -N "${API_AUTH_ARGS[@]}" -X POST "$API/chat/stream" \
+      -H 'Content-Type: application/json' \
+      -d "{\"message\":\"Using only the selected release-verification document, return the release verification code exactly and cite it with the provided source handle, for example [c1]. The code begins with REAL_E2E_.\",\"maxResults\":5,\"useHybridSearch\":true,\"useRerank\":true,\"collectionKeys\":[\"${COLLECTION_KEY}\"],\"documentIds\":[$DOC_ID]}" \
+      --max-time 180 \
+      -o /tmp/rag-e2e-stream.txt
+    python3 - <<'PY'
 import json
 import os
 
@@ -609,13 +613,20 @@ answer_verified = (
 )
 raise SystemExit(0 if looks_sse and answer_verified else 1)
 PY
-stream_rc=$?
-set -e
-if [[ $stream_rc -eq 0 ]]; then
-  ok "positive-evidence stream returned the code with SUPPORTED assessment"
-else
-  bad "positive-evidence stream did not return the code with SUPPORTED assessment"
-fi
+    stream_rc=$?
+    if [[ $stream_rc -eq 0 ]]; then
+      break
+    fi
+    if [[ "$attempt" -eq 1 ]]; then
+      echo "RETRY: positive-evidence stream assertion failed, retrying once"
+    fi
+  done
+  set -e
+  if [[ $stream_rc -eq 0 ]]; then
+    ok "positive-evidence stream returned the code with SUPPORTED assessment"
+  else
+    bad "positive-evidence stream did not return the code with SUPPORTED assessment"
+  fi
 fi
 
 step "7) OpenAI-compatible KNOWLEDGE JSON/SSE (when enabled)"

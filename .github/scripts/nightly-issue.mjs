@@ -25,6 +25,7 @@ const JOBS = [
   { key: 'failure-modes', name: 'failure-modes', env: 'RESULT_FAILURE_MODES', artifact: 'nightly-failure-modes' },
   { key: 'resilience', name: 'resilience', env: 'RESULT_RESILIENCE', artifact: 'nightly-resilience' },
   { key: 'real-llm', name: 'real-llm', env: 'RESULT_REAL_LLM', artifact: 'nightly-real-llm' },
+  { key: 'real-llm-longcat', name: 'real-llm-longcat', env: 'RESULT_REAL_LLM_LONGCAT', artifact: 'nightly-real-llm-longcat' },
   { key: 'soak', name: 'soak', env: 'RESULT_SOAK', artifact: 'nightly-soak' },
   { key: 'webui', name: 'webui-real', env: 'RESULT_WEBUI', artifact: 'nightly-webui-real' },
 ];
@@ -205,7 +206,7 @@ function main() {
 }
 
 function selfTest() {
-  const results = { gated: 'success', 'failure-modes': 'success', resilience: 'success', 'real-llm': 'failure', soak: 'success', webui: 'success' };
+  const results = { gated: 'success', 'failure-modes': 'success', resilience: 'success', 'real-llm': 'failure', 'real-llm-longcat': 'success', soak: 'success', webui: 'success' };
   const body = buildBody({
     results,
     runId: '12345',
@@ -228,7 +229,7 @@ function selfTest() {
   }
 
   const allGreen = buildBody({
-    results: { gated: 'success', 'failure-modes': 'success', resilience: 'success', 'real-llm': 'success', soak: 'skipped', webui: 'success' },
+    results: { gated: 'success', 'failure-modes': 'success', resilience: 'success', 'real-llm': 'success', 'real-llm-longcat': 'success', soak: 'skipped', webui: 'success' },
     runId: '1',
     runNumber: '1',
     serverUrl: 'https://github.com',
@@ -242,7 +243,7 @@ function selfTest() {
   }
 
   const debugBody = buildBody({
-    results: { gated: 'success', 'failure-modes': 'success', resilience: 'success', 'real-llm': 'failure', soak: 'success', webui: 'success' },
+    results: { gated: 'success', 'failure-modes': 'success', resilience: 'success', 'real-llm': 'failure', 'real-llm-longcat': 'success', soak: 'success', webui: 'success' },
     runId: '2', runNumber: '2', serverUrl: 'https://github.com',
     repository: 'wubuku/spring-ai-rag', eventName: 'workflow_dispatch', refName: 'main',
     artifactDir: '/nonexistent-artifact-dir', debug: true,

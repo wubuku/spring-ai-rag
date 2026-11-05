@@ -580,9 +580,11 @@ public class ChatTurnOperationService {
         }
         observability.failed();
         stopRenewal(claim);
+        var upstreamDetails = com.springairag.core.resilience.UpstreamFailureClassifier.classify(error);
+        ErrorCode upstreamCode = com.springairag.core.resilience.UpstreamFailureClassifier.errorCode(upstreamDetails);
         ErrorCode code = error instanceof RagException rag
                 ? rag.getErrorCodeEnum()
-                : ErrorCode.INTERNAL_ERROR;
+                : upstreamCode != null ? upstreamCode : ErrorCode.INTERNAL_ERROR;
         String payload;
         try {
             payload = objectMapper.writeValueAsString(Map.of(

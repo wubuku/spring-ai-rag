@@ -8,16 +8,42 @@
 ## 兼容与默认行为
 
 新分类和保护默认启用，不需要迁移或人工改环境。已有HTTP状态、error/code、failureClass、JSON/SSE
-信封保持；Native未知异常仍500，OpenAI未知异常仍503。不能仅根据SSE的HTTP200判成功。
+信封保持；**已识别的上游失败不再落成 500**（见下节映射表），未归类异常仍按原契约：
+Native 未知异常 500、OpenAI 兼容层未知异常 503。不能仅根据SSE的HTTP200判成功。
 既有粗分类见[Client Kit](client-contract-kit-zh-CN.md#5-错误动作映射)。
+
+### 上游失败的 HTTP 契约（LongCat 真实调用实测）
+
+| 上游实际故障 | Native `/api/v1/rag/chat/ask` | `X-RAG-Failure-Class` | `failureDetails.reason` | OpenAI 兼容层 |
+|---|---|---|---|---|
+| 429（上游给 `Retry-After: 2`） | 429 | RATE_LIMITED | UPSTREAM_RATE_LIMITED | 503，并透传 `Retry-After` |
+| 500 / 503 | 503 | DEPENDENCY_UNAVAILABLE | UPSTREAM_UNAVAILABLE | 503 |
+| 读超时 | 504 | TIMEOUT | UPSTREAM_TIMEOUT | 503 |
+| 连接被重置/断开 | 503 | DEPENDENCY_UNAVAILABLE | UPSTREAM_CONNECTION | 503 |
+| SSE 已开始后上游断流 | 200 + `error` 终态事件 | — | UPSTREAM_RESPONSE_INVALID | 200 + `error` 事件 |
+| 上游 401/403 | 503 | LLM_UNAVAILABLE | UPSTREAM_AUTHENTICATION / UPSTREAM_REJECTED | 503 |
+
+429 与 5xx 仍走有界重试（次数、退避上界与 deadline 都生效），不会立即放弃；
+`Retry-After` 只在能安全等待时采纳，最终错误响应会回传客户端可以接受的 `Retry-After`。
+
+`failureDetails.upstreamMessage` 是从上游错误正文里提取的真实原因：先脱敏，再去控制
+字符、压空白并截断到 300 字符（例如 MiniMax 的
+`rate_limit_error ... Token Plan 用量上限 ... (2056)`）。它只在能提取到正文时出现，
+是新增可选字段（`NON_NULL`），不改变既有字段语义；用于区分“普通限流”和“配额耗尽”
+这类同名状态码的不同根因。普通 429/5xx/超时即使没有正文，也仍然带
+`reason`、`upstreamStatus` 和 `retryable`。
+
+真实调用证据见 [testing-guide-zh-CN.md](testing-guide-zh-CN.md#真实模型失败预算与-provider-中立性)。
+
 
 错误对象增量提供 `failureDetails`：
 
 ```json
-{"origin":"UPSTREAM","reason":"UPSTREAM_RATE_LIMITED","retryable":true,"retryAfterMs":2000,"upstreamStatus":429}
+{"origin":"UPSTREAM","reason":"UPSTREAM_RATE_LIMITED","retryable":true,"retryAfterMs":2000,"upstreamStatus":429,"upstreamMessage":"…已脱敏的真实原因…"}
 ```
 
 origin为UPSTREAM/REQUEST/SERVICE；reason是低敏原因，不包含provider正文、URL或凭据。
+`upstreamMessage` 是单独的可选字段：上游错误正文经脱敏、去控制字符并截断到 300 字符。
 Native放在错误正文或SSE的error对象，OpenAI放在error对象。旧错误快照可能没有该字段。
 HTTP401/403的上游认证错误不转成Client自身401；正文中出现“安全”不被猜测为模型安全拒答。
 
