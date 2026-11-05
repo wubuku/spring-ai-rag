@@ -257,13 +257,11 @@ class LocalStack:
             raise RuntimeError(
                 f"demo 构建失败，见 {self.log_dir / 'maven-package.log'}")
 
-    def start_app(self, extra_env: dict[str, str] | None = None,
+    def spawn_app(self, extra_env: dict[str, str] | None = None,
                   port: int | None = None,
                   database: str | None = None,
-                  extra_args: list[str] | None = None,
-                  keep_existing: bool = False) -> str:
-        if not keep_existing:
-            self.stop_app()
+                  extra_args: list[str] | None = None) -> subprocess.Popen:
+        """启动但不等待健康检查，供“多实例同时启动”场景使用。"""
         port = port or self.app_port
         env = self._base_env(database)
         if extra_env:
@@ -280,14 +278,46 @@ class LocalStack:
             cwd=str(PROJECT_DIR), stdout=log, stderr=subprocess.STDOUT, env=env,
         )
         log.close()
-        self._wait_http(f"http://127.0.0.1:{port}/actuator/health", 180,
+        return process
+
+    def wait_app(self, port: int, process: subprocess.Popen,
+                 seconds: int = 180) -> str:
+        self._wait_http(f"http://127.0.0.1:{port}/actuator/health", seconds,
                         f"demo（端口 {port}）", process=process,
                         log_file=self.log_dir / f"app-{port}.log")
+        return f"http://127.0.0.1:{port}"
+
+    def start_app(self, extra_env: dict[str, str] | None = None,
+                  port: int | None = None,
+                  database: str | None = None,
+                  extra_args: list[str] | None = None,
+                  keep_existing: bool = False) -> str:
+        if not keep_existing:
+            self.stop_app()
+        port = port or self.app_port
+        process = self.spawn_app(extra_env=extra_env, port=port,
+                                 database=database, extra_args=extra_args)
+        base = self.wait_app(port, process)
         if keep_existing:
             self.extra_app_processes.append((process, port))
         else:
             self.app_process = process
-        return f"http://127.0.0.1:{port}"
+        return base
+
+    def stop_extra_app(self, process: subprocess.Popen, port: int) -> None:
+        """停止一个额外实例（用于测试崩溃接管时先让出唯一 worker）。"""
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=10)
+        self.extra_app_processes = [
+            (extra, extra_port) for extra, extra_port in self.extra_app_processes
+            if extra is not process
+        ]
+        self._kill_port(port)
 
     def kill_app(self) -> None:
         """发送 SIGKILL，模拟进程被强杀；不等待任何优雅关闭钩子。"""
@@ -302,16 +332,15 @@ class LocalStack:
 
     def stop_app(self) -> None:
         process = self.app_process
-        if process is None:
-            return
-        if process.poll() is None:
-            process.terminate()
-            try:
-                process.wait(timeout=30)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=10)
-        self.app_process = None
+        if process is not None:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=30)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=10)
+            self.app_process = None
         for extra, extra_port in self.extra_app_processes:
             if extra.poll() is None:
                 extra.terminate()

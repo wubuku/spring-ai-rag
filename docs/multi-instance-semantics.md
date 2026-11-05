@@ -14,6 +14,7 @@ when `replicas > 1`. See the [configuration reference](configuration.md) for set
 | External document sync | Database unique index | One `ACTIVE` run per collection + namespace at a time |
 | Chunking auto-upgrade | Claim + lease + CAS | One replica upgrades a document; an expired lease can be recovered |
 | Chat sessions | `rag_chat_session_lease` | One request commits per session; an expired lease is taken over after a crash |
+| SSE cross-instance resume | `rag_chat_turn_operations` snapshot + `Last-Event-ID` | A keyed stream resumes on any replica by event id; an unkeyed live stream is single-instance only |
 | API rate limits | Shared PostgreSQL buckets | Counters are shared, so quotas are not multiplied by replica count |
 | LLM budget | Database conditional writes | Two replicas share one window and never double-spend |
 | HNSW index startup | Read-only build progress observation | Built once; an in-flight index owned by another replica is never dropped |
@@ -128,6 +129,28 @@ Chat requests for the same `owner_principal_id + session_id` are serialized thro
 Concurrent chat on two instances for one session therefore neither mixes nor loses history;
 the losing request receives an explicit conflict error.
 
+## SSE Cross-Instance Resume
+
+A chat stream sent with `Idempotency-Key` (`/api/v1/rag/chat/stream`) **supports cross-instance
+resume**:
+
+- The server persists the full turn result and event snapshot in `rag_chat_turn_operations`
+  before emitting events. A client disconnect mid-stream does not discard the snapshot or
+  cancel the server-side keyed turn;
+- A client that sends the same `Idempotency-Key` and a `Last-Event-ID` to another replica gets
+  only events with an id greater than the cursor, plus `X-RAG-Idempotent-Replay: true`;
+- A malformed or missing `Last-Event-ID` degrades to a full replay instead of an empty stream.
+
+A live stream **without** `Idempotency-Key` is **single-instance only**: it relies on the
+emitter inside the originating process. `Last-Event-ID` is ignored and a request on another
+replica starts a new turn and generates a full response. That is deterministic behavior, not
+silent frame loss; clients that need cross-instance resume must use keyed turns. An unkeyed
+stream cannot resume if the originating replica crashes mid-stream.
+
+`verify-multi-instance-e2e.py` disconnects a keyed stream on A, resumes it on B with
+`Last-Event-ID`, and asserts that "first segment + resume = full replay" with no duplicate ids;
+it also verifies that an unkeyed stream starts a fresh full turn on B.
+
 ## Crash Recovery
 
 Every durable state that needs takeover uses an "expired means reclaimable" lease rather than
@@ -190,11 +213,12 @@ of silently multiplying the quota by N.
 Multi-instance semantics are verified by gated PostgreSQL suites that are not part of `mvn test`.
 Those suites create two independent component instances in one JVM (two stores, two cleanup
 services, two chat coordinators, two index managers) and exercise the database coordination
-layer directly; two real processes on different ports are covered by the HTTP acceptance in
-`verify-managed-api-principals.sh`.
+layer directly; two real processes on different ports are covered by
+`scripts/verify-multi-instance-e2e.py` and `scripts/verify-managed-api-principals.sh`.
 
 | Command | Coverage |
 |---------|----------|
+| `./scripts/verify-multi-instance-e2e.py` | Two real processes (18086/18087 by default) on one PostgreSQL: concurrent Flyway startup applies migrations once, keyed SSE `Last-Event-ID` resume across instances with no duplicates or gaps, unkeyed stream generates a fresh full turn, same idempotency key concurrently produces one side effect, two workers consume one job batch without double writes, SIGKILL followed by lease-expiry takeover, writes on A immediately visible on B, revoked credentials rejected immediately, and shared rate limits not multiplied by replicas |
 | `./scripts/verify-gated-it.sh MultiInstancePostgresIntegrationTest` | Shared rate-limit quota, concurrent TTL cleanup, concurrent HNSW startup, crash-remnant repair |
 | `./scripts/verify-gated-it.sh ChatSessionPostgresIntegrationTest` | Two instances racing for one session, crash lease takeover, old-owner fencing |
 | `./scripts/verify-gated-it.sh EmbeddingJobsPostgresIntegrationTest,DocumentSyncRunsPostgresIntegrationTest` | Embedding claim/lease and a single active run per namespace |
@@ -207,6 +231,7 @@ and the suite inventory.
 ## Boundaries and Limitations
 
 - Cleanup scheduling fires on every replica; the project guarantees idempotence, not singleton execution.
+- An SSE live stream without `Idempotency-Key` is not resumable across instances; another replica starts a new turn.
 - The Admission concurrency pool is per-replica behavior, not a global quota.
 - Concurrent replica startup waits up to 60 seconds for an HNSW build; exceeding the limit fails
   startup instead of waiting forever.

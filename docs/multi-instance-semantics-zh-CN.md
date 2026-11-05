@@ -12,6 +12,7 @@
 | 外部文档同步 | 数据库唯一索引 | 同一 Collection + namespace 同时只有一个 `ACTIVE` run |
 | 分块自动升级 | claim + lease + CAS | 同一文档只被一个副本升级；lease 过期后可恢复 |
 | 聊天会话 | `rag_chat_session_lease` | 同一 session 同时只有一个请求提交；崩溃后过期 lease 可被接管 |
+| SSE 跨实例续传 | `rag_chat_turn_operations` 快照 + `Last-Event-ID` | 带 `Idempotency-Key` 的流可被任意副本按事件 id 续传；无 key 实时流限定单实例 |
 | API 限流 | PostgreSQL 共享桶 | 计数跨副本共享，配额不会被副本数放大 |
 | LLM 预算 | 数据库条件写入 | 两副本共享同一窗口，不双花 |
 | HNSW 索引启动 | 只读观测构建进度 | 只构建一次；不删除其他副本正在构建的索引 |
@@ -107,6 +108,23 @@ store 故障时 fail closed 返回 `503`，不会降级成本地计数。
 
 因此同一 session 在两实例并发聊天时，历史不串、不丢；失败方得到明确的冲突错误。
 
+## SSE 跨实例续传
+
+带 `Idempotency-Key` 的聊天流（`/api/v1/rag/chat/stream`）**支持跨实例续传**：
+
+- 服务端先把整轮结果与事件快照写入 `rag_chat_turn_operations`，再按事件 id 发送；
+  客户端中途断开不会丢掉已生成的快照，也不会取消服务端的 keyed turn；
+- 客户端带同一个 `Idempotency-Key` 与 `Last-Event-ID` 打到另一副本，副本从数据库读快照，
+  只补发 id 大于游标的事件，并返回 `X-RAG-Idempotent-Replay: true`；
+- 非法或缺失的 `Last-Event-ID` 降级为整轮重放，不会返回空流。
+
+不带 `Idempotency-Key` 的实时流**限定单实例语义**：它依赖发起进程内的 emitter，
+`Last-Event-ID` 会被忽略，请求在另一副本上按新 turn 整轮生成。这是明确行为，不是静默丢帧；
+需要跨实例续传的客户端必须使用 keyed turn。发起副本在流中途崩溃时，无 key 的流无法续传。
+
+`verify-multi-instance-e2e.py` 在 A 上断开 keyed 流后，用 B 带 `Last-Event-ID` 续传，
+断言“首段 + 续传 = 完整回放”且 id 不重复；同时验证无 key 流在 B 上整轮新生成。
+
 ## 崩溃恢复
 
 需要接管的持久状态都使用“过期即可接管”的 lease，而不是永久卡死的锁：
@@ -161,11 +179,12 @@ rag:
 
 多实例语义由 gated PostgreSQL 套件验证，默认不进入 `mvn test`。这些套件在同一 JVM 内
 创建两个独立的组件实例（两个 store、两个清理服务、两个聊天协调器、两个索引管理器），
-直接验证数据库协调层；真实双进程、不同端口的 HTTP 验收由 `verify-managed-api-principals.sh`
-覆盖。
+直接验证数据库协调层；真实双进程、不同端口的 HTTP 验收由
+`scripts/verify-multi-instance-e2e.py` 与 `scripts/verify-managed-api-principals.sh` 覆盖。
 
 | 命令 | 覆盖 |
 |------|------|
+| `./scripts/verify-multi-instance-e2e.py` | 两个真实进程（默认 18086/18087）同一 PostgreSQL：并发 Flyway 启动只应用一次、keyed SSE 跨实例 `Last-Event-ID` 续传不重不漏、无 key 流整轮新生成、同幂等键并发只一次、两 worker 同批任务不双写、SIGKILL 后 lease 过期接管、A 写 B 立即可见、吊销凭据即时生效、共享限流不被副本数放大 |
 | `./scripts/verify-gated-it.sh MultiInstancePostgresIntegrationTest` | 共享限流配额、并发 TTL 清理、并发 HNSW 启动、崩溃残骸修复 |
 | `./scripts/verify-gated-it.sh ChatSessionPostgresIntegrationTest` | 两实例并发抢占同一 session、崩溃租约接管与旧 owner fencing |
 | `./scripts/verify-gated-it.sh EmbeddingJobsPostgresIntegrationTest,DocumentSyncRunsPostgresIntegrationTest` | 嵌入任务 claim/lease 与同 namespace 单 active run |
@@ -177,6 +196,7 @@ nightly 的 gated 层会运行全部套件；门控开关与套件清单见[测�
 ## 边界与限制
 
 - 清理调度会在每个副本触发；项目保证幂等，不保证单例执行。
+- 无 `Idempotency-Key` 的 SSE 实时流不承诺跨实例续传：另一副本会把它当作新 turn 整轮生成。
 - Admission 并发池是每副本行为，不是全局配额。
 - 多副本启动时 HNSW 构建等待上限为 60 秒；超过上限会启动失败，避免无限等待。
 - Helm 的 `Recreate` 策略不提供滚动升级零停机；需要零停机时应另行设计兼容的迁移与滚动策略。
