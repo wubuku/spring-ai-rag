@@ -1025,6 +1025,10 @@ describe('Chat SSE callbacks', () => {
     });
     expect(screen.getByText(/chat\.sources/)).toBeInTheDocument();
     expect(screen.getByText('first-source')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /first-source/ }),
+      '引用必须可点击并指向被引用文档的过滤视图',
+    ).toHaveAttribute('href', '/documents?previewDocumentId=1');
 
     await act(async () => {
       (opts.onSources as (s: unknown, next?: string) => void)(

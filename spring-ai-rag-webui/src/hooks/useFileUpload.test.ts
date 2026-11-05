@@ -402,6 +402,29 @@ describe('useFileUpload success, failure and fallback branches', () => {
     fetchSpy.mockRestore();
   });
 
+  it('explains a 422 parse rejection instead of a generic upload failure', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({ code: 'DOCUMENT_EXTRACTION_FAILED', detail: 'PDF has no extractable text' }),
+        { status: 422 },
+      ),
+    );
+    const onError = vi.fn();
+    const { result } = renderHook(() => useFileUpload({ onError }));
+
+    await act(async () => {
+      await result.current.uploadFiles(oneFile());
+    });
+
+    expect(result.current.uploads[0].error)
+      .toBe('documents.parseRejected PDF has no extractable text');
+    expect(onError).toHaveBeenCalledWith(
+      'test.txt',
+      'documents.parseRejected PDF has no extractable text',
+    );
+    fetchSpy.mockRestore();
+  });
+
   it('surfaces the backend message field when detail is absent', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ message: 'Unsupported type' }), { status: 400 }),

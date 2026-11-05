@@ -123,7 +123,11 @@ export function useFileUpload(options: UseFileUploadOptions): UseFileUploadRetur
           const reason = canAppendServerReason({ failureClass })
             ? usableReason(detail)
             : '';
-          const copy = failureCopy(t, { failureClass }, 'documents.uploadFailed');
+          // 422 是解析/内容层面的拒绝：扫描件 PDF、加密或损坏文件都走这里。
+          // 通用“上传失败”会让用户反复重试同一个不可能成功的文件。
+          const copy = response.status === 422
+            ? t('documents.parseRejected')
+            : failureCopy(t, { failureClass }, 'documents.uploadFailed');
           throw new UploadRejected(
             reason && !/^HTTP \d{3}$/i.test(reason) ? `${copy} ${reason}` : copy);
         }

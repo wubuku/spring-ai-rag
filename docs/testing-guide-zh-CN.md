@@ -380,11 +380,11 @@ workflow 里，而不是靠人记得：
 | 层 | 触发 | 工作流 | 包含 | 不包含 |
 |----|------|--------|------|--------|
 | PR 快层 | push `main`/`develop`、PR → `main`；同分支新提交自动取消旧运行 | `.github/workflows/ci.yml` | `mvn test`（含 `OpenApiContractTest` 与 `WebUiRouteContract`）、`verify-project-tests.sh`、`verify-project-docs.sh`、Flyway 迁移清单校验、WebUI lint/单测/覆盖率阈值/构建/Mock E2E | gated PostgreSQL、真实模型、goldenset、soak、`*-real.spec.ts` |
-| 长跑层 | 每日 18:00 UTC（北京时间 02:00）与手动 `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL（31 套件）、上游/Embedding 故障模式（受控 provider + 隔离 PG，无需真实模型）、崩溃一致性（真实 `SIGKILL`）与端点行为运行时矩阵（受控 provider + 隔离 PG）、真实 LLM smoke + goldenset + 检索回归（MiniMax）、LongCat 真实 smoke + 失败语义/预算（`real-llm-longcat`）、并发延迟基准与执行计划门禁、有界 soak（含线程/堆/连接/FD 趋势）、无需人工 fixture 的真实 WebUI spec | 需要预置告警/投递 ID 的 `alerts-real`、需要 rerank fixture 的 `rerank-document-diversity-real` |
+| 长跑层 | 每日 18:00 UTC（北京时间 02:00）与手动 `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL（31 套件）、上游/Embedding 故障模式（受控 provider + 隔离 PG，无需真实模型）、崩溃一致性（真实 `SIGKILL`）与端点行为运行时矩阵（受控 provider + 隔离 PG）、真实 LLM smoke + goldenset + 检索回归（MiniMax）、LongCat 真实 smoke + 失败语义/预算（`real-llm-longcat`）、并发延迟基准与执行计划门禁、有界 soak（含线程/堆/连接/FD 趋势）、无需人工 fixture 的真实 WebUI spec、真实打包 WebUI 套件（18081，含缺失 chunk/续传/CSP） | 需要预置告警/投递 ID 的 `alerts-real`、需要 rerank fixture 的 `rerank-document-diversity-real` |
 
 PR 层的时间预算由 job 级 `timeout-minutes` 固定（backend 45、webui 30）。gated IT
 本地约 9–19 分钟，放在 PR 层会把反馈时间拖到 20 分钟以上，所以它只在 nightly 跑；
-nightly 的每个 job 各自有超时（90/60/60/60/75/30/75 分钟），互相不阻塞。
+nightly 的每个 job 各自有超时（90/60/60/60/75/30/75/75 分钟），互相不阻塞。
 
 故障模式 job（`failure-modes`）跑两条脚本：
 `python3 scripts/verify-upstream-recovery-e2e.py`（chat 500/429/超时/连接中断/畸形响应/SSE 断流、
@@ -714,6 +714,64 @@ npx playwright test e2e/api-key-real.spec.ts
 可能在一个回合内对同名工具发起超过 `rag.chat.agent.max-tool-calls-per-name`（默认 3）的
 调用，此时请求会在 SSE 建立前直接返回 `422 CHAT_BUDGET_EXHAUSTED`；这属于模型侧不确定性，
 不是检索回归。失败信息会附带响应体；需要更高工具预算时调大该配置，而不是放宽状态码断言。
+
+### 真实打包 WebUI 套件（`webui-*-real.spec.ts`）
+
+`playwright.real.config.ts` 面向"真实 PostgreSQL/provider + 后端 classpath 里的打包
+WebUI"，默认不执行，必须显式 `REAL_WEBUI_E2E=1`；nightly 的 `webui-real-packaged`
+job 会自动开启。它与上面的 dev-stack `-real` spec 分开：后者验证 dev server 行为，
+前者验证真正的发布形态（包括升级后的缺失 chunk）。
+
+```bash
+set -a; source .env; set +a
+SERVER_PORT=18081 \
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/rag_webui_real \
+LLM_PROVIDER=openai RAG_SECURITY_ENABLED=true MODELS_CONFIG_FILE=none \
+  ./scripts/start-real-e2e-server.sh
+
+cd spring-ai-rag-webui
+npm run test:e2e:real           # Chromium 全量
+# Firefox / WebKit 各一条主链路（隔离 project、workers=1）
+npx playwright test --config=playwright.real.config.ts \
+  --project=firefox-real-main --project=webkit-real-main
+```
+
+前端改动后必须重新打包并重启后端：`npm run build` →
+`mvn -pl spring-ai-rag-core -Pwebui generate-resources`。`WebUiConfig` 在启动时缓存
+index，换包不重启会出现旧 index 指向不存在 chunk 的白屏。
+
+| spec | 真实覆盖 | 主要断言 |
+|------|----------|----------|
+| `webui-journey-real` | 上传 PDF → 解析 → Embedding `COMPLETED` → 检索命中 → 真实模型 SSE 回答 → 引用 | codename 在 chunk/回答/预览中可见；引用链接打开 `previewDocumentId` 预览；Firefox/WebKit 同一条 |
+| `webui-failures-real` | 401/403/404/422/429/503/504 + 损坏 PDF | 每类按 `X-RAG-Failure-Class` 显示本地化文案、无裸状态码；401 回解锁页并提示会话失效；422 给出明确解析失败 |
+| `webui-reconnect-real` | 反向代理在首个 `content` 帧后真实半关连接 | 第二次 `POST /chat/stream` 带 `Last-Event-ID`，续传后落库回答非空且 UI 可见 |
+| `webui-pagination-real` | 真实 offset/limit 翻页 21 条 | 第一页 20、第二页 1，合并后 21 条唯一标题、无重无漏 |
+| `webui-stale-chunk-real` | 删除打包产物中的 lazy chunk 模拟发版 | 旧标签页请求 404 后立即出现"可刷新"横幅与刷新按钮 |
+| `webui-csp-real` | Dark/Light/System 主题 + 全路由 | CSP violation、console error、pageerror 均为 0；chat/documents axe 无 serious/critical |
+
+与 mock spec 的差异：
+
+- Mock 用 `page.route` 造响应；真实套件走真实 PostgreSQL/provider，HTTP 失败与断流由
+  `e2e/support/real-proxy.ts` 在真实网络上注入，因此能覆盖 axios-retry、SSE 解析和
+  历史落库。
+- 真实引用标题可能是"PDF Import + UUID"形式的展示名，与文档列表标题不同；引用必须按
+  `documentId` 打开预览，不能按标题过滤。
+- 失败文案必须读 `X-RAG-Failure-Class`。5xx 会先被 axios-retry 消耗 4 次尝试，
+  最终错误必须保留分类（否则页面退回"加载失败 + 原始 detail"）。
+
+已知不稳定项与规避：
+
+- **WebKit 上下文泄漏**：约 58 个 context 后会卡死。真实矩阵只给 WebKit 一条主链路，
+  独立 project、`workers=1`、`fullyParallel=false`；不要把它并入 Chromium 套件。
+- **语义缓存回放**：相同问题可能命中缓存，只发一个 `done` 帧，绕过"流式中断"。
+  续传用例每次使用唯一 codename，且代理只在看到第一个 `content` 帧后才断流。
+- **5xx 重试耗时**：503/504 的可读文案约 15 秒后才出现（axios 3 次 + React Query 1 次）。
+  断言超时放到 90 秒，等的是最终态而不是首包。
+- **反向代理同源校验**：代理必须把 `Origin`/`Referer` 改写到上游源，否则真实服务端会把
+  经代理的 POST 判成跨站并返回 403。
+- 后端与前端进程只清理本套件自己起的端口（18081 / 测试专用库）；启动脚本拒绝占用
+  已有端口，不会杀别人的进程。
+
 
 运行期间不要编辑被 dev server 服务的源文件：HMR/整页 reload 会让正在运行的
 Mock Playwright 用例出现元素 detach。

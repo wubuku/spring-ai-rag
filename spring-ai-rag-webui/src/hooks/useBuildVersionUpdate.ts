@@ -23,16 +23,56 @@ export function useBuildVersionUpdate(): boolean {
   const [updateAvailable, setUpdateAvailable] = useState(false);
 
   useEffect(() => {
-    const runningVersion = readRunningBuildVersion();
-    // Dev server and builds from before this mechanism have no meta tag. There
-    // is nothing to compare against, so stay silent rather than guess.
-    if (!runningVersion) return;
-
     let disposed = false;
     let found = false;
     let timer: number | undefined;
     let lastCheckAt = Date.now();
     let inFlight: AbortController | null = null;
+
+    const markUpdateAvailable = () => {
+      if (disposed || found) return;
+      found = true;
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+        timer = undefined;
+      }
+      inFlight?.abort();
+      setUpdateAvailable(true);
+    };
+
+    // 升级后旧标签页懒加载已删除的 hash chunk 会得到 404，页面本身还活着，
+    // 但后续路由会白屏。Vite 在动态 import 失败时派发 `vite:preloadError`；
+    // 各引擎对同一失败的错误文案不同，所以同时兜住 window error 与
+    // unhandledrejection。发现缺失 chunk 立即显示“立即刷新”，不等 5 分钟轮询。
+    const isChunkLoadFailure = (message: unknown): boolean => {
+      if (typeof message !== 'string') return false;
+      return /failed to fetch dynamically imported module|error loading dynamically imported module|importing a module script failed|failed to load module script|chunkloaderror/i
+        .test(message);
+    };
+    const handlePreloadError = () => markUpdateAvailable();
+    const handleWindowError = (event: ErrorEvent) => {
+      if (isChunkLoadFailure(event.message)) markUpdateAvailable();
+    };
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason as { message?: unknown } | undefined;
+      if (isChunkLoadFailure(reason?.message)) markUpdateAvailable();
+    };
+
+    window.addEventListener('vite:preloadError', handlePreloadError);
+    window.addEventListener('error', handleWindowError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    const runningVersion = readRunningBuildVersion();
+    // Dev server and builds from before this mechanism have no meta tag. There
+    // is nothing to compare against, so stay silent rather than guess.
+    if (!runningVersion) {
+      return () => {
+        disposed = true;
+        window.removeEventListener('vite:preloadError', handlePreloadError);
+        window.removeEventListener('error', handleWindowError);
+        window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+      };
+    }
 
     const schedule = () => {
       if (disposed || found) return;
@@ -81,6 +121,9 @@ export function useBuildVersionUpdate(): boolean {
 
     return () => {
       disposed = true;
+      window.removeEventListener('vite:preloadError', handlePreloadError);
+      window.removeEventListener('error', handleWindowError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (timer !== undefined) window.clearTimeout(timer);
       inFlight?.abort();

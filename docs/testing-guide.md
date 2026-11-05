@@ -426,12 +426,12 @@ of in someone's memory:
 | Layer | Trigger | Workflow | Includes | Excludes |
 |-------|---------|----------|----------|----------|
 | PR fast | push to `main`/`develop`, PR to `main`; a newer commit cancels the stale run | `.github/workflows/ci.yml` | `mvn test` (including `OpenApiContractTest` and `WebUiRouteContract`), `verify-project-tests.sh`, `verify-project-docs.sh`, Flyway migration inventory, WebUI lint/unit/coverage thresholds/build/mock E2E | gated PostgreSQL, real models, goldenset, soak, `*-real.spec.ts` |
-| Long-running | daily 18:00 UTC (02:00 Asia/Shanghai) and manual `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL (33 suites), upstream/embedding failure modes (controlled provider + isolated PG, no real models), crash consistency (real `SIGKILL`) and the endpoint behaviour runtime matrix (controlled provider + isolated PG), real LLM smoke + goldenset + retrieval regression (MiniMax), real LongCat smoke + failure semantics/budgets (`real-llm-longcat`), concurrency latency baseline and query-plan gates, bounded soak with thread/heap/connection/FD trends, real WebUI specs that need no manual fixtures | `alerts-real` (needs preset alert/delivery IDs) and `rerank-document-diversity-real` (needs a rerank fixture) |
+| Long-running | daily 18:00 UTC (02:00 Asia/Shanghai) and manual `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL (33 suites), upstream/embedding failure modes (controlled provider + isolated PG, no real models), crash consistency (real `SIGKILL`) and the endpoint behaviour runtime matrix (controlled provider + isolated PG), real LLM smoke + goldenset + retrieval regression (MiniMax), real LongCat smoke + failure semantics/budgets (`real-llm-longcat`), concurrency latency baseline and query-plan gates, bounded soak with thread/heap/connection/FD trends, real WebUI specs that need no manual fixtures, and the packaged WebUI suite (18081, missing chunk/reconnect/CSP) | `alerts-real` (needs preset alert/delivery IDs) and `rerank-document-diversity-real` (needs a rerank fixture) |
 
 The PR layer is bounded by job-level `timeout-minutes` (backend 45, webui 30).
 Gated IT takes about 9–19 minutes locally; keeping it in the PR layer would push
 feedback past twenty minutes, so it runs only in nightly. Each nightly job has
-its own timeout (90/60/60/60/75/30/75 minutes) and they do not block each other.
+its own timeout (90/60/60/60/75/30/75/75 minutes) and they do not block each other.
 
 The failure-modes job runs `python3 scripts/verify-upstream-recovery-e2e.py`
 (chat 500/429/timeout/connection drop/malformed response/SSE truncation, history
@@ -817,6 +817,67 @@ Per-spec extra requirements (verified 2026-09-06):
 | `chat-outcomes-real` | owned controlled stack from `verify-chat-outcomes-e2e.py` only | three refusal-handling cases, separate from real-model positive quality |
 | `files-real` | real Embedding + Chat LLM; KNOWLEDGE generation must finish within `rag.timeout.chat-ask-ms` (default 120s) | passes (with a slow local provider, relax via `RAG_TIMEOUT_CHATASKMS=300000` in `.env`) |
 | `rerank-document-diversity-real` | also `RERANK_DIVERSITY_FIXTURE_FILE` pointing at a fixture | fails without fixture |
+
+### Packaged WebUI real suite (`webui-*-real.spec.ts`)
+
+`playwright.real.config.ts` targets a real PostgreSQL/provider plus the WebUI packaged on the
+backend classpath. It never runs by default and requires `REAL_WEBUI_E2E=1`; nightly's
+`webui-real-packaged` job enables it. This layer is separate from the dev-stack `-real` specs
+above: the latter exercise the dev server, while this one exercises the shipped shape,
+including the missing-lazy-chunk case after a release.
+
+```bash
+set -a; source .env; set +a
+SERVER_PORT=18081 \
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/rag_webui_real \
+LLM_PROVIDER=openai RAG_SECURITY_ENABLED=true MODELS_CONFIG_FILE=none \
+  ./scripts/start-real-e2e-server.sh
+
+cd spring-ai-rag-webui
+npm run test:e2e:real           # full Chromium suite
+# One main journey each on Firefox / WebKit (separate projects, workers=1)
+npx playwright test --config=playwright.real.config.ts \
+  --project=firefox-real-main --project=webkit-real-main
+```
+
+Rebuild and restart the backend after frontend changes: `npm run build` then
+`mvn -pl spring-ai-rag-core -Pwebui generate-resources`. `WebUiConfig` caches the index at
+startup; swapping the build without a restart leaves an old index pointing at missing chunks.
+
+| Spec | Real coverage | Main assertions |
+|------|---------------|-----------------|
+| `webui-journey-real` | upload PDF → parse → Embedding `COMPLETED` → retrieval hit → real-model SSE answer → citation | codename appears in the chunk/answer/preview; citation opens the `previewDocumentId` dialog; same journey on Firefox/WebKit |
+| `webui-failures-real` | 401/403/404/422/429/503/504 + corrupt PDF | each class renders localized copy from `X-RAG-Failure-Class`, never a raw status code; 401 returns to unlock with an expired-session notice; 422 gives explicit parse-failure copy |
+| `webui-reconnect-real` | reverse proxy closes the connection after the first `content` frame | the second `POST /chat/stream` carries `Last-Event-ID`; the resumed turn persists a non-empty answer visible in the UI |
+| `webui-pagination-real` | real offset/limit paging over 21 rows | 20 rows then 1; all 21 unique titles with no duplicates or gaps |
+| `webui-stale-chunk-real` | remove a lazy chunk from the packaged build to simulate a release | an old tab's 404 immediately shows the refresh banner and button |
+| `webui-csp-real` | Dark/Light/System themes across routes | zero CSP violations, console errors and pageerrors; axe reports no serious/critical on chat/documents |
+
+Differences from the mock specs:
+
+- Mock specs use `page.route` fixtures; the real suite uses PostgreSQL/providers, and
+  `e2e/support/real-proxy.ts` injects HTTP failures and stream cuts on a real network, so it
+  covers axios-retry, SSE parsing and history persistence.
+- Real citation titles may be display names such as "PDF Import + UUID", which differ from the
+  documents list title; citations open the preview by `documentId`, never by title filtering.
+- Failure copy must read `X-RAG-Failure-Class`. A 5xx first consumes four axios-retry attempts;
+  the final error must retain its class, otherwise the page falls back to "load failed + raw detail".
+
+Known instability and mitigations:
+
+- **WebKit context leak**: it hangs after roughly 58 contexts. The real matrix gives WebKit a
+  single main journey in its own project with `workers=1` and `fullyParallel=false`; never merge
+  it into the Chromium suite.
+- **Semantic-cache replay**: the same question can hit the cache and emit only one `done` frame,
+  bypassing the mid-stream cut. The reconnect case uses a unique codename per run, and the proxy
+  cuts only after seeing the first `content` frame.
+- **5xx retry latency**: 503/504 copy appears after about 15 seconds (3 axios retries + 1 React
+  Query retry). Wait up to 90 seconds for the final state rather than the first packet.
+- **Reverse-proxy same-origin checks**: rewrite `Origin`/`Referer` to the upstream origin; otherwise
+  the real server treats proxied POSTs as cross-site and returns 403.
+- Processes are cleaned up only on ports this suite started (18081 and its dedicated database);
+  the start script refuses an occupied port and never kills someone else's process.
+
 
 The `chat-real` Agent positive case asks the model to call `searchKnowledge`
 once with a single query. A real model can still issue more calls to the same

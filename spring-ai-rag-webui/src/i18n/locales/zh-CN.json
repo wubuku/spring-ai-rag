@@ -22,6 +22,7 @@
     "submit": "解锁",
     "unlocking": "验证中…",
     "invalidKey": "无法解锁：请确认使用有效的 Root API Key。",
+    "sessionExpired": "当前凭据已失效，请重新输入以继续。",
     "memoryOnly": "凭证仅保存在当前页面内存中；刷新或退出后需要重新输入。",
     "logout": "退出控制台"
   },
@@ -91,6 +92,7 @@
     "embeddingRetried": "已开始重试嵌入",
     "embeddingRetryError": "嵌入重试失败",
     "uploadFailed": "上传失败，请重试。",
+    "parseRejected": "该文件无法解析，可能是扫描件 PDF、加密文件或已损坏；请导出为可复制文本的 PDF 后重试。",
     "uploadCancelled": "已取消上传。",
     "processingRuns": "处理记录",
     "processingRunsTitle": "文档处理记录",
@@ -311,7 +313,7 @@
     "timeout": "模型或向量服务响应超时，请重试。",
     "invalidResponse": "模型或向量服务返回了无法识别的响应，重复相同请求大概率不会成功。",
     "conflict": "该资源正在被另一个请求修改，请稍后重试。",
-    "authentication": "服务端的上游凭据被拒绝，需要运维修复配置。",
+    "authentication": "认证失败。请检查 API Key，或联系运维修复上游凭据配置。",
     "authorization": "当前凭据没有执行该操作的权限。",
     "clientRequest": "服务端拒绝了这次请求，请检查输入后重试。"
   },
@@ -655,6 +657,7 @@
     "importDone": "导入完成！",
     "importSuccess": "「{{name}}」已导入 — 存储了 {{count}} 个文件",
     "importError": "导入失败",
+    "importParseRejected": "该 PDF 无法解析，可能是扫描件、加密文件或已损坏；请导出为可复制文本的 PDF 后重试。",
     "previewTitle": "预览",
     "previewError": "预览失败",
     "pdfNoPreview": "此浏览器不支持 PDF 预览",

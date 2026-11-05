@@ -20,7 +20,7 @@ import { useBlobUrlOpener } from '../hooks/useBlobUrlOpener';
 import { useImeComposition } from '../utils/ime';
 import styles from './Documents.module.css';
 import { EmptyState, IconButton, QueryErrorBanner } from '../components/ui';
-import { failureMessage, usableReason } from '../utils/failureReason';
+import { failureMessage } from '../utils/failureReason';
 import {
   failureCopy,
   failureCopyWithDetail,
@@ -372,6 +372,23 @@ export function Documents() {
     }
   };
 
+  const handledCitationPreviewRef = useRef<string | null>(null);
+  useEffect(() => {
+    const previewId = searchParams.get('previewDocumentId');
+    if (!previewId || handledCitationPreviewRef.current === previewId) return;
+    const id = Number(previewId);
+    if (!Number.isInteger(id) || id <= 0) return;
+    handledCitationPreviewRef.current = previewId;
+    // 引用链接要直接打开被引文档，而不是按标题过滤——引用里的标题可能是
+    // 抽取后生成的展示名，和文档列表标题并不总是同一个字符串。
+    void documentsApi.get(id).then(response => {
+      const detail = response.data;
+      setPreviewDoc({ id: detail.id, title: detail.title, content: detail.content || '' });
+    }).catch(err => {
+      showToast(failureMessage(t, 'documents.loadDetailError', err), 'error');
+    });
+  }, [searchParams, t, showToast]);
+
   const handleEdit = async (doc: Document) => {
     try {
       const response = await documentsApi.get(doc.id);
@@ -530,8 +547,12 @@ export function Documents() {
           onRetry={() => void refetch()}
           retryLabel={t('common.retry')}
         >
-          {t('documents.loadError')}:{' '}
-          {usableReason(error) || t('common.unknownError')}
+          {failureCopyWithDetail(
+            t,
+            failureSignalOf(error),
+            'documents.loadError',
+            error instanceof Error ? error.message : undefined,
+          )}
         </QueryErrorBanner>
       ) : (
         <>

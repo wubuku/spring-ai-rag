@@ -504,12 +504,16 @@ export function Files() {
       // render that difference as two kinds of text in the same sentence.
       setUploadError(err);
       setUploadState('error');
-      showToast(failureCopyWithDetail(
-        t,
-        failureSignalOf(err),
-        'files.importError',
-        err instanceof Error ? err.message : undefined,
-      ), 'error');
+      const status = (err as { status?: number }).status;
+      const copy = status === 422
+        ? t('files.importParseRejected')
+        : failureCopyWithDetail(
+          t,
+          failureSignalOf(err),
+          'files.importError',
+          err instanceof Error ? err.message : undefined,
+        );
+      showToast(copy, 'error');
     }
   }, [navigateTo, queryClient, showToast, t]);
 

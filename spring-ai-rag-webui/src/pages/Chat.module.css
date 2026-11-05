@@ -169,6 +169,11 @@
   display: block;
   margin: 0.25rem 0 0;
   color: var(--color-primary);
+  text-decoration: none;
+}
+
+.source:hover {
+  text-decoration: underline;
 }
 
 .citationId {

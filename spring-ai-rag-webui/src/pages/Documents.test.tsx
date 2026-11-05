@@ -127,8 +127,8 @@ describe('Documents', () => {
 
   // Batch 872. `Documents` printed `error.message` unconditionally, so a
   // transport-level string appeared after the label as though the server had
-  // said it. The fallback it already used for a non-Error value
-  // (`common.unknownError`) is now what a message with no reason in it gets too.
+  // said it. That string is now dropped instead of replaced with a second
+  // generic sentence: the label alone already says what the user needs.
   it('does not print a transport message as the load-failure reason', () => {
     mockUseQuery.mockReturnValue({
       data: undefined,
@@ -141,9 +141,27 @@ describe('Documents', () => {
     // The label and the reason are siblings inside one node, so a matcher has to
     // be a substring one — `getByText('exact')` would never match here.
     expect(screen.getByText(/documents\.loadError/)).toHaveTextContent(
-      'common.unknownError',
+      'documents.loadError',
     );
     expect(screen.queryByText(/Request failed with status code/)).toBeNull();
+    expect(screen.queryByText(/common\.unknownError/)).toBeNull();
+  });
+
+  it('maps a rate-limited read to localized copy instead of an HTTP code', () => {
+    mockUseQuery.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      error: Object.assign(new Error('HTTP 429'), {
+        status: 429,
+        failureClass: 'RATE_LIMITED',
+      }),
+    });
+
+    renderDocuments();
+
+    expect(screen.getByText(/failures\.rateLimited/))
+      .toHaveTextContent('failures.rateLimited');
+    expect(screen.queryByText(/429/)).toBeNull();
   });
 
   it('still prints a reason the server actually gave', () => {

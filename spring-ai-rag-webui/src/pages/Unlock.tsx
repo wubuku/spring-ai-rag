@@ -1,12 +1,24 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { AUTH_EXPIRED_NOTICE_KEY } from '../api/client';
 import { useApiKeyAuth } from '../auth/ApiKeyAuthContext';
 import { ImeSafeForm } from '../components/ImeSafeForm';
 import styles from './Unlock.module.css';
 
 interface UnlockLocationState {
   from?: string;
+}
+
+function takeExpiredNotice(t: (key: string) => string): string {
+  try {
+    const notice = sessionStorage.getItem(AUTH_EXPIRED_NOTICE_KEY);
+    if (!notice) return '';
+    sessionStorage.removeItem(AUTH_EXPIRED_NOTICE_KEY);
+    return t('unlock.sessionExpired');
+  } catch {
+    return '';
+  }
 }
 
 export function Unlock() {
@@ -16,7 +28,7 @@ export function Unlock() {
   const location = useLocation();
   const navigate = useNavigate();
   const [rootApiKey, setRootApiKey] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => takeExpiredNotice(t));
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (wasUnlockedOnEntry) {

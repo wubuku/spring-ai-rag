@@ -97,6 +97,37 @@ describe('useBuildVersionUpdate', () => {
     expect(result.current).toBe(false);
   });
 
+  it('shows the refresh banner immediately when a lazy chunk is missing', async () => {
+    setRunningVersion('build-1');
+    mockFetchVersion('build-1');
+
+    const { result } = renderHook(() => useBuildVersionUpdate());
+    expect(result.current).toBe(false);
+
+    act(() => {
+      window.dispatchEvent(new Event('vite:preloadError'));
+    });
+    expect(result.current).toBe(true);
+    // 已经知道要刷新，轮询应停止而不是继续占用请求。
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(BUILD_VERSION_POLL_INTERVAL_MS);
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('recognizes engine-specific dynamic import error messages', async () => {
+    setRunningVersion('build-1');
+    mockFetchVersion('build-1');
+
+    const { result } = renderHook(() => useBuildVersionUpdate());
+    act(() => {
+      window.dispatchEvent(new ErrorEvent('error', {
+        message: 'Importing a module script failed.',
+      }));
+    });
+    expect(result.current).toBe(true);
+  });
+
   it('disables itself when the document has no build identity', async () => {
     setRunningVersion(null);
     mockFetchVersion('build-2');

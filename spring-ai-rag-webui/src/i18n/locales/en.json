@@ -22,6 +22,7 @@
     "submit": "Unlock",
     "unlocking": "Verifying…",
     "invalidKey": "Unable to unlock. Use a valid root API key.",
+    "sessionExpired": "Your credential is no longer accepted. Enter it again to continue.",
     "memoryOnly": "The credential remains in page memory only. Refreshing or signing out requires it again.",
     "logout": "Sign out"
   },
@@ -91,6 +92,7 @@
     "embeddingRetried": "Embedding retry started",
     "embeddingRetryError": "Embedding retry failed",
     "uploadFailed": "Upload failed. Try again.",
+    "parseRejected": "This file could not be parsed. It may be a scanned image PDF, encrypted, or damaged; export a text-based PDF and try again.",
     "uploadCancelled": "Upload cancelled.",
     "processingRuns": "Processing runs",
     "processingRunsTitle": "Document processing runs",
@@ -311,7 +313,7 @@
     "timeout": "The model or embedding service took too long to answer. Try again.",
     "invalidResponse": "The model or embedding service returned a response this app cannot read. Repeating the same request is unlikely to help.",
     "conflict": "This resource was being changed by another request. Wait a moment, then retry.",
-    "authentication": "The server's upstream provider credential was rejected. An operator needs to fix the configuration.",
+    "authentication": "Authentication failed. Check the API key, or ask an operator to fix the provider credential.",
     "authorization": "This credential is not allowed to perform that action.",
     "clientRequest": "The server rejected this request. Check the input and try again."
   },
@@ -655,6 +657,7 @@
     "importDone": "Import complete!",
     "importSuccess": "{{name}} imported — {{count}} file(s) stored",
     "importError": "Import failed",
+    "importParseRejected": "This PDF could not be parsed. It may be a scanned image PDF, encrypted, or damaged; export a text-based PDF and try again.",
     "previewTitle": "Preview",
     "previewError": "Preview failed",
     "pdfNoPreview": "PDF preview is not available in this browser",

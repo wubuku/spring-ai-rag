@@ -236,6 +236,32 @@ describe('apiClient retry behaviour (real axios-retry flow)', () => {
     expect(attempts).toBe(1);
   });
 
+  it('keeps the failure class after 5xx retries are exhausted', async () => {
+    // 5xx 会先被 axios-retry 消耗掉 4 次尝试。用户最终看到的仍然是
+    // ApiRequestError，因此重试耗尽后分类头不能丢，否则页面会退回成
+    // "加载失败 + 原始 detail"，又变成技术文案。
+    apiClient.defaults.adapter = async (config) => {
+      throw new AxiosError(
+        'Request failed',
+        undefined,
+        config,
+        undefined,
+        {
+          status: 503,
+          statusText: 'error',
+          data: { detail: 'dependency down' },
+          headers: new AxiosHeaders({ 'X-RAG-Failure-Class': 'DEPENDENCY_UNAVAILABLE' }),
+          config,
+        },
+      );
+    };
+
+    const error = await apiClient.get('/health').catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(ApiRequestError);
+    expect((error as ApiRequestError).message).toBe('dependency down');
+    expect((error as ApiRequestError).failureClass).toBe('DEPENDENCY_UNAVAILABLE');
+  }, 10_000);
+
   it('logs each retry attempt through console.warn', async () => {
     const warnSpy = vi.fn();
     console.warn = warnSpy;

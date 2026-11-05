@@ -11,6 +11,8 @@ import {
 } from '../utils/failureClass';
 import { HTTP_TIMEOUT_MS } from '../utils/timing';
 
+export const AUTH_EXPIRED_NOTICE_KEY = 'rag-auth-expired-notice';
+
 export const apiClient = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
@@ -95,8 +97,19 @@ function readHeader(headers: unknown, name: string): string | undefined {
 apiClient.interceptors.response.use(
   response => response,
   error => {
+    // axios-retry 内部用同一个实例重发请求；被重试的那次调用已经走过
+    // 本拦截器，返回的 `ApiRequestError` 没有 `response` 字段。若在这里
+    // 再归一化一次，5xx 重试耗尽后的 failureClass/status 会被清空，
+    // 页面就退回"加载失败 + 原始 detail"的技术文案。
+    if (error instanceof ApiRequestError) return Promise.reject(error);
     if (error.response?.status === 401) {
       clearCredential();
+      try {
+        // 401 会让受保护路由回到解锁页；留下原因，否则用户只会看到表单重置。
+        sessionStorage.setItem(AUTH_EXPIRED_NOTICE_KEY, '1');
+      } catch {
+        // sessionStorage 在隐私模式下可能抛错；提示缺失不应阻断错误映射。
+      }
     }
     const message =
       error.response?.data?.detail

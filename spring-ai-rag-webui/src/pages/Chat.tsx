@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useChatSSE } from '../hooks/useSSE';
 import { ChatSidebar, useChatSessions } from '../components/ChatSidebar';
 import { CollectionScopeSelector } from '../components/CollectionScopeSelector';
@@ -643,7 +643,13 @@ export function Chat() {
                 <div className={styles.sources}>
                   <strong>{t('chat.sources')}:</strong>
                   {msg.sources.map((s, i) => (
-                    <span key={s.citationId ?? `${s.documentId}-${i}`} className={styles.source}>
+                    <Link
+                      key={s.citationId ?? `${s.documentId}-${i}`}
+                      className={styles.source}
+                      to={s.documentId != null
+                        ? `/documents?previewDocumentId=${encodeURIComponent(String(s.documentId))}`
+                        : `/documents?keyword=${encodeURIComponent(s.title ?? '')}`}
+                    >
                       <span className={styles.citationId}>{s.citationId ?? `[S${i + 1}]`}</span>
                       <span>{s.title ?? t('chat.untitledSource')}</span>
                       {s.collectionKey && (
@@ -652,7 +658,7 @@ export function Chat() {
                       {s.documentType && (
                         <span className={styles.sourceMeta}> · {s.documentType}</span>
                       )}
-                    </span>
+                    </Link>
                   ))}
                 </div>
               )}

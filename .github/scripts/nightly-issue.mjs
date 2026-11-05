@@ -28,12 +28,19 @@ const JOBS = [
   { key: 'real-llm-longcat', name: 'real-llm-longcat', env: 'RESULT_REAL_LLM_LONGCAT', artifact: 'nightly-real-llm-longcat' },
   { key: 'soak', name: 'soak', env: 'RESULT_SOAK', artifact: 'nightly-soak' },
   { key: 'webui', name: 'webui-real', env: 'RESULT_WEBUI', artifact: 'nightly-webui-real' },
+  {
+    key: 'webui-packaged',
+    name: 'webui-real-packaged',
+    env: 'RESULT_WEBUI_PACKAGED',
+    artifact: 'nightly-webui-real-packaged',
+  },
 ];
 
 // artifact 里值得贴进 issue 的文件名。其余（HTML 报告、截图、XML）只放在 artifact。
 const INTERESTING_FILES = new Set([
   'summary.md',
   'webui-summary.md',
+  'webui-packaged-summary.md',
   'model-usage.md',
   'gated-it.log',
   'crash-consistency.log',
