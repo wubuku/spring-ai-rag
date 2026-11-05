@@ -123,6 +123,21 @@ mvn -o -B -DskipTests compile             # 依赖已预热后的离线构建
 cd spring-ai-rag-webui && npm ci --dry-run   # lockfile 与 package.json 一致性
 ```
 
+近期深度验收（隔离库 / 一次性容器，默认不进 PR 快层）：
+
+```bash
+./scripts/verify-deletion-integrity.py        # 逐类删除 + 全库孤儿/同 id 重建/批量回滚
+./scripts/verify-multi-instance-e2e.py        # 双进程：SSE 跨实例续传、共享幂等/lease/限流
+./scripts/verify-performance-baseline.py --run --profile quick
+./scripts/verify-query-plans.py --docker
+./scripts/run-bounded-soak.py --minutes 10 --concurrency 4
+./scripts/run-real-embedding-goldenset.py --ack-paid-models  # 真实 embedding goldenset
+./scripts/verify-release-artifact.py --build --blackbox
+```
+
+全量分层、实测耗时、CI/nightly 归属与当前结论见
+[verification-baseline-zh-CN.md](verification-baseline-zh-CN.md)。
+
 境内网络需要镜像时，只临时覆盖 Wrapper 仓库地址：
 `MVNW_REPOURL=https://maven.aliyun.com/repository/public ./mvnw ...`，不要改
 `distributionUrl`。细节见 [testing-guide-zh-CN.md](testing-guide-zh-CN.md#底座验收干净冷启动flyway-升级路径并发幂等备份恢复与接口兼容)，

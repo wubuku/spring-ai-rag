@@ -417,6 +417,11 @@ Known quality boundaries:
 - Long queries can still admit low-coverage literal matches. The current guard is the
   "at least half the lexemes" floor plus top-k truncation; no more aggressive
   semantic filtering is applied.
+- Cross-language / synonym query expansion (LLM rewriting or glossary translation
+  expansion) is **not implemented and was terminated**: there is no default-on
+  expansion channel and no expansion budget/fallback implementation, so Chinese
+  queries still rely on vectors to reach English documents. Any restart must first
+  show Chinese-group gains without p95 regression before default-on is considered.
 - The baseline fixes `useRerank=false`; it says nothing about reranking, another
   embedding model, or a different chunking profile.
 

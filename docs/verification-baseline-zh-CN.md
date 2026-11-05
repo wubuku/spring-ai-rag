@@ -23,7 +23,7 @@
 | 层 | 触发 | 入口 | 主要证明 | 本机实测 |
 |----|------|------|----------|----------|
 | PR 快层 | push `main`/`develop`、PR | `.github/workflows/ci.yml` | 编译、单元/契约测试、静态门禁、文档门禁、WebUI 类型/规范/单测/构建/Mock E2E | 分项见下表；Mock E2E 约 9.6 分钟 |
-| 长跑层 | 每日 18:00 UTC 与手动 | `.github/workflows/nightly.yml` | gated PostgreSQL、故障模式、崩溃一致性、真实模型、soak、安全回归、容器交付、真实 WebUI | 子项见下表；故障模式最长约 8 分钟 |
+| 长跑层 | 每日 18:00 UTC 与手动 | `.github/workflows/nightly.yml` | gated PostgreSQL、PG 15/17/18 矩阵、故障模式、崩溃一致性、发版产物、真实模型与 goldenset、性能/慢 SQL、soak、安全回归、容器交付、真实 WebUI | 子项见下表；故障模式最长约 8 分钟 |
 | 供应链层 | push `main` 与每周一 03:00 UTC | `.github/workflows/codeql.yml` | Java/JS 静态安全扫描 | 未实测（CI 专属） |
 | 手工发版 | 发版前人工执行 | `./scripts/verify-release.sh` | 产物完整性、内嵌 WebUI、清单与验签 | 未实测（需完整发版环境） |
 | 本地可选 | 按需 | `scripts/verify-*.py`、`scripts/verify-*.sh` | 真实进程/浏览器/故障注入的深度验收 | 见第 6 节 |
@@ -123,19 +123,42 @@
 | 入口 | 证明的命题 | 实测 | 依赖 | 红了先看 |
 |------|------------|------|------|----------|
 | `verify-gated-it.sh` | 31 套 gated PostgreSQL 集成测试通过（真实迁移、事务、租约） | 未实测 | Docker/Testcontainers、JDK 21 | `.verification/nightly/gated-it.log` |
+| `verify-postgres-version-matrix.sh --versions 15/17/18` | 全量 V1–V74 迁移探针在 pgvector pg15/17/18 上可应用，核心 gated 套件在同版本通过 | 未实测 | Docker、Node、JDK 21 | `postgres-matrix-<pg>.log` 的迁移版本与失败套件 |
 | `verify-upstream-recovery-e2e.py` | 上游重试、`Retry-After`、恢复后可用 | 83.4s | 隔离 PostgreSQL、mock provider | 三阶段失败点与恢复断言 |
 | `verify-embedding-failure-e2e.py` | embedding 失败后恢复为 `SYNC` 且可检索 | 490.0s | 隔离 PostgreSQL、mock provider | 失败状态与恢复轮询 |
 | `verify-crash-consistency-e2e.py` | 真实 `SIGKILL` 后数据一致、无半写 | 未实测 | 隔离 PostgreSQL、demo jar | 崩溃点与恢复后 SQL 断言 |
-| `verify-endpoint-behavior-e2e.py` | 运行时端点行为矩阵与契约一致 | 未实测 | 隔离 PostgreSQL、mock provider | 矩阵差异行 |
-| `real-llm-e2e-smoke.sh` + 真实模型检查 | 真实 BGE-M3/LLM、goldenset 与检索回归 | 未实测 | 真实模型密钥、外部网络 | 模型调用日志与 goldenset 差异 |
-| 有界 soak | 持续负载下无泄漏、无锁竞争、延迟有界 | 未实测 | 隔离 PostgreSQL、demo jar | soak 摘要与内存/延迟曲线 |
+| `verify-endpoint-behavior-e2e.py` | 运行时端点行为矩阵与契约一致（195 端点 + 21 成功探针） | 未实测 | 隔离 PostgreSQL、mock provider | 矩阵差异行 |
+| `verify-release-artifact.py --blackbox` | fat jar 的 zip CRC、manifest、内嵌 WebUI、依赖收敛、checksums；打包 jar 黑盒启动、Flyway V1–V74、静态 content-type、优雅停机 | 未实测 | Docker/隔离 PostgreSQL、mock provider、Demo jar | `release-artifact.log` 的首个契约失败项 |
+| `real-llm-e2e-smoke.sh` + `run-retrieval-goldenset.sh` + `run-retrieval-regression.sh` | 真实 MiniMax + BGE-M3 冒烟、48 条 goldenset 与版本化检索回归 | 未实测 | 真实模型密钥、外部网络 | 模型调用日志、goldenset 与回归差异 |
+| `verify-real-llm-failure-e2e.py --run --providers openai` | 真实 LongCat 调用下的 429/5xx/超时/断流/客户端断开、预算诊断与 base-url 拼接 | 未实测 | 真实模型密钥、本地故障代理 | `longcat-failure-e2e.log` 的失败分类断言 |
+| `run-real-embedding-goldenset.py --ack-paid-models` | 真实 SiliconFlow BGE-M3 下 32 文档 / 48 查询的纯向量、混合与权重对照 | 未实测（付费、手工） | 真实 embedding 密钥、隔离库 | 生成 manifest 与分组指标 |
+| `run-bounded-soak.py --minutes 10 --concurrency 4` | 固定时长混合负载无泄漏、无锁竞争，首尾资源与延迟不持续爬升 | 未实测 | 隔离 PostgreSQL、真实进程 | `.verification/soak/nightly/` 的漂移与资源曲线 |
+| `verify-performance-baseline.py --run --profile quick` | 并发 1/8/32 的检索、创建、上传解析、embedding、导出相对基线不退化（p95≤2.5×、p99≤3×、吞吐≥0.3×） | 未实测 | 隔离 PostgreSQL、mock provider | `performance/baseline.json` 的超限工作负载 |
+| `verify-query-plans.py --docker` | 1200 文档 × 8 chunk 下 top SQL 与 EXPLAIN：向量走 HNSW、关键查询无全表扫描 | 未实测 | Docker、`pg_stat_statements` | `query-plans.json` 里的 Seq Scan / 索引断言 |
 | `verify-security-boundary.py` | 受限 key 不能跨 Collection/principal，路径穿越被拒 | 14.0s | 隔离 PostgreSQL、mock provider | 具体越权断言 |
 | `verify-security-upgrade-path.py` | V70→V71 升级路径 fail-closed、归属回填正确 | 34.7s | 隔离 PostgreSQL、V70 数据构造 | 升级前后可见性断言 |
 | `verify-security-deployment-posture.py` | 部署态安全开关默认值正确 | 32.2s | 隔离 PostgreSQL、demo jar | 不安全的默认值 |
 | `verify-log-secrecy-e2e.py` | 敏感 canary 不进日志/指标/错误体/导出；actuator 诊断端点关闭 | 24.0s | 隔离 PostgreSQL、mock provider | 报告里泄漏的 canary 名称与被扫描位置 |
-| `verify-container-image.sh` | 镜像可构建、可启动、健康检查通过 | 未实测 | Docker、Buildx | 构建日志与容器健康输出 |
-| 真实 WebUI specs | 真实后端 + 真实模型下页面流程可用 | 未实测 | 开发栈、真实模型、Playwright | Playwright trace 与后端日志 |
+| `verify-container-image.sh` | 镜像可构建、可启动、健康检查、认证与只读文件系统断言通过 | 未实测 | Docker、Buildx | 构建日志与容器健康输出 |
+| 真实 WebUI specs（`api-key-real`/`chat-real`/`files-real`） | 真实后端 + 真实模型下页面流程可用；`alerts-real`/`rerank-document-diversity-real` 需人工 fixture，不在 nightly 自动跑 | 未实测 | 开发栈、真实模型、Playwright | Playwright trace 与后端日志 |
+| 打包 WebUI（`webui-real-packaged`） | 浏览器加载后端 classpath 里的打包产物；`/webui/` 静态资源、旧标签页 lazy chunk 刷新横幅、解锁页与 401 失效提示 | 未实测 | 18081 打包后端、真实模型 | `nightly-webui-real-packaged` 里的 trace 与 404/401 断言 |
 | CodeQL | Java/JS 静态安全扫描无新增高置信告警 | 未实测 | GitHub Actions | CodeQL 告警位置 |
+
+### 5.1 nightly job 清单与各自守什么
+
+| job | 入口脚本 | 守什么 |
+|-----|----------|--------|
+| `gated-postgres` | `verify-gated-it.sh` | 真实迁移、事务、租约的 31 套集成测试 |
+| `postgres-version-matrix` | `verify-postgres-version-matrix.sh` + 核心 gated 子集 | pgvector pg15/17/18 的迁移与关键路径兼容 |
+| `failure-modes` | `verify-upstream-recovery-e2e.py`、`verify-embedding-failure-e2e.py` | chat/embedding 的 5xx/429/超时/断流降级与恢复 |
+| `resilience` | `verify-release-artifact.py --blackbox`、`verify-crash-consistency-e2e.py`、`verify-endpoint-behavior-e2e.py` | 发版产物契约、`SIGKILL` 收敛、端点运行时矩阵 |
+| `real-llm-longcat` | `real-llm-e2e-smoke.sh`、`verify-real-llm-failure-e2e.py` | provider 中立性与真实失败语义；缺密钥时显式 skip（不是通过） |
+| `real-llm` | `real-llm-e2e-smoke.sh`、`run-retrieval-goldenset.sh`、`run-retrieval-regression.sh` | 真实 MiniMax/BGE-M3、goldenset、检索回归；请求量硬上限 600 |
+| `soak` | `run-bounded-soak.py`、`verify-performance-baseline.py`、`verify-query-plans.py`、四个安全回归 | 稳定性/性能/执行计划与安全边界 |
+| `container-smoke` | `verify-container-image.sh --skip-build` | 镜像构建、健康、认证与只读文件系统 |
+| `webui-real` | `dev.sh` + 三个真实 WebUI spec | 真实模型下的页面流程 |
+| `webui-real-packaged` | `start-real-e2e-server.sh` + `playwright.real.config.ts` | classpath 打包 WebUI 的真实浏览器行为 |
+| `report` | `.github/scripts/nightly-issue.mjs` | 失败可见性：创建/更新/关闭追踪 issue；不产生模型调用 |
 
 ## 6. 手工发版与本地可选
 
@@ -190,6 +213,10 @@
 | `verify-upload-boundaries-e2e.py` | 413/503、预读拒绝、并发与中断清理 | 未实测 | 隔离 PostgreSQL、mock provider |
 | `verify-resource-saturation-e2e.py` | 池耗尽/慢查询/DB 不可达的 503/504 与恢复 | 未实测 | 隔离 PostgreSQL、mock provider |
 | `verify-concurrency-idempotency.py` | 并发写幂等与租约语义 | 未实测 | 隔离 PostgreSQL、mock provider |
+| `verify-backup-restore-drill.py` | pg_dump→清理→隔离恢复演练；恢复后向量、文档与检索可用 | 未实测 | Docker、隔离 PostgreSQL |
+| `verify-deletion-integrity.py` | 逐类删除后全库无孤儿、同 id 重建与批量回滚一致 | 未实测 | 隔离 PostgreSQL、mock provider |
+| `verify-multi-instance-e2e.py` | 双进程跨实例：共享幂等/lease/限流；有 key SSE 可续传，无 key SSE 只做整轮重放、不做跨实例续传 | 未实测 | 隔离 PostgreSQL、两个服务进程、mock provider |
+| `verify-quality-real-e2e.py` | 真实模型多轮问答、诊断字段与质量门禁的确定性对照 | 未实测（付费、手工） | 真实模型密钥、隔离 PostgreSQL |
 
 ## 7. WebUI 静态产物：入库决策与可复现性
 
@@ -241,3 +268,52 @@ CI 在 WebUI job 的 `Committed static build matches a fresh build` 步骤执行
 | 安全回归失败 | `security-boundary`/`upgrade-path`/`posture` 的具体越权或默认值断言 |
 | 静态产物门禁失败 | `diff -r` 列出的文件；确认是否改前端后忘记重建入库 |
 | 真实模型 nightly 失败 | 密钥、网络、模型配额与 goldenset 差异 |
+| 真实 WebUI 失败 | 后端日志、`playwright-report/` trace，以及是否走的是打包产物而非 dev server |
+
+## 9. 当前验证结论（2026-11-05）
+
+- **检索真实基线**（32 文档 / 48 查询，真实 BGE-M3）：
+  - 纯向量：R@5 / R@10 / MRR / 片段 MRR / nDCG@10 = `0.917 / 0.938 / 0.822 / 0.812 / 0.846`
+  - 混合 55/45：`0.917 / 0.938 / 0.871 / 0.864 / 0.884`
+  - 纯关键词（可排序 OR）：`0.823 / 0.823 / 0.802 / 0.802 / 0.802`
+  - 分组细节、显著性区间与失败类型见
+    [quality-defaults-zh-CN.md](quality-defaults-zh-CN.md#真实-embedding-检索基线人工标注-goldenset)。
+- **确定性质量门禁**：hash embedding 下 40 例 / 28 文档，MRR `0.9583`、
+  nDCG@5 `0.9710`；它守管线，不代表真实语义质量。
+- **关键词通道**：已从纯 AND 改为可排序 OR（OR 词项 + `ts_rank_cd` +
+  标题/标识符加权），解决“候选只有 0–2 条”的通道失效；执行计划证据在
+  [quality-defaults-zh-CN.md](quality-defaults-zh-CN.md)。
+- **迁移**：当前到 **V1–V74**。V74 把
+  `rag_embeddings.document_id`、`rag_derivation_repair_items.document_id`
+  从 `NO ACTION` 改为 `ON DELETE CASCADE`，保证受控永久删除不会因漏删顺序
+  失败或留下孤儿；其他引用语义不变。
+- **WebUI**：Mock E2E、设计系统/对齐/可复现静态产物门禁，以及真实后端
+  spec 的归属见 §4、§5；是否有绿以对应 CI/nightly 最近运行为准。
+- 本表“未实测”只表示本轮本地没有重新跑，**不等于通过**；nightly 的“绿”
+  以最近一次成功运行为准。
+
+## 10. 已知红 / 跳过 / 未实施（及原因）
+
+| 项 | 状态 | 原因 / 边界 | 落档位置 |
+|----|------|-------------|----------|
+| MiniMax 真实成功样本 | 未取得 | 外部额度/配额阻断（429），不拿替身数据冒充通过；provider 中立性由 LongCat 真实失败语义 + smoke 覆盖 | [multi-model-external-config-zh-CN.md](multi-model-external-config-zh-CN.md) |
+| 跨语言 / 同义查询扩展 | **未实施，已终止** | 中文查英文仍只靠向量；`paraphrase-zh` 是分组最弱项（MRR `0.302`）。重启必须先证明中文改善且 p95 不劣化 | [quality-defaults-zh-CN.md](quality-defaults-zh-CN.md#真实-embedding-检索基线人工标注-goldenset) |
+| 上传解析 p95 | 最紧容量路径 | 约 `7.0s`，对 `20s` 上限约 `2.9×` 余量；是容量优化的第一优先 | [capacity-and-scale-zh-CN.md](capacity-and-scale-zh-CN.md) |
+| 两栏 / 表格版式 | 启发式，有剩余失败样本 | 48 条 goldenset 本次全部可定位，但不承诺任意版式；新样本仍可能误判，需继续补样本 | [quality-defaults-zh-CN.md](quality-defaults-zh-CN.md#真实-embedding-检索基线人工标注-goldenset) |
+| 上传幂等 | 无 key 不去重 | 没有 `Idempotency-Key` 的重复上传产生独立记录；客户端重试必须带 key | 本文 §5 + [rest-api-zh-CN.md](rest-api-zh-CN.md) |
+| 无 key SSE 跨实例续传 | 不支持 | 无 `last-event-id` 时只能整轮重放；有 key 才走持久化事件续传 | 本文 §6.1 + [multi-instance-semantics-zh-CN.md](multi-instance-semantics-zh-CN.md) |
+| `alerts-real` / `rerank-document-diversity-real` | 跳过 | 需要人工告警与 rerank fixture，nightly 不自动跑 | 本文 §5 |
+| 真实 embedding goldenset、手工 release、CodeQL、容器 | 本机未实测 | 付费/CI 专属/需完整发版环境 | 本文 §2、§5 |
+| 样本量 | 偏小 | 32 文档 / 48 查询，bootstrap 区间偏宽；分组结论只作方向 | [quality-defaults-zh-CN.md](quality-defaults-zh-CN.md) |
+
+## 11. 下一步还能往哪打（候选，未承诺）
+
+1. **paraphrase-zh / 跨语言**：若重启，只做确定性术语表 + 有界扩展预算，
+   并以“中文改善且 p95 不劣化”为准入；不做默认开启的 LLM 改写。
+2. **上传解析 p95**：最紧容量路径，优先做流式解析、分片与超时预算。
+3. **两栏 / 表格解析**：先把剩余失败样本固化成 goldenset，再动启发式。
+4. **上传幂等去重**：为 upload 增加可选 `Idempotency-Key`（契约变更，需兼容评审）。
+5. **无 key SSE 跨实例续传**：需要可恢复事件存储与 last-event id 语义。
+6. **扩样本**：把 goldenset 扩到能收紧 bootstrap 区间的规模，再谈分组胜负。
+7. **验成本**：按变更面选择深验（检索改动跑 goldenset，上传改动跑 upload/perf），
+   避免 nightly 全量重跑。

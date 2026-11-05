@@ -96,7 +96,7 @@ jobs:
       - name: Pre-pull pgvector image
         run: docker pull pgvector/pgvector:pg${{ matrix.pg }} || true
 
-      - name: Schema and version probe (full V1–V73 migrations)
+      - name: Schema and version probe (full V1–V74 migrations)
         run: |
           mkdir -p .verification/nightly
           ./scripts/verify-postgres-version-matrix.sh \
@@ -228,7 +228,7 @@ jobs:
           mvn -q -B -DskipTests -f demos/demo-basic-rag/pom.xml package
 
       # 发版产物契约 + 打包 fat jar 黑盒启动：manifest/checksums/依赖收敛/
-      # 内嵌 WebUI 一致性、Flyway V1..V73、health/API/静态 content-type/优雅停机。
+      # 内嵌 WebUI 一致性、Flyway V1..V74、health/API/静态 content-type/优雅停机。
       - name: Release artifact contract and jar black-box startup
         run: |
           set -o pipefail

@@ -27,7 +27,7 @@
 | Layer | Trigger | Entry | Main proof | Local measurement |
 |-------|---------|-------|------------|-------------------|
 | PR fast | push `main`/`develop`, PR | `.github/workflows/ci.yml` | compile, unit/contract tests, static gates, docs gates, WebUI type/lint/unit/build/mock E2E | see details below; Mock E2E about 9.6 minutes |
-| Long run | daily 18:00 UTC and manual | `.github/workflows/nightly.yml` | gated PostgreSQL, failure modes, crash consistency, real model, soak, security regressions, container delivery, real WebUI | see details below; the longest failure mode is about 8 minutes |
+| Long run | daily 18:00 UTC and manual | `.github/workflows/nightly.yml` | gated PostgreSQL, PG 15/17/18 matrix, failure modes, crash consistency, release artifacts, real model and goldenset, performance/slow SQL, soak, security regressions, container delivery, real WebUI | see details below; the longest failure mode is about 8 minutes |
 | Supply chain | push `main` and Monday 03:00 UTC | `.github/workflows/codeql.yml` | Java/JS static security scanning | not measured (CI only) |
 | Manual release | before a release | `./scripts/verify-release.sh` | artifact integrity, embedded WebUI, inventory and signatures | not measured (needs a full release environment) |
 | Local optional | on demand | `scripts/verify-*.py`, `scripts/verify-*.sh` | deep acceptance with real processes, browsers, and fault injection | see section 6 |
@@ -127,19 +127,42 @@ The 56 automated gates below (57 are registered; `verify-container-image.sh` nee
 | Entry | Proposition | Measured | Dependencies | First place to look |
 |-------|-------------|----------|--------------|---------------------|
 | `verify-gated-it.sh` | 31 gated PostgreSQL integration suites pass (real migrations, transactions, leases) | not measured | Docker/Testcontainers, JDK 21 | `.verification/nightly/gated-it.log` |
+| `verify-postgres-version-matrix.sh --versions 15/17/18` | the full V1–V74 migration probe applies on pgvector pg15/17/18, and the core gated subset passes on the same version | not measured | Docker, Node, JDK 21 | the migration version and failing suite in `postgres-matrix-<pg>.log` |
 | `verify-upstream-recovery-e2e.py` | upstream retries, `Retry-After`, and post-recovery availability | 83.4s | isolated PostgreSQL, mock provider | the three-stage failure point and recovery assertions |
 | `verify-embedding-failure-e2e.py` | embedding failure recovers to `SYNC` and becomes searchable | 490.0s | isolated PostgreSQL, mock provider | the failure state and recovery polling |
 | `verify-crash-consistency-e2e.py` | real `SIGKILL` leaves consistent data with no half-writes | not measured | isolated PostgreSQL, demo jar | the crash point and post-recovery SQL assertions |
-| `verify-endpoint-behavior-e2e.py` | the runtime endpoint behavior matrix matches the contract | not measured | isolated PostgreSQL, mock provider | the differing matrix row |
-| `real-llm-e2e-smoke.sh` plus real-model checks | real BGE-M3/LLM, goldenset, and retrieval regressions | not measured | real model secrets, external network | model call logs and goldenset diff |
-| Bounded soak | sustained load has no leaks, lock contention, or unbounded latency | not measured | isolated PostgreSQL, demo jar | soak summary and memory/latency curves |
+| `verify-endpoint-behavior-e2e.py` | the runtime endpoint behavior matrix matches the contract (195 endpoints + 21 success probes) | not measured | isolated PostgreSQL, mock provider | the differing matrix row |
+| `verify-release-artifact.py --blackbox` | fat-jar zip CRC, manifest, embedded WebUI, dependency convergence, checksums; packaged-jar black-box startup, Flyway V1–V74, static content types, graceful shutdown | not measured | Docker/isolated PostgreSQL, mock provider, demo jar | the first contract failure in `release-artifact.log` |
+| `real-llm-e2e-smoke.sh` + `run-retrieval-goldenset.sh` + `run-retrieval-regression.sh` | real MiniMax + BGE-M3 smoke, the 48-query goldenset, and versioned retrieval regression | not measured | real model secrets, external network | model call logs and goldenset/regression diff |
+| `verify-real-llm-failure-e2e.py --run --providers openai` | real LongCat 429/5xx/timeout/stream-cut/client-disconnect behavior, budget diagnostics, and base-url joining | not measured | real model secrets, local fault proxy | the failure-classification assertion in `longcat-failure-e2e.log` |
+| `run-real-embedding-goldenset.py --ack-paid-models` | vector-only, hybrid, and weight comparisons on real SiliconFlow BGE-M3 with 32 documents / 48 queries | not measured (paid, manual) | real embedding secrets, isolated database | the generated manifest and grouped metrics |
+| `run-bounded-soak.py --minutes 10 --concurrency 4` | fixed-duration mixed load has no leaks or lock contention, and first/last resource and latency values do not keep climbing | not measured | isolated PostgreSQL, real process | drift and resource curves under `.verification/soak/nightly/` |
+| `verify-performance-baseline.py --run --profile quick` | retrieval/create/upload-parse/embedding/export at concurrency 1/8/32 stay within baseline ratios (p95≤2.5×, p99≤3×, throughput≥0.3×) | not measured | isolated PostgreSQL, mock provider | the workload above limits in `performance/baseline.json` |
+| `verify-query-plans.py --docker` | with 1200 documents × 8 chunks, top SQL and EXPLAIN show HNSW for vectors and no full table scans on key queries | not measured | Docker, `pg_stat_statements` | Seq Scan/index assertions in `query-plans.json` |
 | `verify-security-boundary.py` | a restricted key cannot cross Collections or principals; path traversal is rejected | 14.0s | isolated PostgreSQL, mock provider | the specific privilege-escalation assertion |
 | `verify-security-upgrade-path.py` | V70→V71 upgrade fails closed and ownership backfill is correct | 34.7s | isolated PostgreSQL, V70 data construction | the pre/post visibility assertions |
 | `verify-security-deployment-posture.py` | deployment security switch defaults are correct | 32.2s | isolated PostgreSQL, demo jar | the unsafe default |
 | `verify-log-secrecy-e2e.py` | sensitive canaries stay out of logs/metrics/error bodies/exports; diagnostic actuator endpoints are closed | 24.0s | isolated PostgreSQL, mock provider | leaked canary name and scanned location |
-| `verify-container-image.sh` | the image builds, starts, and passes health checks | not measured | Docker, Buildx | build log and container health output |
-| Real WebUI specs | page flows work against a real backend and real model | not measured | dev stack, real model, Playwright | Playwright traces and backend logs |
+| `verify-container-image.sh` | the image builds, starts, passes health checks, and honors authentication and a read-only filesystem | not measured | Docker, Buildx | build log and container health output |
+| Real WebUI specs (`api-key-real`/`chat-real`/`files-real`) | page flows work against a real backend and real model; `alerts-real`/`rerank-document-diversity-real` need manual fixtures and do not run automatically in nightly | not measured | dev stack, real model, Playwright | Playwright traces and backend logs |
+| Packaged WebUI (`webui-real-packaged`) | the browser loads the artifact packaged on the backend classpath; `/webui/` statics, stale-tab lazy-chunk refresh banner, unlock page, and 401 expiry prompts | not measured | packaged backend on 18081, real model | traces and 404/401 assertions in `nightly-webui-real-packaged` |
 | CodeQL | Java/JS static security scanning has no new high-confidence alerts | not measured | GitHub Actions | the CodeQL alert location |
+
+### 5.1 Nightly Job Inventory And What Each Guards
+
+| Job | Entry script | What it guards |
+|-----|--------------|----------------|
+| `gated-postgres` | `verify-gated-it.sh` | 31 gated integration suites over real migrations, transactions, and leases |
+| `postgres-version-matrix` | `verify-postgres-version-matrix.sh` + core gated subset | pgvector pg15/17/18 migration and critical-path compatibility |
+| `failure-modes` | `verify-upstream-recovery-e2e.py`, `verify-embedding-failure-e2e.py` | chat/embedding degradation and recovery on 5xx/429/timeout/stream cut |
+| `resilience` | `verify-release-artifact.py --blackbox`, `verify-crash-consistency-e2e.py`, `verify-endpoint-behavior-e2e.py` | release contract, `SIGKILL` convergence, runtime endpoint matrix |
+| `real-llm-longcat` | `real-llm-e2e-smoke.sh`, `verify-real-llm-failure-e2e.py` | provider neutrality and real failure semantics; missing secrets are an explicit skip, not a pass |
+| `real-llm` | `real-llm-e2e-smoke.sh`, `run-retrieval-goldenset.sh`, `run-retrieval-regression.sh` | real MiniMax/BGE-M3, goldenset, retrieval regression; hard cap of 600 requests |
+| `soak` | `run-bounded-soak.py`, `verify-performance-baseline.py`, `verify-query-plans.py`, four security regressions | stability, performance, query plans, and security boundaries |
+| `container-smoke` | `verify-container-image.sh --skip-build` | image build, health, authentication, and read-only filesystem |
+| `webui-real` | `dev.sh` + three real WebUI specs | page flows under a real model |
+| `webui-real-packaged` | `start-real-e2e-server.sh` + `playwright.real.config.ts` | real browser behavior of the classpath-packaged WebUI |
+| `report` | `.github/scripts/nightly-issue.mjs` | failure visibility: create/update/close tracking issues; makes no model calls |
 
 ## 6. Manual Release And Local Optional
 
@@ -194,6 +217,10 @@ The 56 automated gates below (57 are registered; `verify-container-image.sh` nee
 | `verify-upload-boundaries-e2e.py` | 413/503, pre-read rejection, concurrency and interrupt cleanup | not measured | isolated PostgreSQL, mock provider |
 | `verify-resource-saturation-e2e.py` | pool exhaustion/slow query/DB unreachable produce 503/504 and recover | not measured | isolated PostgreSQL, mock provider |
 | `verify-concurrency-idempotency.py` | concurrent write idempotency and lease semantics | not measured | isolated PostgreSQL, mock provider |
+| `verify-backup-restore-drill.py` | pg_dump → purge → isolated restore drill; vectors, documents, and retrieval work after restore | not measured | Docker, isolated PostgreSQL |
+| `verify-deletion-integrity.py` | per-family deletion leaves no orphans; same-id rebuild and batch rollback stay consistent | not measured | isolated PostgreSQL, mock provider |
+| `verify-multi-instance-e2e.py` | two processes: shared idempotency/lease/rate limiting; keyed SSE resumes, unkeyed SSE only replays the whole turn and does not resume across instances | not measured | isolated PostgreSQL, two service processes, mock provider |
+| `verify-quality-real-e2e.py` | deterministic comparison of multi-turn real-model QA, diagnostic fields, and quality gates | not measured (paid, manual) | real model secrets, isolated PostgreSQL |
 
 ## 7. WebUI Static Artifacts: Commit Decision And Reproducibility
 
@@ -250,3 +277,61 @@ CI runs the same rebuild and directory comparison in the WebUI job step
 | security regression fails | the specific privilege or default-value assertion in `security-boundary`/`upgrade-path`/`posture` |
 | static artifact gate fails | the files listed by `diff -r`; confirm whether a frontend change skipped the rebuild commit |
 | real-model nightly fails | secrets, network, model quota, and goldenset diffs |
+| real WebUI fails | backend logs, `playwright-report/` traces, and whether the packaged artifact (not the dev server) was under test |
+
+## 9. Current Verification Conclusions (2026-11-05)
+
+- **Real retrieval baseline** (32 documents / 48 queries, real BGE-M3):
+  - Vector-only: R@5 / R@10 / MRR / chunk MRR / nDCG@10 = `0.917 / 0.938 / 0.822 / 0.812 / 0.846`
+  - Hybrid 55/45: `0.917 / 0.938 / 0.871 / 0.864 / 0.884`
+  - Keyword-only (sortable OR): `0.823 / 0.823 / 0.802 / 0.802 / 0.802`
+  - Group details, significance intervals, and failure types are in
+    [quality-defaults.md](quality-defaults.md#real-embedding-retrieval-baseline-human-labeled-goldenset).
+- **Deterministic quality gate**: 40 cases / 28 documents under hash embedding,
+  MRR `0.9583`, nDCG@5 `0.9710`; it guards the pipeline, not real semantic quality.
+- **Keyword channel**: changed from pure AND to sortable OR (OR terms +
+  `ts_rank_cd` + title/identifier weighting), fixing the “only 0–2 candidates”
+  channel failure; EXPLAIN evidence lives in
+  [quality-defaults.md](quality-defaults.md).
+- **Migrations**: now **V1–V74**. V74 changes
+  `rag_embeddings.document_id` and `rag_derivation_repair_items.document_id`
+  from `NO ACTION` to `ON DELETE CASCADE`, so controlled permanent deletion
+  cannot fail on ordering or leave orphans; other references keep their semantics.
+- **WebUI**: mock E2E, design-system/alignment/reproducible-static-artifact gates,
+  and real-backend specs are mapped in sections 4 and 5; green status follows the
+  latest corresponding CI/nightly run.
+- “Not measured” in these tables means this round did not re-run it locally and
+  **does not mean pass**. A nightly “green” means the latest successful run.
+
+## 10. Known Red / Skipped / Not Implemented (And Why)
+
+| Item | Status | Reason / boundary | Where documented |
+|------|--------|-------------------|------------------|
+| MiniMax real success samples | Not obtained | external quota/allowance blocked (429); no stand-in data is passed off as success. Provider neutrality is covered by real LongCat failure semantics plus smoke | [multi-model-external-config.md](multi-model-external-config.md) |
+| Cross-language / synonym query expansion | **Not implemented, terminated** | Chinese→English still relies on vectors only; `paraphrase-zh` is the weakest group (MRR `0.302`). Any restart must first prove Chinese gains without p95 regression | [quality-defaults.md](quality-defaults.md#real-embedding-retrieval-baseline-human-labeled-goldenset) |
+| Upload parse p95 | Tightest capacity path | about `7.0s`, roughly `2.9×` headroom under the `20s` cap; first capacity-optimization priority | [capacity-and-scale.md](capacity-and-scale.md) |
+| Two-column / table layouts | Heuristic, residual failing samples | all 48 goldenset queries locate their target this round, but arbitrary layouts are not promised; new samples can still misparse and need more corpus | [quality-defaults.md](quality-defaults.md#real-embedding-retrieval-baseline-human-labeled-goldenset) |
+| Upload idempotency | No dedupe without a key | repeated uploads without `Idempotency-Key` create independent records; client retries must send the key | section 5 here + [rest-api.md](rest-api.md) |
+| Unkeyed SSE cross-instance resume | Not supported | without `last-event-id` the whole turn is replayed; only keyed streams resume from persisted events | section 6.1 here + [multi-instance-semantics.md](multi-instance-semantics.md) |
+| `alerts-real` / `rerank-document-diversity-real` | Skipped | need manual alert and rerank fixtures; nightly does not run them | section 5 here |
+| Real-embedding goldenset, manual release, CodeQL, container | Not measured locally | paid / CI-only / needs a full release environment | sections 2 and 5 here |
+| Sample size | Small | 32 documents / 48 queries make bootstrap intervals wide; group conclusions are directional only | [quality-defaults.md](quality-defaults.md) |
+
+## 11. Where To Push Next (Candidates, Not Commitments)
+
+1. **paraphrase-zh / cross-language**: if restarted, only a deterministic glossary
+   plus a bounded expansion budget, admitted only when Chinese improves and p95
+   does not regress; no default-on LLM rewriting.
+2. **Upload parse p95**: the tightest capacity path; prioritize streaming parsing,
+   chunking, and timeout budgets.
+3. **Two-column / table parsing**: freeze residual failing samples into the
+   goldenset before changing the heuristic.
+4. **Upload dedupe**: add an optional `Idempotency-Key` to upload (contract change,
+   needs compatibility review).
+5. **Unkeyed SSE cross-instance resume**: requires recoverable event storage and
+   last-event-id semantics.
+6. **Larger sample**: grow the goldenset enough to tighten bootstrap intervals
+   before claiming group wins.
+7. **Verification cost**: select deep gates by change surface (retrieval changes
+   run the goldenset; upload changes run upload/perf) instead of rerunning nightly
+   in full.

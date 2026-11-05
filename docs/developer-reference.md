@@ -129,6 +129,21 @@ mvn -o -B -DskipTests compile             # offline build after dependencies wer
 cd spring-ai-rag-webui && npm ci --dry-run   # lockfile/package.json consistency
 ```
 
+Recent deep acceptance (isolated database / disposable container; not in the PR fast layer):
+
+```bash
+./scripts/verify-deletion-integrity.py        # per-family deletion + orphan/same-id rebuild/rollback audit
+./scripts/verify-multi-instance-e2e.py        # two processes: cross-instance SSE resume, shared idempotency/lease/rate-limit
+./scripts/verify-performance-baseline.py --run --profile quick
+./scripts/verify-query-plans.py --docker
+./scripts/run-bounded-soak.py --minutes 10 --concurrency 4
+./scripts/run-real-embedding-goldenset.py --ack-paid-models  # real-embedding goldenset
+./scripts/verify-release-artifact.py --build --blackbox
+```
+
+For the full layer split, measured durations, CI/nightly ownership, and current
+conclusions, see [verification-baseline.md](verification-baseline.md).
+
 In restricted networks override only the wrapper repository for that run:
 `MVNW_REPOURL=https://maven.aliyun.com/repository/public ./mvnw ...`; do not edit
 `distributionUrl`. Details in
