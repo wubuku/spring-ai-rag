@@ -62,8 +62,8 @@ class PgEnglishFtsProviderTest {
     }
 
     @Test
-    @DisplayName("search uses ts_rank_cd and websearch_to_tsquery")
-    void search_usesTsRankAndWebsearch() {
+    @DisplayName("search uses ts_rank_cd and OR tsquery")
+    void search_usesTsRankAndOrQuery() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForObject(contains("search_vector_en"), eq(Boolean.class))).thenReturn(true);
 
@@ -160,11 +160,51 @@ class PgEnglishFtsProviderTest {
         assertTrue(sql.contains("d.document_type = ?"));
         assertTrue(sql.contains("v.embedding_profile_id = 7"));
         Object[] args = argsCaptor.getValue();
-        assertInstanceOf(
-                org.springframework.jdbc.support.SqlArrayValue.class, args[1]);
+        // 前两个参数是 SELECT 内分词组件的查询文本；没有编号时作用域参数从下标 2 开始。
+        assertEquals("records", args[0]);
+        assertEquals("records", args[1]);
         assertInstanceOf(
                 org.springframework.jdbc.support.SqlArrayValue.class, args[2]);
-        assertEquals("json-record", args[3]);
+        assertInstanceOf(
+                org.springframework.jdbc.support.SqlArrayValue.class, args[3]);
+        assertEquals("json-record", args[4]);
+    }
+
+    @Test
+    @DisplayName("search uses OR tsquery, title weight and exact identifier boost")
+    void search_usesOrSemanticsAndIdentifierBoost() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(contains("search_vector_en"), eq(Boolean.class))).thenReturn(true);
+        when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of());
+
+        PgEnglishFtsProvider provider = new PgEnglishFtsProvider(jdbc);
+        provider.search("NEBULA-300 rack units", null, null, 5, 0.0, 1L);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> argsCaptor = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc).queryForList(sqlCaptor.capture(), argsCaptor.capture());
+        String sql = sqlCaptor.getValue();
+        // OR 词项：数据库分词后用 | 拼装，不再使用 websearch_to_tsquery 的 AND 语义。
+        assertTrue(sql.contains("string_agg(quote_literal(lex), ' | ')"));
+        assertTrue(sql.contains("search_vector_en @@ (SELECT"));
+        assertFalse(sql.contains("websearch_to_tsquery"));
+        // 标题参与打分，连字符编号按原文子串精确命中加权。
+        assertTrue(sql.contains("ts_rank_cd(to_tsvector('english', COALESCE(d.title, ''))"));
+        assertTrue(sql.contains("strpos(lower(e.chunk_text), lower(?))"));
+        // 覆盖率下限：只保留命中至少一半查询词项的长查询候选，避免单词语义洪泛。
+        assertTrue(sql.contains("doc_lex IN (SELECT lex FROM unnest(tsvector_to_array"));
+        assertTrue(sql.contains("OR strpos(lower(e.chunk_text), lower(?)) > 0"));
+
+        Object[] args = argsCaptor.getValue();
+        assertEquals("NEBULA-300 rack units", args[0]);
+        assertEquals("NEBULA-300 rack units", args[1]);
+        assertEquals("NEBULA-300", args[2]);
+        assertEquals("NEBULA-300 rack units", args[3]);
+        assertEquals("NEBULA-300 rack units", args[4]);
+        assertEquals("NEBULA-300 rack units", args[5]);
+        // 精确编号命中直接通过覆盖率下限。
+        assertEquals("NEBULA-300", args[6]);
+        assertEquals(5, args[7]);
     }
 
     @Test

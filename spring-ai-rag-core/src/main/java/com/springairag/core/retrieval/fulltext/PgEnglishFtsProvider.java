@@ -25,7 +25,12 @@ import java.util.*;
  * <ul>
  *   <li>Uses built-in english config, no extra extension needed</li>
  *   <li>Depends on search_vector_en GENERATED column and GIN index</li>
- *   <li>Uses websearch_to_tsquery supporting Google-style search syntax</li>
+ *   <li>Query is tokenized by the database and matched as OR terms, ranked by
+ *       {@code ts_rank_cd}; a term-coverage ordering replaces the previous
+ *       strict AND semantics that collapsed candidates to 0–2 rows</li>
+ *   <li>Document titles contribute a smaller ranking weight, and hyphenated
+ *       identifiers (for example {@code NEBULA-300}) get an exact-substring
+ *       boost so neighbouring numbers do not outrank the requested one</li>
  * </ul>
  */
 public class PgEnglishFtsProvider implements FulltextSearchProvider {
@@ -156,6 +161,8 @@ public class PgEnglishFtsProvider implements FulltextSearchProvider {
             String query, RetrievalScope retrievalScope,
             int limit, long embeddingProfileId,
             RetrievalFilters filters) {
+        String tsQuery = FulltextQuerySupport.tsQueryLexemeSubquery(TS_CONFIG);
+        List<String> identifiers = FulltextQuerySupport.identifierTerms(query);
         String select = "SELECT e.id AS local_chunk_id, v.id AS embedding_id, "
                 + "d.document_revision AS evidence_revision, d.content_hash AS evidence_content_hash, "
                 + "'KEYWORD' AS evidence_index_kind, NULL::bigint AS evidence_profile_id, "
@@ -166,8 +173,13 @@ public class PgEnglishFtsProvider implements FulltextSearchProvider {
                 + "(SELECT c.collection_key FROM rag_collection c WHERE c.id = d.collection_id) AS collection_key, "
                 + "d.title AS document_title, d.source AS document_source, "
                 + "d.original_filename AS original_filename, "
-                + "ts_rank_cd(e.search_vector_en, "
-                + "websearch_to_tsquery('" + TS_CONFIG + "', ?)) AS rank";
+                + "("
+                + "ts_rank_cd(e.search_vector_en, (" + tsQuery + "))"
+                + " + " + FulltextQuerySupport.titleWeight()
+                + " * ts_rank_cd(to_tsvector('" + TS_CONFIG + "', COALESCE(d.title, '')), ("
+                + tsQuery + "))"
+                + FulltextQuerySupport.identifierBoostSql(identifiers)
+                + ") AS rank";
         String scope = KeywordIndexSqlScope.fromAndFreshness(
                 embeddingProfileId,
                 descriptorProvider.textDescriptor().chunkerVersion(),
@@ -175,13 +187,21 @@ public class PgEnglishFtsProvider implements FulltextSearchProvider {
         RetrievalScopeSql.Fragment fragment =
                 RetrievalScopeSql.build(retrievalScope, filters);
         String sql = select + scope + fragment.sql()
-                + "AND e.search_vector_en @@ websearch_to_tsquery('"
-                + TS_CONFIG + "', ?) "
+                + "AND e.search_vector_en @@ (" + tsQuery + ") "
+                + FulltextQuerySupport.coverageFloorSql(
+                        TS_CONFIG, "e.search_vector_en", "e.chunk_text", identifiers)
                 + "ORDER BY rank DESC, e.document_id, e.chunk_index LIMIT ?";
         List<Object> args = new ArrayList<>();
+        // SELECT 里的两处分词子查询，与 WHERE 的匹配子查询共用同一个查询文本。
         args.add(query);
+        args.add(query);
+        args.addAll(identifiers);
         args.addAll(fragment.args());
         args.add(query);
+        // 覆盖率下限：查询词项集合 + 词项数量；精确编号命中直接放行。
+        args.add(query);
+        args.add(query);
+        args.addAll(identifiers);
         args.add(limit);
         return jdbcTemplate.queryForList(sql, args.toArray());
     }

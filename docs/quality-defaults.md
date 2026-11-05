@@ -42,7 +42,12 @@ Coverage (the count is the regression signal, not a couple of examples):
 
 Determinism: fixed corpus, fixed queries, only `POST /api/v1/rag/search`, no chat
 model call, no sampled metric. With the same embedding provider two runs produce
-identical per-case numbers (measured twice at `mrr=0.9583 ndcg=0.9710`).
+identical per-case numbers (measured twice at `mrr=0.9583 ndcg=0.9710`). With a
+real remote embedding provider, float jitter between the two query embeddings can
+swap two documents that were nearly tied. One verification run showed
+`quality < baseline` (en-semantic-2 was a near tie) and an otherwise identical
+rerun restored equality. That jitter is remote-model noise, not randomness in
+retrieval logic; rerun the gate unchanged before treating it as a regression.
 
 The runner executes the same cases twice: `baseline` (`useRerank=false`) and
 `quality` (`useRerank=true`). `quality` may not regress MRR/nDCG against
@@ -257,76 +262,78 @@ about 32 document embeddings plus 5x48 query embeddings; rerunning with
 document embeddings.
 
 Real baseline (2026-11-05, SiliconFlow `BAAI/bge-m3`, 1024 dims, `useRerank=false`,
-`minScore=0`, top-10, 48 queries):
+`minScore=0`, top-10, 48 queries; the table reflects the keyword-channel OR fix):
 
 | Variant | R@5 | R@10 | MRR | Fragment MRR | nDCG@10 |
 |---------|-----|------|-----|--------------|---------|
 | Vector only (`useHybridSearch=false`) | 0.917 | 0.938 | 0.822 | 0.812 | 0.846 |
-| Hybrid 50/50 | 0.917 | 0.938 | 0.835 | 0.828 | 0.857 |
-| **Hybrid 55/45 (production default, baseline)** | **0.917** | **0.938** | **0.838** | **0.828** | **0.858** |
-| Hybrid 70/30 | 0.917 | 0.938 | 0.838 | 0.828 | 0.858 |
-| Hybrid 30/70 | 0.917 | 0.938 | 0.838 | 0.828 | 0.858 |
-| Keyword only (0/1) | 0.125 | 0.125 | 0.125 | 0.125 | 0.125 |
+| Hybrid 50/50 | 0.917 | 0.938 | 0.881 | 0.875 | 0.892 |
+| **Hybrid 55/45 (production default, baseline)** | **0.917** | **0.938** | **0.871** | **0.864** | **0.884** |
+| Hybrid 70/30 | 0.917 | 0.938 | 0.875 | 0.864 | 0.886 |
+| Hybrid 30/70 | 0.917 | 0.938 | 0.871 | 0.864 | 0.884 |
+| Keyword only (0/1) | 0.823 | 0.823 | 0.802 | 0.802 | 0.802 |
 
 Remote embedding float differences can swap individual query ranks between runs;
 MRR / nDCG@10 jitter by about +/-0.004. The table is the last full run on 2026-11-05.
 
 Group breakdown (production default 55/45):
 
-- Language: en (20) R@5/R@10 1.000/1.000, MRR 0.913, nDCG@10 0.930; zh (26)
-  0.846/0.885, MRR 0.768, nDCG@10 0.795; mixed (2) 1.000/1.000, MRR 1.000,
+- Language: en (20) R@5/R@10 1.000/1.000, MRR 0.950, nDCG@10 0.959; zh (26)
+  0.846/0.885, MRR 0.800, nDCG@10 0.821; mixed (2) 1.000/1.000, MRR 1.000,
   nDCG@10 0.960.
-- Format: HTML (5) and CSV (1) are all 1.0; DOCX (8) R@10 1.000, MRR 0.854,
-  nDCG@10 0.891; PDF (22) R@10 0.909, MRR 0.802, nDCG@10 0.821; MD (8) R@10
-  0.875, MRR 0.813, nDCG@10 0.822; TXT (4) R@10 1.000, MRR 0.813, nDCG@10 0.858.
-- Failure type: normal (17) all 1.0; table-cell (11) R@10 1.000, MRR 0.909;
-  identifier (6) R@10 1.000, MRR 0.792; cross-doc (3) R@10 1.000, MRR 0.833;
-  short (5) R@10 0.800, MRR 0.667; paraphrase-zh (6) R@10 0.667, MRR 0.440.
+- Format: HTML (5) and CSV (1) are all 1.0; DOCX (8) R@10 1.000, MRR 0.917,
+  nDCG@10 0.938; PDF (22) R@10 0.909, MRR 0.847, nDCG@10 0.854; MD (8) R@10
+  0.875, MRR 0.854, nDCG@10 0.860; TXT (4) R@10 1.000, MRR 0.750, nDCG@10 0.815.
+- Failure type: normal (17) all 1.0; table-cell (11) R@10 1.000, MRR 1.000,
+  nDCG@10 1.000; identifier (6) R@10 1.000, MRR 0.917, nDCG@10 0.938; cross-doc
+  (3) R@10 1.000, MRR 0.833, nDCG@10 0.821; short (5) R@10 0.800, MRR 0.800,
+  nDCG@10 0.800; paraphrase-zh (6) R@10 0.667, MRR 0.302, nDCG@10 0.391.
 
 Comparison and noise:
 
-- Vector only to hybrid: MRR 0.822 to 0.838 and nDCG@10 0.846 to 0.858. A paired
-  bootstrap over the same 48 queries (5000 resamples) gives a 95% CI for the nDCG@10
-  delta of **[-0.036, 0.000]**. It includes 0, so hybrid cannot be declared
-  significantly better than vector-only; the direction is consistent, nothing more.
-  The CI covers query sampling only, not corpora or model versions.
-- Weights: 50/50, 55/45, 70/30, and 30/70 differ by at most 0.004 in MRR / nDCG,
-  and repeated runs swap their ordering (50/50 and 70/30 were each slightly lower in
-  different runs). There is no stable ranking difference, so there is no evidence to
-  change the production weights and 55/45 stays. Fusion is weighted RRF with a fixed,
-  non-configurable K, so this experiment sweeps weights but not K.
-- Keyword-only R@10 is just 0.125: the English and Chinese full-text channels use AND
-  semantics and are routed by query language, so they usually return 0-2 candidates.
-  Weight changes cannot pull them into the top ranks; keyword search is an auxiliary
-  signal only.
+- Keyword-only R@10 moves from 0.125 to 0.823. A paired bootstrap over the same
+  48 queries (10000 resamples) gives a 95% CI for the R@10 delta of
+  **[+0.563, +0.823]**, excluding 0: the channel improvement is **significant**.
+  MRR moves from 0.125 to 0.802 (CI `[+0.552, +0.802]`).
+- Hybrid 55/45 before/after the fix: MRR 0.838 to 0.871 (delta CI
+  `[-0.016, +0.087]`) and nDCG@10 0.858 to 0.884 (delta CI `[-0.009, +0.065]`).
+  The direction is positive but the intervals include 0; 48 queries cannot
+  establish a significant overall hybrid change.
+- Within the new run, vector-only to hybrid 55/45: MRR 0.822 to 0.871 (CI
+  `[+0.007, +0.097]`) and nDCG@10 0.846 to 0.884 (CI `[+0.008, +0.074]`); both
+  intervals exclude 0. This is the first time this goldenset supports "hybrid is
+  better than vector-only" as significant, but the interval covers query
+  sampling only, not other corpora or model versions.
+- Weights: 50/50 is numerically highest in this run (MRR 0.881, nDCG@10 0.892),
+  but its delta versus 55/45 has a 95% CI of MRR `[0.000, +0.031]` and nDCG
+  `[0.000, +0.023]`; the lower bound touches 0, so this is noise. The production
+  default stays at 55/45. Fusion is weighted RRF with a fixed, non-configurable K,
+  so this experiment sweeps weights but not K.
 
-Representative failures and attribution (baseline):
+Representative failures and attribution (post-fix baseline):
 
-- **Cross-language paraphrase (embedding)**: q-para-01, "How does the platform handle
-  retries without double charging?", targets the English PDF sentence "Idempotency keys
-  are recorded for 24 hours" and misses top-10; top1 is the Chinese 429/Retry-After
-  troubleshooting manual. `double charging` and `idempotency` are not aligned in the
-  embedding; chunking and fusion weights are not the cause.
-- **Short query plus cross-language table fact (embedding + no keyword candidate)**:
-  q-short-02, "audit retention", targets the "Audit retention / 400 days" table and
-  misses top-10; top1 is "Audit logs ... 90 days". A four-character query is too weak,
-  and the Chinese query is routed to jieba, so the English table gets no keyword
-  candidate.
-- **Label ambiguity (not a system error)**: q-para-04 annotates only `Retry-After` in
-  `md-code-en.md`, but top1 `md-mixed-zh.md` also gives `Retry-After` and exponential
-  backoff, which is a correct answer; the query therefore earns document-level credit
-  only. q-para-05 is similar: top1 from the Chinese operations manual says to drain
-  traffic and wait for an empty queue before stopping a process, which is correct, while
-  the annotated English `nebulactl drain --node` misses top-10. Both stay in the
-  goldenset as known label boundaries; labels are not rewritten to fit the system.
-- **Identifier/model neighbors (embedding + keyword channel inactive)**: q-id-02
-  `NEBULA-300` puts the target at rank 2 behind an overview containing `NEBULA-400`;
-  q-id-05 `RAG-4291` puts the target at rank 2 behind an error-code catalogue containing
-  `RAG-4290`. Adjacent IDs are close in vector space, and a Chinese-plus-ID query is
-  routed to jieba AND semantics, so the hyphenated `websearch_to_tsquery` phrase match
-  never runs.
-- **Tables**: none of the 11 table-cell queries failed because a table row was split;
-  chunk previews confirm that real two- and three-column rows stay intact.
+- **Cross-language paraphrase (embedding; no keyword candidate)**: q-para-01,
+  "How does the platform handle retries without double charging?", targets the
+  English PDF sentence "Idempotency keys are recorded for 24 hours" and misses
+  top-10; top1 is the Chinese 429/Retry-After troubleshooting manual. The Chinese
+  query is routed to jieba, English documents contain no Chinese lexemes, and
+  pure keyword search cannot cross languages; `double charging` and `idempotency`
+  still rely on the embedding.
+- **Short query plus cross-language table fact (embedding-primary)**: q-short-02,
+  "audit retention", targets the "Audit retention / 400 days" table and misses
+  top-10; top1 is "Audit logs ... 90 days". A four-character query is too weak,
+  and a Chinese query cannot produce keyword candidates in an English table; this
+  remains an embedding failure.
+- **Label ambiguity (not a system error)**: q-para-04 annotates only `Retry-After`
+  in `md-code-en.md`, but top1 `md-mixed-zh.md` also gives `Retry-After` and
+  exponential backoff, which is a correct answer; the query therefore earns
+  document-level credit only. q-para-05 is similar: top1 from the Chinese
+  operations manual says to drain traffic and wait for an empty queue before
+  stopping a process, which is correct, while the annotated English
+  `nebulactl drain --node` misses top-10. Both stay in the goldenset as known
+  label boundaries; labels are not rewritten to fit the system.
+- **Tables**: none of the 11 table-cell queries failed because a table row was
+  split; chunk previews confirm that real two- and three-column rows stay intact.
 
 Fixes and before/after:
 
@@ -343,14 +350,56 @@ Fixes and before/after:
 2. **Chunk overlap splitting words (application defect)**: `BoundedTextChunker` stepped
    the overlap start back by a raw character count, producing "...node uns" plus
    "chedulable. ...". The fix snaps the start back to a word/sentence boundary within
-   32 characters. Baseline metrics are unchanged (hybrid 55/45 MRR/nDCG stay at
-   0.838/0.858; vector-only MRR moves by -0.0035, roughly one query rank). This is a
-   text-integrity fix, not a metric gain. Regression test:
+   32 characters. Baseline metrics at that time were unchanged (hybrid 55/45
+   MRR/nDCG stayed at 0.838/0.858; vector-only MRR moved by -0.0035, roughly one
+   query rank). This is a text-integrity fix, not a metric gain. Regression test:
    `overlapStartSnapsToWordBoundary`.
 3. **Goldenset corpus generator (evaluation data only)**: the `china-s` width estimate
    was too low and let two-column text cross the gutter; PDF/DOCX timestamps made the
    output non-reproducible. Text width now uses full glyph width, and PDF metadata /
    document ID and DOCX timestamps are fixed. Application runtime is unaffected.
+4. **Keyword channel failure (application defect, 2026-11-05)**: the English and
+   Chinese full-text channels used `websearch_to_tsquery` (AND semantics), so long
+   queries returned only 0-2 candidates and keyword-only R@10 was 0.125. The fix:
+   - The database tokenizes the query once (`tsvector_to_array`), joins lexemes with
+     OR into `to_tsquery`, and ranks by `ts_rank_cd`; the GIN index still selects the
+     candidates, and `ORDER BY rank + LIMIT` truncates the list.
+   - The document title is weighted separately via
+     `ts_rank_cd(to_tsvector(config, title), q)` (weight 0.35).
+   - Hyphenated identifiers/model numbers in the query (up to 3, for example
+     `NEBULA-300` or `RAG-4291`) get a +1.0 exact-substring boost, so `NEBULA-300`
+     no longer loses to `NEBULA-400`. Identifiers inside Chinese queries still hit
+     the same identifier in English documents because jieba keeps the numeric part
+     as a lexeme and the substring boost compares raw text.
+   - Noise control: when the query has 3 or more lexemes, a chunk must match at
+     least half of them (rounded up); an exact identifier substring hit passes the
+     floor directly (otherwise the Chinese remainder would exclude the only correct
+     identifier chunk). The coverage subquery only runs on rows already selected
+     by the GIN scan.
+   - `EXPLAIN (ANALYZE, BUFFERS)` confirms a `Bitmap Index Scan` for both
+     `search_vector_en` and the jieba expression index; the coverage subquery
+     `loops` equals the candidate count, so there is no sequential scan. No new
+     migration or index is needed (V43 GIN indexes are reused).
+   Result: keyword-only R@10 0.125 to 0.823 (CI `[+0.563, +0.823]`, significant);
+   hybrid 55/45 MRR 0.838 to 0.871 and nDCG@10 0.858 to 0.884; within the same run
+   vector-only to hybrid becomes significant (nDCG CI `[+0.008, +0.074]`).
+   identifier group MRR 0.792 to 0.917; table-cell 0.909 to 1.000; short 0.667 to
+   0.800. q-id-02 ranks first in the keyword-only channel (MRR 1.000), and the
+   adjacent-identifier interference in q-id-02/q-id-05 is gone.
+   Residual and rollback decision: the TXT group MRR moves from 0.812 to 0.750, all
+   from a symmetric RRF tie in q-zh-08 (`txt-utf8-zh` and `txt-gbk-zh` are two
+   encodings of the same content, each slightly stronger in a different channel, so
+   near-equal weighted RRF sums flip the order). The paraphrase-zh group MRR moves
+   from 0.440 to 0.302 because q-para-03 has no literal overlap with its answer and
+   a Chinese chunk with 3/5 coverage is inserted one rank above. Neither is a
+   systematic regression: Chinese aggregate MRR moves from 0.768 to 0.800, English
+   from 0.925 to 0.950, and overall hybrid MRR/nDCG improve. Reverting OR would
+   also discard the +0.698 keyword-only R@10 gain, so this FTS change is not rolled
+   back. Cross-language paraphrase still relies on vectors; the keyword channel does
+   not pretend to solve it.
+   Long English queries (for example q-en-02, q-cross-01/02) return no keyword
+   candidates when literal coverage stays below half; vectors carry them. This is
+   the expected cost of the coverage floor, not a channel failure.
 
 Known quality boundaries:
 
@@ -360,8 +409,13 @@ Known quality boundaries:
 - Fragment scoring is an exact whitespace-normalized substring check; semantically
   equivalent chunks with different wording do not count. nDCG de-duplicates by document
   and uses a 2/1/0 scale, so scores are conservative.
-- Chinese paraphrase, cross-language synonyms, and adjacent identifiers/model numbers
-  are the weakest areas; the keyword channel helps little there.
+- Chinese paraphrase and cross-language synonyms remain the weakest areas: a Chinese
+  query is routed to jieba, English documents contain no Chinese lexemes, and pure
+  keyword search cannot cross languages, so vectors remain primary. Adjacent
+  identifiers/model numbers are fixed by the exact-substring boost.
+- Long queries can still admit low-coverage literal matches. The current guard is the
+  "at least half the lexemes" floor plus top-k truncation; no more aggressive
+  semantic filtering is applied.
 - The baseline fixes `useRerank=false`; it says nothing about reranking, another
   embedding model, or a different chunking profile.
 

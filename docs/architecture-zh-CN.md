@@ -860,7 +860,11 @@ PostgreSQL 全文检索从当前 generation 的
 - pg_trgm 使用可选的 `chunk_text gin_trgm_ops` 索引
 - pg_jieba 使用可选的 `to_tsvector('jiebacfg', chunk_text)` 表达式索引
 - 搜索配置：`jiebacfg`（基于 jieba 分词器）
-- 支持中文 tokenization + ranking (`ts_rank`)
+- 查询先由数据库侧分词，词项以 OR 拼成 `to_tsquery`，再用 `ts_rank_cd` 排序；
+  不再使用 AND 语义的 `websearch_to_tsquery`。标题单独加权；查询中的连字符编号/
+  型号按原文子串精确命中额外加权；查询词项 ≥3 时要求片段至少命中「过半（向上取整）」
+  个不同词项，精确编号命中可直接通过该下限，用覆盖率下限 + `LIMIT` 截断控制 OR 召回噪声。
+  候选仍由 GIN 索引筛出。
 - `rag_embeddings` 仍是向量真相源；HybridRetrieverService 通过缩放加权 RRF
   （Reciprocal Rank Fusion）融合向量和全文结果。固定 `K=60`，提供方原始分数只用于
   确定各自通道内的名次；不同通道的加权贡献会在候选重叠时相加，最终分数相同则按稳定的

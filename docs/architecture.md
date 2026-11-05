@@ -992,7 +992,13 @@ PostgreSQL full-text search reads the current generation from
 - pg_trgm uses the optional `chunk_text gin_trgm_ops` index
 - pg_jieba uses the optional `to_tsvector('jiebacfg', chunk_text)` expression index
 - Search configuration: `jiebacfg` (based on jieba tokenizer)
-- Supports Chinese tokenization + ranking (`ts_rank`)
+- The database tokenizes each query, joins lexemes with OR into `to_tsquery`, and
+  ranks by `ts_rank_cd`; the previous AND-semantics `websearch_to_tsquery` is gone.
+  Titles get a separate weight, and hyphenated identifiers/model numbers get an
+  exact-substring boost. Queries with 3+ lexemes require a chunk to match at
+  least half of them (rounded up), except that an exact identifier hit passes the
+  floor directly; this keeps OR recall from flooding the candidate list. The GIN
+  index still selects candidates.
 - `rag_embeddings` remains the vector source of truth; HybridRetrieverService
   fuses vector and full-text results via scaled weighted RRF (Reciprocal Rank
   Fusion). With fixed `K=60`, provider scores determine rank within each

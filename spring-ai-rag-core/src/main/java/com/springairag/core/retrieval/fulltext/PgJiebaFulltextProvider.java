@@ -21,6 +21,10 @@ import java.util.*;
  * <p>Uses PostgreSQL pg_jieba extension with `jiebacfg` text search configuration,
  * via a pre-built search_vector_zh GENERATED column (with GIN index) for efficient Chinese FTS.
  *
+ * <p>查询侧先由 jiebacfg 分词，再以 OR 词项 + {@code ts_rank_cd} 排序；严格 AND 会把
+ * 中文长查询的候选压到 0–2 条，等于让关键词通道失效。标题单独加权，连字符编号
+ * （如 {@code NEBULA-300}）按原文子串精确命中额外加权，避免被近邻编号挤掉。</p>
+ *
  * <p>Prerequisites:
  * <ul>
  *   <li>pg_jieba extension is installed in the database</li>
@@ -160,8 +164,11 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
             String query, RetrievalScope retrievalScope,
             int limit, long embeddingProfileId,
             RetrievalFilters filters) {
-        // Use pre-built search_vector_zh column (with GIN index)
-        // Use websearch_to_tsquery for Google-style search syntax
+        // 查询文本由 jiebacfg 分词后拼成 OR tsquery，再按 ts_rank_cd 排序。
+        // 旧的 websearch_to_tsquery 是 AND 语义，中文长查询会直接把候选压到 0–2 条。
+        String tsQuery = FulltextQuerySupport.tsQueryLexemeSubquery(TS_CONFIG);
+        List<String> identifiers = FulltextQuerySupport.identifierTerms(query);
+        String chunkVector = "to_tsvector('" + TS_CONFIG + "', e.chunk_text)";
         String select = "SELECT e.id AS local_chunk_id, v.id AS embedding_id, "
                 + "d.document_revision AS evidence_revision, d.content_hash AS evidence_content_hash, "
                 + "'KEYWORD' AS evidence_index_kind, NULL::bigint AS evidence_profile_id, "
@@ -172,8 +179,13 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
                 + "(SELECT c.collection_key FROM rag_collection c WHERE c.id = d.collection_id) AS collection_key, "
                 + "d.title AS document_title, d.source AS document_source, "
                 + "d.original_filename AS original_filename, "
-                + "ts_rank_cd(to_tsvector('" + TS_CONFIG + "', e.chunk_text), "
-                + "websearch_to_tsquery('" + TS_CONFIG + "', ?)) AS rank";
+                + "("
+                + "ts_rank_cd(" + chunkVector + ", (" + tsQuery + "))"
+                + " + " + FulltextQuerySupport.titleWeight()
+                + " * ts_rank_cd(to_tsvector('" + TS_CONFIG + "', COALESCE(d.title, '')), ("
+                + tsQuery + "))"
+                + FulltextQuerySupport.identifierBoostSql(identifiers)
+                + ") AS rank";
         String scope = KeywordIndexSqlScope.fromAndFreshness(
                 embeddingProfileId,
                 descriptorProvider.textDescriptor().chunkerVersion(),
@@ -181,14 +193,21 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
         RetrievalScopeSql.Fragment fragment =
                 RetrievalScopeSql.build(retrievalScope, filters);
         String sql = select + scope + fragment.sql()
-                + "AND to_tsvector('" + TS_CONFIG + "', e.chunk_text) "
-                + "@@ websearch_to_tsquery('"
-                + TS_CONFIG + "', ?) "
+                + "AND " + chunkVector + " @@ (" + tsQuery + ") "
+                + FulltextQuerySupport.coverageFloorSql(
+                        TS_CONFIG, chunkVector, "e.chunk_text", identifiers)
                 + "ORDER BY rank DESC, e.document_id, e.chunk_index LIMIT ?";
         List<Object> args = new ArrayList<>();
+        // SELECT 里的两处分词子查询，与 WHERE 的匹配子查询共用同一个查询文本。
         args.add(query);
+        args.add(query);
+        args.addAll(identifiers);
         args.addAll(fragment.args());
         args.add(query);
+        // 覆盖率下限：查询词项集合 + 词项数量；精确编号命中直接放行。
+        args.add(query);
+        args.add(query);
+        args.addAll(identifiers);
         args.add(limit);
         return jdbcTemplate.queryForList(sql, args.toArray());
     }

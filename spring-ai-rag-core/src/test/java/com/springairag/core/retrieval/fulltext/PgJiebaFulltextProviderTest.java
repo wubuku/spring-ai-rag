@@ -68,7 +68,7 @@ class PgJiebaFulltextProviderTest {
     }
 
     @Test
-    @DisplayName("search uses ts_rank and websearch_to_tsquery")
+    @DisplayName("search uses ts_rank_cd and OR tsquery")
     void search_usesTsQueryAndRank() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         // detectAvailability(): ext (Integer) + config (Integer) + index (Boolean)
@@ -163,11 +163,48 @@ class PgJiebaFulltextProviderTest {
         assertTrue(sql.contains("d.document_type = ?"));
         assertTrue(sql.contains("v.embedding_profile_id = 7"));
         Object[] args = argsCaptor.getValue();
-        assertInstanceOf(
-                org.springframework.jdbc.support.SqlArrayValue.class, args[1]);
+        // 前两个参数是 SELECT 内分词组件的查询文本；没有编号时作用域参数从下标 2 开始。
+        assertEquals("记录", args[0]);
+        assertEquals("记录", args[1]);
         assertInstanceOf(
                 org.springframework.jdbc.support.SqlArrayValue.class, args[2]);
-        assertEquals("json-record", args[3]);
+        assertInstanceOf(
+                org.springframework.jdbc.support.SqlArrayValue.class, args[3]);
+        assertEquals("json-record", args[4]);
+    }
+
+    @Test
+    @DisplayName("search uses OR tsquery, title weight and exact identifier boost")
+    void search_usesOrSemanticsAndIdentifierBoost() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
+        when(jdbc.queryForObject(contains("search_vector_zh"), eq(Boolean.class))).thenReturn(true);
+        when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of());
+
+        PgJiebaFulltextProvider provider = new PgJiebaFulltextProvider(jdbc);
+        provider.search("NEBULA-400 持续吞吐是多少？", null, null, 5, 0.0, 1L);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> argsCaptor = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc).queryForList(sqlCaptor.capture(), argsCaptor.capture());
+        String sql = sqlCaptor.getValue();
+        assertTrue(sql.contains("string_agg(quote_literal(lex), ' | ')"));
+        assertTrue(sql.contains("to_tsvector('jiebacfg', e.chunk_text) @@ (SELECT"));
+        assertFalse(sql.contains("websearch_to_tsquery"));
+        assertTrue(sql.contains("ts_rank_cd(to_tsvector('jiebacfg', COALESCE(d.title, ''))"));
+        assertTrue(sql.contains("strpos(lower(e.chunk_text), lower(?))"));
+        assertTrue(sql.contains("doc_lex IN (SELECT lex FROM unnest(tsvector_to_array"));
+
+        Object[] args = argsCaptor.getValue();
+        assertEquals("NEBULA-400 持续吞吐是多少？", args[0]);
+        assertEquals("NEBULA-400 持续吞吐是多少？", args[1]);
+        assertEquals("NEBULA-400", args[2]);
+        assertEquals("NEBULA-400 持续吞吐是多少？", args[3]);
+        assertEquals("NEBULA-400 持续吞吐是多少？", args[4]);
+        assertEquals("NEBULA-400 持续吞吐是多少？", args[5]);
+        // 中文查询里的编号在英文片段中精确命中时直接通过覆盖率下限。
+        assertEquals("NEBULA-400", args[6]);
+        assertEquals(5, args[7]);
     }
 
     @Test
