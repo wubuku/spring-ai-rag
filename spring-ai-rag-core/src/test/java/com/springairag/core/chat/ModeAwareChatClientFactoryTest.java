@@ -412,6 +412,70 @@ class ModeAwareChatClientFactoryTest {
     }
 
     @Test
+    void knowledgeModeReusesSharedAdvisorExecutorInsteadOfPerAttemptPools()
+            throws Exception {
+        RagProperties properties = new RagProperties();
+        properties.getChat().getKnowledge().setQueryTransformer("none");
+        ProjectDocumentRetriever retriever = mock(ProjectDocumentRetriever.class);
+        AtomicReference<String> retrievalThread = new AtomicReference<>();
+        when(retriever.retrieve(any(Query.class))).thenAnswer(invocation -> {
+            retrievalThread.compareAndSet(
+                    null, Thread.currentThread().getName());
+            return List.of();
+        });
+        java.util.concurrent.ExecutorService shared =
+                java.util.concurrent.Executors.newFixedThreadPool(1, task -> {
+                    Thread thread = new Thread(task, "test-advisor-shared");
+                    thread.setDaemon(true);
+                    return thread;
+                });
+        long leaksBefore = threadsNamed("ai-advisor-");
+        try {
+            ModeAwareChatClientFactory configuredFactory =
+                    new ModeAwareChatClientFactory(
+                            retriever,
+                            rerankPostProcessor,
+                            new CitationQueryAugmenter(properties),
+                            properties,
+                            List.of(),
+                            mock(ToolCallingManager.class));
+            configuredFactory.setAdvisorTaskExecutor(shared::execute);
+            for (int index = 0; index < 20; index++) {
+                ChatCommand command = command(ChatMode.KNOWLEDGE);
+                ModeAwareChatClientFactory.Attempt attempt =
+                        configuredFactory.create(
+                                command,
+                                candidate("knowledge", model("answer")),
+                                List.of());
+                attempt.client().prompt()
+                        .user(command.message())
+                        .advisors(advisor -> advisor.param(
+                                ProjectDocumentRetriever.CONTEXT_KEY,
+                                attempt.retrievalContext()))
+                        .call()
+                        .chatClientResponse();
+            }
+            assertEquals(
+                    "test-advisor-shared",
+                    retrievalThread.get(),
+                    "检索任务必须在共享执行器上运行");
+            assertEquals(
+                    leaksBefore,
+                    threadsNamed("ai-advisor-"),
+                    "每次 attempt 不能再新建 ai-advisor 线程池");
+        } finally {
+            shared.shutdownNow();
+        }
+    }
+
+    /** 统计存活线程中指定前缀的数量：用于断言每次请求不新建线程池。 */
+    private long threadsNamed(String prefix) {
+        return Thread.getAllStackTraces().keySet().stream()
+                .filter(thread -> thread.getName().startsWith(prefix))
+                .count();
+    }
+
+    @Test
     void plainModeDoesNotRunRetrievalAdvisor() {
         ChatModel model = model("plain answer");
         ChatCommand command = command(ChatMode.PLAIN);

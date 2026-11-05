@@ -140,6 +140,10 @@ class LocalStack:
             "POSTGRES_DATABASE": database or self.db_name,
             "POSTGRES_USER": self.pg_user,
             "POSTGRES_PASSWORD": self.pg_password,
+            # 验收栈必须和 dev/prod 用同一个 PostgreSQL profile：否则
+            # EmbeddingProfileBootstrap 不会创建 HNSW 索引，三个后台 worker
+            # 也不会注册，压测跑的是"去掉索引与后台任务"的另一套配置。
+            "SPRING_PROFILES_ACTIVE": "postgresql",
             "LLM_PROVIDER": "openai",
             "SPRING_AI_OPENAI_API_KEY": "mock-key",
             "SPRING_AI_OPENAI_BASE_URL": f"http://127.0.0.1:{self.mock_port}",

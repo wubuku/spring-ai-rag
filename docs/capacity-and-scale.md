@@ -352,6 +352,18 @@ the Service. The readiness probe `timeoutSeconds` must exceed
 `DB_CONNECTION_TIMEOUT_MS` (10 s default); a probe aborted early leaves a waiter inside
 Hikari and makes saturation worse.
 
+**Sustained concurrency + long transactions + client aborts (re-measured 2026-11)**
+
+Scenario 3 of the same script: 6 threads hit `documents` continuously for 8 s while `psql`
+repeatedly runs `BEGIN; LOCK TABLE rag_documents ACCESS EXCLUSIVE; pg_sleep(1.5); ROLLBACK;`,
+plus 39 client aborts that close the socket immediately after sending the request.
+
+- 1,933 requests and 39 aborts: only 200 / 429 / 503 / 504, **zero 500s**, nothing hung
+  beyond 20 s;
+- requests recover to 200 after the long transactions, `hikaricp.connections.active ≤ 2`
+  (pool size 2), and `pg_stat_activity` shows no `idle in transaction`;
+- no `Apparent connection leak detected` in the log.
+
 **Fixes this round**:
 
 1. Pool exhaustion arrives as `CannotCreateTransactionException`, which previously
@@ -384,6 +396,155 @@ swallowed bytes are discarded, not buffered, but they do consume bandwidth. The 
 upload rejection path now uses file metadata only and no longer calls `getBytes()` to
 read the whole part before rejecting it.
 
+### 3.12 Concurrency Baseline and Regression Gate (measured 2026-11)
+
+Reproduce:
+
+```bash
+python3 scripts/verify-performance-baseline.py --run --profile quick \
+  --baseline scripts/testdata/performance-baseline.json
+```
+
+The script provisions its own database and mock provider, runs concurrency **1 / 8 / 32**
+with `requests-per-worker=2`, and writes the baseline to
+[performance-baseline.json](../scripts/testdata/performance-baseline.json). Environment:
+14-core macOS, JDK 25, PostgreSQL 16.8 + pgvector, pool 20, fixture 200 docs / 800 chunks.
+The fixture is intentionally small for CI runtime; index regression is covered separately
+by the 9,600-vector scenario in §3.13.
+
+| Concurrency | Workload | Throughput (rps) | p50 (ms) | p95 (ms) | p99 (ms) | Error rate |
+|-------------|----------|------------------|----------|----------|----------|------------|
+| 1 | search_vector | 12.0 | 73 | 125 | 125 | 0% |
+| 1 | search_hybrid | 10.4 | 96 | 129 | 129 | 0% |
+| 1 | export_collection | 100.7 | 10 | 10 | 10 | 0% |
+| 1 | document_create | 30.0 | 25 | 85 | 85 | 0% |
+| 1 | upload_parse | 4.4 | 72 | 579 | 579 | 0% |
+| 1 | embedding_pipeline | 20.2 | 47 | 80 | 80 | 0% |
+| 8 | search_vector | 58.1 | 89 | 185 | 185 | 0% |
+| 8 | search_hybrid | 65.0 | 106 | 159 | 159 | 0% |
+| 8 | export_collection | 296.0 | 20 | 24 | 24 | 0% |
+| 8 | document_create | 93.5 | 62 | 134 | 134 | 0% |
+| 8 | upload_parse | 3.2 | 1788 | 4307 | 4307 | 0% |
+| 8 | embedding_pipeline | 83.3 | 74 | 132 | 132 | 0% |
+| 32 | search_vector | 51.5 | 458 | 736 | 813 | 0% |
+| 32 | search_hybrid | 33.9 | 875 | 973 | 994 | 0% |
+| 32 | export_collection | 239.7 | 76 | 108 | 116 | 0% |
+| 32 | document_create | 47.2 | 557 | 917 | 970 | 0% |
+| 32 | upload_parse | 8.1 | 3515 | 7004 | 7637 | 0% |
+| 32 | embedding_pipeline | 140.9 | 158 | 309 | 429 | 0% |
+
+**Gate** (`verify-performance-baseline.py`, any failure turns the run red):
+
+- Relative to baseline: p95 ≤ **2.5×**, p99 ≤ **3.0×**, throughput ≥ **0.3×**;
+- Generous absolute caps: search_vector 3 s, search_hybrid 4 s, export 3 s,
+  document_create 4 s, upload_parse 20 s, embedding_pipeline 6 s;
+- Error rate ≤ **5%**.
+
+**Headroom**: relative thresholds are the primary constraint. At c=32 the tightest cases
+are `upload_parse` (p95 7.0 s vs 20 s cap, 2.9×) and `search_hybrid` (p95 0.97 s vs 4 s cap,
+4.1×). The 0.3× throughput floor tolerates a clearly slower shared CI machine; absolute
+caps are a backstop, not a normal-jitter gate.
+
+**Two issues fixed this round that only sustained load exposed**:
+
+1. **OSIV held one database connection per request for the whole request.** The demo
+   `application.yml` shadowed the core jar's `spring.jpa.open-in-view: false`, so OSIV
+   stayed enabled. At c=32 Hikari showed `total=20, active=20, idle=0, waiting=32`, p50
+   13–20 s, and many 503s; 177 `Apparent connection leak` warnings pointed at
+   `CollectionIdentityResolver.resolveActiveKeyIds` and `DocumentQueryService.findById`.
+   All four demos now disable OSIV explicitly; c=32 is 0 errors / 0 waiters.
+2. **Verification stacks never activated the `postgresql` profile, so the HNSW index did
+   not exist.** `EmbeddingProfileBootstrap` is `@Profile("postgresql")`; the shared
+   `LocalStack` and the demos' default startup did not set it, so the bootstrap and three
+   background workers were skipped. Across 9,600 vectors ANN fell back to Seq Scan (24 ms);
+   with HNSW it is 1.9 ms. `scripts/lib/rag_local_stack.py` and all four demo
+   `application.yml` files now default to the `postgresql` profile.
+
+### 3.13 Slow SQL and Query Plans (measured 2026-11)
+
+Reproduce:
+
+```bash
+python3 scripts/verify-query-plans.py --docker --documents 1200 --chunks-per-doc 8
+```
+
+The script starts a temporary pgvector container with `pg_stat_statements` preloaded (the
+host's everyday database usually has not preloaded it), seeds 9,600 vectors, resets stats,
+runs 40 rounds of vector/hybrid search plus 10 exports, then reports top SQL and EXPLAINs.
+
+| Top SQL | Calls | Total (ms) | Mean (ms) |
+|---------|-------|------------|-----------|
+| Vector candidate CTE (`WITH candidates AS MATERIALIZED`) | 80 | 476.4 | 5.96 |
+| Evidence backfill (`local_chunk_id` / `embedding_id` join) | 40 | 1740.8 | 43.52 |
+| Freshness/state counts (`COUNT(*) FILTER`) | 40 | 169.5 | 4.24 |
+| Document list batch query | 60 | 22.9 | 0.38 |
+| retrieval_logs insert/update, collection/profile lookups | 80–90 | < 7 | < 0.1 |
+
+Key plans (`EXPLAIN (ANALYZE, BUFFERS)`):
+
+| Path | Plan | Time |
+|------|------|------|
+| Vector ANN (with collection scope) | `Nested Loop` + `Index Scan(idx_rag_emb_p_1_1024_hnsw)` + `Memoize` + `Index Scan(rag_documents_pkey)`, **no Seq Scan** | **1.94 ms** |
+| Vector ANN (no scope, diagnostic) | `Index Scan(idx_rag_emb_p_1_1024_hnsw)` | 0.72 ms |
+| Export keyset | `Index Scan(rag_documents_pkey)` | 0.14 ms |
+| Title keyword | `Bitmap Index Scan(idx_rag_documents_title_trgm)` | 0.07 ms |
+
+**Conclusion**: the key retrieval path still uses HNSW and has not regressed to a Seq Scan;
+export and keyword paths hit their indexes. The verifier asserts
+`vector_ann.hnsw_used=true` and no Seq Scan on `rag_embeddings`.
+
+**Index-availability constraint**: HNSW is a **partial index** with predicate
+`embedding_profile_id = <id> AND embedding_<dim> IS NOT NULL`. The profile id in SQL must
+stay an **inlined literal** (as in production). If it becomes a bind parameter, the planner
+cannot prove that `embedding_profile_id = $1` implies the partial-index predicate and
+silently falls back to Seq Scan. Any change to the ANN SQL must preserve the literal and
+re-run this verifier.
+
+### 3.14 Long soak: resource trends and GC (12 minutes, measured 2026-11)
+
+Reproduce:
+
+```bash
+python3 scripts/run-bounded-soak.py --minutes 12 --concurrency 4 \
+  --pid <app-pid> --dsn <postgres-dsn> --sample-seconds 15
+```
+
+`--pid` / `--dsn` are optional; without them the script only drives load and skips the
+resource assertions. Nightly runs the short form with `--minutes 10 --sample-seconds 15`.
+The workload is 3 continuous mixed-search workers plus 1 chat worker (2 s gap between
+turns) against mock provider + real PostgreSQL, sampled 48 times.
+
+Gate: compare the **median of the first and last quarter** of samples, requiring
+`last ≤ first × relative + absolute`. Sawtooth from GC is fine; monotonic growth is not.
+Any breach sets `degraded=true` and exits 1.
+
+| Metric | First-quarter median | Last-quarter median | Ratio | Limit | Result |
+|--------|---------------------|---------------------|-------|-------|--------|
+| Java threads | 84 | 84 | 1.00 | 1.5× + 8 | pass |
+| Heap used | 255 MB | 335 MB | 1.31 | 1.5× + 64 MB | pass (sawtooth, 0 full GCs) |
+| Process RSS | 803 MB | 671 MB | 0.84 | 2.0× + 128 MB | pass |
+| File descriptors | 55 | 56 | 1.02 | 1.5× + 20 | pass |
+| DB connections | 7 | 8 | 1.14 | 1.5× + 4 | pass (pool cap 20) |
+
+Load: 5,858 searches (0 errors, p50 350 ms, p95 523 ms, p99 645 ms, second-half p95 drift
+1.04) and 213 chats (0 errors, p50 1,367 ms, p95 1,598 ms, drift 0.88). GC: 194 young
+collections, 0 old, 2.24 s total pause (0.31% of wall clock). `idle in transaction`
+appeared once at 2 connections and was 0 in the other 47 samples — an in-flight request,
+not a leak.
+
+**Real leak found by the soak (fixed)**: `ai-advisor-*` threads grew linearly with request
+count, from 153 to 725 (4.3×) in 12 minutes. Root cause: Spring AI 1.1.8's
+`RetrievalAugmentationAdvisor` creates a fresh core=4 / max=16 `ThreadPoolTaskExecutor`
+per advisor instance when no `TaskExecutor` is injected, and never shuts it down; this
+repository rebuilds the advisor on every chat attempt, leaking 3–4 threads per request.
+Fix: `PerformanceConfig` now exposes a shared bounded `ragAdvisorExecutor` (core 8 /
+max 16 / queue 256 / `CallerRunsPolicy`, propagating MDC and request context), and
+`ModeAwareChatClientFactory` injects it via `setAdvisorTaskExecutor` and passes it to the
+advisor builder. After the fix the same load keeps threads at 84–86 with zero
+`ai-advisor-*` threads; `ModeAwareChatClientFactoryTest` gained a regression case that
+asserts thread count is unchanged across 20 attempts and that retrieval runs on the
+injected executor.
+
 ## 4. Capacity Boundaries
 
 | Dimension | Current | Boundary / guidance |
@@ -394,7 +555,11 @@ read the whole part before rejecting it.
 | Retrieval | p50 ~50–90 ms | Dominated by the embedding call; SQL is near-constant. Candidate pool caps at 1000, so heavy staleness can reduce recall |
 | Lists | Fixed ≤20 rows per page | N+1 growth removed; processing summaries use 4 batched queries per page |
 | WebUI first paint | 130.4 KB gzip / 403.8 KB uncompressed; Slow 4G FCP 2.44 s | Budget and gate in §3.8; gzip headroom 29.6 KB and Slow 4G headroom 18.7%; axios and recharts are kept out of the first screen |
-| SSE concurrency | 16 streams per key, 64 globally; 16 streams peak at +3.0 MB RSS with exactly 2 heartbeat threads | Limits in §3.9; request 17 for one key gets HTTP 429 `TOO_MANY_REQUESTS` with no queueing; emitter timeout = `chat-stream-ms` (180 s default) |
+| SSE concurrency | 16 streams per key, 64 globally; 16 streams peak at +45 threads (Tomcat/boundedElastic expansion); after two rounds `SseEmitter` returns to 0 with exactly 2 heartbeat threads | Limits in §3.9; request 17 for one key gets HTTP 429 `TOO_MANY_REQUESTS` with no queueing; emitter timeout = `chat-stream-ms` (180 s default) |
+| Concurrency baseline | c=32: search p95 0.74–0.97 s, export 108 ms, document create 0.92 s, upload parse 7.0 s (200-doc fixture) | Gate: p95 ≤ 2.5× baseline and under absolute caps; upload parse is the tightest boundary, see §3.12 |
+| Retrieval plan | 9.6k-vector ANN uses HNSW in 1.9 ms, no Seq Scan; export keyset 0.14 ms | ANN SQL must keep the profile id as a literal or the partial-index predicate no longer matches and silently degrades, see §3.13 |
+| Soak | 12-minute mixed load: threads 84→84, heap 255→335 MB (sawtooth), FDs 55→56, DB connections 7→8; 194 young / 0 old GCs, pause share 0.31% | Gate compares first/last quarter medians (1.5× + absolute cap); monotonic growth fails, see §3.14 |
+| Advisor executor | Shared `ragAdvisorExecutor`: core 8 / max 16 / queue 256, `CallerRunsPolicy` | Do not remove `taskExecutor(...)` from the advisor builder, or every chat attempt rebuilds a 4/16 pool, see §3.14 |
 | WebUI lists | 20 rows per page, 510 DOM nodes, 9.5 MB heap | Documents, collections and evaluation history are paginated; 200 synthetic rows render in 53–70 ms |
 | WebUI export | Built into Collection cards; fetch + ReadableStream writes as it reads, with progress and cancel; 2.73 MB / 12–13 ms first byte at 5k docs | Browsers without a write API fall back to a Blob (platform boundary); ~27 MB at 50k docs |
 | Export | Streaming, 200 rows per batch, batch count in response headers | Memory does not grow with row count; limited by network and client consumption. Export very large collections off-peak |

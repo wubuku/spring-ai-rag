@@ -15,7 +15,9 @@ import json
 import math
 import os
 import pathlib
+import re
 import statistics
+import subprocess
 import sys
 import threading
 import time
@@ -24,6 +26,188 @@ import urllib.parse
 import urllib.request
 
 ENV_FILE = pathlib.Path(__file__).resolve().parent.parent / ".env"
+
+# 资源趋势门禁：允许锯齿与堆扩容，不允许持续爬升。
+# (相对首段中位数的倍数上限, 绝对余量)
+RESOURCE_LIMITS = {
+    "rss_kb": (2.0, 131_072),
+    "heap_used_kb": (1.5, 65_536),
+    "threads": (1.5, 8),
+    "fd_count": (1.5, 20),
+    "db_connections": (1.5, 4),
+}
+
+
+def _run(command, timeout=15):
+    try:
+        return subprocess.run(command, capture_output=True, text=True,
+                              timeout=timeout)
+    except Exception:  # noqa: BLE001 - 采样失败按 None 处理，不中断压测
+        return None
+
+
+def sample_threads(pid):
+    result = _run(["jcmd", str(pid), "Thread.print"])
+    if result is None or result.returncode != 0:
+        fallback = _run(["ps", "-M", "-p", str(pid)])
+        if fallback is None or fallback.returncode != 0:
+            return None
+        return max(0, len(fallback.stdout.splitlines()) - 1)
+    return sum(1 for line in result.stdout.splitlines()
+               if line.lstrip().startswith('"'))
+
+
+def sample_heap_used_kb(pid):
+    result = _run(["jcmd", str(pid), "GC.heap_info"])
+    if result is None or result.returncode != 0:
+        return None
+    match = re.search(r"used\s+(\d+)K", result.stdout)
+    return int(match.group(1)) if match else None
+
+
+def sample_fd_count(pid):
+    result = _run(["lsof", "-p", str(pid)])
+    if result is None or result.returncode not in (0, 1):
+        return None
+    return max(0, len(result.stdout.splitlines()) - 1)
+
+
+def sample_gc(pid):
+    result = _run(["jstat", "-gc", str(pid), "1000", "1"])
+    if result is None or result.returncode != 0:
+        return None
+    lines = [line.split() for line in result.stdout.splitlines() if line.strip()]
+    header = next((row for row in lines if row and row[0] == "S0C"), None)
+    if header is None:
+        return None
+    values = next((row for row in lines
+                   if len(row) > 4 and row[1].replace(".", "").isdigit()), None)
+    if values is None:
+        return None
+    data = dict(zip(header, values))
+    return {
+        "young_count": int(float(data.get("YGC", 0))),
+        "young_pause_s": float(data.get("YGCT", 0)),
+        "old_count": int(float(data.get("FGC", 0))),
+        "old_pause_s": float(data.get("FGCT", 0)),
+        "total_pause_s": float(data.get("GCT", 0)),
+    }
+
+
+def sample_db_connections(dsn):
+    try:
+        import psycopg2
+    except ImportError:
+        return None
+    try:
+        connection = psycopg2.connect(dsn, connect_timeout=5)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT COUNT(*), COUNT(*) FILTER "
+                "(WHERE state = 'idle in transaction') "
+                "FROM pg_stat_activity WHERE datname = current_database()")
+            total, idle_in_tx = cursor.fetchone()
+        connection.close()
+        return {"total": int(total), "idle_in_transaction": int(idle_in_tx)}
+    except Exception:  # noqa: BLE001 - 采样库不可达时忽略连接指标
+        return None
+
+
+def analyze_trend(key, values):
+    """首尾各 1/4 样本中位数对比；锯齿允许，单调爬升判失败。"""
+    if len(values) < 6:
+        return None
+    window = max(1, len(values) // 4)
+    first = statistics.median(values[:window])
+    last = statistics.median(values[-window:])
+    relative, absolute = RESOURCE_LIMITS.get(key, (1.5, 0))
+    ratio = round(last / first, 3) if first else None
+    return {
+        "first_quarter_median": round(first, 2),
+        "last_quarter_median": round(last, 2),
+        "ratio": ratio,
+        "max": round(max(values), 2),
+        "min": round(min(values), 2),
+        "ok": last <= first * relative + absolute,
+        "limit": {"relative": relative, "absolute": absolute},
+    }
+
+
+def collect_resources(pid, dsn, seconds, interval):
+    """固定间隔采样堆/线程/FD/DB 连接/GC，返回样本与趋势判定。"""
+    samples = []
+    stop = threading.Event()
+
+    def loop():
+        while not stop.is_set():
+            sample = {"ts": round(time.monotonic(), 2)}
+            sample["rss_kb"] = _rss(pid)
+            sample["heap_used_kb"] = sample_heap_used_kb(pid)
+            sample["threads"] = sample_threads(pid)
+            sample["fd_count"] = sample_fd_count(pid)
+            if dsn:
+                connections = sample_db_connections(dsn)
+                if connections:
+                    sample["db_connections"] = connections["total"]
+                    sample["db_idle_in_transaction"] = \
+                        connections["idle_in_transaction"]
+            gc = sample_gc(pid)
+            if gc:
+                sample["gc"] = gc
+            samples.append(sample)
+            stop.wait(interval)
+
+    thread = threading.Thread(target=loop, daemon=True)
+    thread.start()
+    started = time.monotonic()
+    while time.monotonic() - started < seconds:
+        time.sleep(min(interval, 1))
+    stop.set()
+    thread.join(timeout=interval + 5)
+
+    resource_keys = [key for key in RESOURCE_LIMITS
+                     if any(sample.get(key) is not None for sample in samples)]
+    trends = {}
+    for key in resource_keys:
+        values = [sample[key] for sample in samples
+                  if sample.get(key) is not None]
+        trend = analyze_trend(key, values)
+        if trend is not None:
+            trends[key] = trend
+
+    gc_samples = [sample["gc"] for sample in samples if sample.get("gc")]
+    gc = None
+    if gc_samples:
+        last = gc_samples[-1]
+        gc = {
+            "young_count": last["young_count"],
+            "old_count": last["old_count"],
+            "total_pause_s": round(last["total_pause_s"], 3),
+            "old_pause_s": round(last["old_pause_s"], 3),
+            "pause_fraction": round(last["total_pause_s"] / seconds, 4),
+        }
+    max_idle_in_tx = max((sample.get("db_idle_in_transaction", 0)
+                          for sample in samples), default=0)
+    failures = [key for key, trend in trends.items() if not trend["ok"]]
+    if max_idle_in_tx > 2:
+        failures.append("db_idle_in_transaction")
+    return {
+        "samples": samples,
+        "sample_count": len(samples),
+        "trends": trends,
+        "gc": gc,
+        "max_idle_in_transaction": max_idle_in_tx,
+        "failures": failures,
+        "ok": not failures,
+    }
+
+
+def _rss(pid):
+    result = _run(["ps", "-o", "rss=", "-p", str(pid)])
+    if result is None or result.returncode != 0:
+        return None
+    text = result.stdout.strip()
+    return int(text) if text.isdigit() else None
 
 
 def load_env_file(path):
@@ -112,6 +296,12 @@ def self_test():
         failures.append("one error in 100 requests should degrade")
     if load_env_file(pathlib.Path("/nonexistent.env")):
         failures.append("missing env file should yield an empty mapping")
+    if not analyze_trend("threads", [10] * 20)["ok"]:
+        failures.append("flat threads should not be a growth trend")
+    if analyze_trend("threads", [10] * 10 + [30] * 10)["ok"]:
+        failures.append("monotonically grown threads should degrade")
+    if not analyze_trend("threads", [10, 20, 9, 21, 10, 20, 11, 19] * 2)["ok"]:
+        failures.append("sawtooth threads should pass the trend gate")
     if failures:
         raise SystemExit(
             "soak self-test failed: " + "; ".join(failures))
@@ -132,6 +322,13 @@ def main():
     parser.add_argument("--api-key", default="")
     parser.add_argument("--self-test", action="store_true",
                         help="Validate percentile/drift logic without HTTP")
+    parser.add_argument("--pid", type=int, default=int(os.environ.get(
+        "SOAK_APP_PID", "0") or 0),
+                        help="被测 Java 进程 PID；用于堆/线程/FD 采样")
+    parser.add_argument("--dsn", default=os.environ.get("SOAK_DSN", ""),
+                        help="应用数据库 DSN；用于连接数/idle-in-transaction 采样")
+    parser.add_argument("--sample-seconds", type=float, default=10,
+                        help="资源采样间隔（默认 10s）")
     args = parser.parse_args()
 
     if args.self_test:
@@ -142,6 +339,8 @@ def main():
         parser.error("--minutes 至少为 1")
     if args.concurrency < 2:
         parser.error("--concurrency 至少为 2（search + chat）")
+    if args.sample_seconds < 1:
+        parser.error("--sample-seconds 至少为 1")
 
     api_key = args.api_key or os.environ.get("RAG_API_KEY") \
         or os.environ.get("RAG_ROOT_API_KEY") or ""
@@ -258,11 +457,28 @@ def main():
     workers = [threading.Thread(target=search_worker)
                for _ in range(max(args.concurrency - 1, 1))]
     workers.append(threading.Thread(target=chat_worker))
+
+    resource_holder = {}
+    resource_thread = None
+    if args.pid > 0:
+        def sample_resources():
+            resource_holder["resources"] = collect_resources(
+                args.pid, args.dsn, args.minutes * 60 + args.sample_seconds,
+                args.sample_seconds)
+
+        resource_thread = threading.Thread(target=sample_resources, daemon=True)
+        resource_thread.start()
+    else:
+        print("WARN: 未提供 --pid/SOAK_APP_PID，跳过堆/线程/FD 增长断言",
+              file=sys.stderr)
+
     for worker in workers:
         worker.start()
     for worker in workers:
         worker.join()
     elapsed = time.monotonic() - started
+    if resource_thread is not None:
+        resource_thread.join(timeout=args.sample_seconds + 15)
 
     rows = [json.loads(line) for line in
             rows_path.read_text(encoding="utf-8").splitlines() if line]
@@ -286,6 +502,19 @@ def main():
             args.max_error_rate, args.max_p95_drift)
         summary["endpoints"][kind] = entry
         degraded = degraded or entry_degraded
+    resources = resource_holder.get("resources")
+    if resources is not None:
+        (output / "resources.json").write_text(
+            json.dumps(resources, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8")
+        summary["resources"] = {
+            key: value for key, value in resources.items() if key != "samples"}
+        summary["resources"]["samples_path"] = "resources.json"
+        if not resources["ok"]:
+            degraded = True
+    else:
+        summary["resources"] = {"ok": None,
+                                "skipped": "未提供 --pid/SOAK_APP_PID"}
     summary["degraded"] = degraded
     summary_path.write_text(
         json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

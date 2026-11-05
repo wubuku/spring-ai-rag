@@ -139,7 +139,10 @@ mvn clean package -DskipTests
 | 干净环境冷启动 | `./scripts/verify-clean-clone.sh` | 临时目录 clone → 临时库 → `.env`(mock) → `mvn -B -DskipTests install` → demo health → collection → documents → embed → search → chat；结束自动清理 |
 | Flyway 双路径 | `./scripts/verify-flyway-schema-paths.sh` | 空库→最新 vs 空库→V30→最新 schema 逐字一致；早期数据升级后仍在；最新库重跑 migrate 不丢数据 |
 | 并发与幂等 | `./scripts/verify-concurrency-idempotency.py` | 同一 collectionKey 并发创建、同一文档并发更新/删除与读取交错、同一文件名并发上传（带/不带 Idempotency-Key）、不同幂等键隔离、同一外部文档同/不同 revision 并发 upsert、同一文档并发 ASYNC reindex 合并、keyset 流式导出边写边读、同一 principal 并发配额扣减、同一外部标识并发 JSON upsert；断言无重复行、无丢更新、除 409/429 外无 5xx，导出不重不漏，并验证唯一约束/条件写入。默认连跑 3 次作为稳定性门槛。写端点登记见 `scripts/testdata/write-endpoints.json` |
-| SSE 并发资源边界 | `./scripts/verify-sse-concurrency.py --burst 20` | 真实 PostgreSQL + Spring Boot + mock：单 key 16 / 全局 64 的上限、第 17 条起 HTTP 429 `TOO_MANY_REQUESTS` 不排队、峰值心跳线程固定 2 条与 RSS 增量、客户端断开与上游空闲超时后的 lease 回收；脚本拒绝 `--burst > 64` |
+| SSE 并发资源边界 | `./scripts/verify-sse-concurrency.py --burst 20` | 真实 PostgreSQL + Spring Boot + mock：单 key 16 / 全局 64 的上限、第 17 条起 HTTP 429 `TOO_MANY_REQUESTS` 不排队、峰值心跳线程固定 2 条与 RSS 增量、客户端断开与上游空闲超时后的 lease 回收；`Last-Event-ID` 续传与非法游标重放；两轮 burst 后 `SseEmitter` 与线程前缀不累积；脚本拒绝 `--burst > 64` |
+| 并发延迟基准与退化门禁 | `./scripts/run-concurrency-benchmark.py`；`./scripts/verify-performance-baseline.py --run --profile quick` | 真实 PostgreSQL + mock，并发 1/8/32 下的向量/混合检索、文档创建、上传解析、embedding 管线与导出：吞吐与 p50/p95/p99 对比 `scripts/testdata/performance-baseline.json`；p95 ≤ 2.5×、p99 ≤ 3×、吞吐 ≥ 0.3×，并叠加宽松绝对上限 |
+| 慢 SQL 与执行计划 | `./scripts/verify-query-plans.py --docker` | 一次性 pgvector 容器开启 `pg_stat_statements`：40 轮检索 + 10 次导出后的 top SQL；断言 `vector_ann` 使用 HNSW、`rag_embeddings` 无 Seq Scan，导出与标题关键词走索引 |
+| 长时间 soak | `./scripts/run-bounded-soak.py --minutes 12 --pid <pid> --dsn <dsn>` | 12 分钟混合负载，每 15 s 采样线程/堆/RSS/FD/DB 连接/GC；首尾 1/4 中位数比值门禁（1.5× + 绝对上限），单调爬升即失败；nightly 跑 10 分钟短版 |
 | 备份恢复演练 | `./scripts/verify-backup-restore-drill.py` | 真实数据写入 → 停写 → `rag-backup.py backup` → 校验 → 恢复到全新库 → 文档/向量/collection/迁移历史/内容指纹比对 → 恢复库直接 health+search |
 | 安全边界全入口回归 | `./scripts/verify-security-boundary.py` | 真实 PostgreSQL + mock provider：受限 NORMAL key 对 search/chat/collections/upload/PDF-to-RAG/files tree·raw·preview/evaluation/feedback 的跨 Collection 与跨 principal 断言；路径穿越拒绝；root 全局视图不变 |
 | 浏览器安全头与注入面 | `./scripts/verify-browser-security-headers-e2e.py` | 真实进程 + 真实 Chromium：`/webui/`、API、SSE、错误响应的 CSP/nosniff/Referrer-Policy/X-Frame-Options/Permissions-Policy；HTTP 无 HSTS、`X-Forwarded-Proto: https` 有 HSTS；页面加载、聊天 SSE、上传、搜索、导出不被 CSP 阻断；内联 `<script>` 与 `onclick` 注入被拒绝并触发 `securitypolicyviolation`；含 `<script>` 的模型输出按文本呈现 |
@@ -377,7 +380,7 @@ workflow 里，而不是靠人记得：
 | 层 | 触发 | 工作流 | 包含 | 不包含 |
 |----|------|--------|------|--------|
 | PR 快层 | push `main`/`develop`、PR → `main`；同分支新提交自动取消旧运行 | `.github/workflows/ci.yml` | `mvn test`（含 `OpenApiContractTest` 与 `WebUiRouteContract`）、`verify-project-tests.sh`、`verify-project-docs.sh`、Flyway 迁移清单校验、WebUI lint/单测/覆盖率阈值/构建/Mock E2E | gated PostgreSQL、真实模型、goldenset、soak、`*-real.spec.ts` |
-| 长跑层 | 每日 18:00 UTC（北京时间 02:00）与手动 `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL（31 套件）、上游/Embedding 故障模式（受控 provider + 隔离 PG，无需真实模型）、崩溃一致性（真实 `SIGKILL`）与端点行为运行时矩阵（受控 provider + 隔离 PG）、真实 LLM smoke + goldenset + 检索回归、有界 soak、无需人工 fixture 的真实 WebUI spec | 需要预置告警/投递 ID 的 `alerts-real`、需要 rerank fixture 的 `rerank-document-diversity-real` |
+| 长跑层 | 每日 18:00 UTC（北京时间 02:00）与手动 `workflow_dispatch` | `.github/workflows/nightly.yml` | gated PostgreSQL（31 套件）、上游/Embedding 故障模式（受控 provider + 隔离 PG，无需真实模型）、崩溃一致性（真实 `SIGKILL`）与端点行为运行时矩阵（受控 provider + 隔离 PG）、真实 LLM smoke + goldenset + 检索回归、并发延迟基准与执行计划门禁、有界 soak（含线程/堆/连接/FD 趋势）、无需人工 fixture 的真实 WebUI spec | 需要预置告警/投递 ID 的 `alerts-real`、需要 rerank fixture 的 `rerank-document-diversity-real` |
 
 PR 层的时间预算由 job 级 `timeout-minutes` 固定（backend 45、webui 30）。gated IT
 本地约 9–19 分钟，放在 PR 层会把反馈时间拖到 20 分钟以上，所以它只在 nightly 跑；

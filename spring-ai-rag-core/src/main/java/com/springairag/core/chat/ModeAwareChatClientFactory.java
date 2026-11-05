@@ -36,6 +36,8 @@ import org.springframework.ai.rag.preretrieval.query.expansion.QueryExpander;
 import org.springframework.ai.rag.preretrieval.query.transformation.CompressionQueryTransformer;
 import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransformer;
 import org.springframework.ai.chat.prompt.PromptTemplate;
+import org.springframework.core.task.SyncTaskExecutor;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -100,12 +102,29 @@ public class ModeAwareChatClientFactory {
     private final PromptBudgetDocumentPostProcessor promptBudgetDocumentPostProcessor;
     private final ProjectDocumentJoiner documentJoiner =
             new ProjectDocumentJoiner();
+    /**
+     * 知识模式 advisor 的并行检索执行器。生产由 ragAdvisorExecutor 覆盖；
+     * 单测场景退化为调用线程内联执行，避免每个工厂实例各建一个线程池。
+     */
+    private TaskExecutor advisorTaskExecutor = new SyncTaskExecutor();
     private com.springairag.core.resilience.CandidateCircuitRegistry circuits;
     private com.springairag.core.rag.QueryEnhancementExecutor enhancements;
 
     @org.springframework.beans.factory.annotation.Autowired
     public void setQueryEnhancementExecutor(com.springairag.core.rag.QueryEnhancementExecutor executor) {
         this.enhancements = executor;
+    }
+
+    /**
+     * 注入共享的 advisor 执行器；缺失时保留内联执行（单测）。
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setAdvisorTaskExecutor(
+            @org.springframework.beans.factory.annotation.Qualifier("ragAdvisorExecutor")
+            TaskExecutor executor) {
+        if (executor != null) {
+            this.advisorTaskExecutor = executor;
+        }
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -332,6 +351,7 @@ public class ModeAwareChatClientFactory {
                                 ? List.of(rerankPostProcessor, contextAssemblyPostProcessor, promptBudgetDocumentPostProcessor)
                                 : List.of(rerankPostProcessor, promptBudgetDocumentPostProcessor))
                         .queryAugmenter(queryAugmenter)
+                        .taskExecutor(advisorTaskExecutor)
                         .order(MODE_ORDER);
         QueryTransformer transformer = buildQueryTransformer(candidate, budget);
         if (transformer != null) {

@@ -16,10 +16,21 @@ spring:
   application:
     name: spring-ai-rag-multi-model-demo
 
+  # PostgreSQL 是 demo 的默认数据库；postgresql profile 负责注册 embedding
+  # profile 引导（含 HNSW 索引）与后台 worker。未显式设置时默认打开，
+  # 避免 `java -jar` 直接启动时静默跑在"没有索引、没有 worker"的降级配置上。
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:postgresql}
+
   jackson:
     time-zone: UTC
     serialization:
       write-dates-as-timestamps: false
+
+  # demo 的 application.yml 会遮蔽 core jar 内的同名文件；OSIV 默认 true 会让
+  # 每个 HTTP 请求在检索/调用模型期间一直占住一个 DB 连接，高并发下极易耗尽连接池。
+  jpa:
+    open-in-view: false
 
   task:
     scheduling:

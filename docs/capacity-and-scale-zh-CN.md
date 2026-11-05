@@ -303,6 +303,17 @@ Spring Boot 进程 + mock provider；`DB_POOL_SIZE=2`、`DB_CONNECTION_TIMEOUT_M
 readiness 探针 `timeoutSeconds` 必须大于 `DB_CONNECTION_TIMEOUT_MS`（默认 10 s），
 否则被提前掐断的探针会在 Hikari 里留下等待者，反而加重饱和。
 
+**持续并发 + 长事务 + 客户端中断（2026-11 复测）**
+
+复现同上脚本的场景 3：6 线程连续 8 s 打 `documents`，同时用 `psql` 反复
+`BEGIN; LOCK TABLE rag_documents ACCESS EXCLUSIVE; pg_sleep(1.5); ROLLBACK;`，
+并做 39 次“发出请求后立刻关闭 socket”的客户端中断。
+
+- 1933 次请求、39 次中断：状态只出现 200 / 429 / 503 / 504，**0 个 500**，无超过 20 s 的挂死；
+- 长事务结束后请求恢复 200，`hikaricp.connections.active ≤ 2`（池容量 2），
+  `pg_stat_activity` 无 `idle in transaction`；
+- 日志无 `Apparent connection leak detected`。
+
 **关键修复**（本轮）：
 
 1. 池耗尽经 `CannotCreateTransactionException` 抛出，原先绕过 `DataAccessException`
@@ -330,6 +341,144 @@ readiness 探针 `timeoutSeconds` 必须大于 `DB_CONNECTION_TIMEOUT_MS`（默�
 超限请求仍能收到结构化 413，而不是被直接断连；吞掉的是丢弃字节，不占堆内存，但会
 消耗带宽。文本上传的拒绝路径只依赖文件元数据，不再用 `getBytes()` 先读完整文件。
 
+### 3.12 并发基准与退化门禁（2026-11 实测）
+
+复现：
+
+```bash
+python3 scripts/verify-performance-baseline.py --run --profile quick \
+  --baseline scripts/testdata/performance-baseline.json
+```
+
+脚本自建一次性数据库与 mock provider，固定并发 **1 / 8 / 32**，每档每类负载按
+`requests-per-worker=2` 采样；基线落在
+[performance-baseline.json](../scripts/testdata/performance-baseline.json)。
+环境：14 核 macOS、JDK 25、PostgreSQL 16.8 + pgvector、连接池 20、fixture 200 文档 /
+800 chunk。fixture 刻意保持小规模以控制 CI 时长，索引退化另由 §3.13 的 9600 向量场景覆盖。
+
+| 并发 | 负载 | 吞吐 (rps) | p50 (ms) | p95 (ms) | p99 (ms) | 错误率 |
+|-----|------|-----------|----------|----------|----------|--------|
+| 1 | `search_vector` | 12.0 | 73 | 125 | 125 | 0% |
+| 1 | `search_hybrid` | 10.4 | 96 | 129 | 129 | 0% |
+| 1 | `export_collection` | 100.7 | 10 | 10 | 10 | 0% |
+| 1 | `document_create` | 30.0 | 25 | 85 | 85 | 0% |
+| 1 | `upload_parse` | 4.4 | 72 | 579 | 579 | 0% |
+| 1 | `embedding_pipeline` | 20.2 | 47 | 80 | 80 | 0% |
+| 8 | `search_vector` | 58.1 | 89 | 185 | 185 | 0% |
+| 8 | `search_hybrid` | 65.0 | 106 | 159 | 159 | 0% |
+| 8 | `export_collection` | 296.0 | 20 | 24 | 24 | 0% |
+| 8 | `document_create` | 93.5 | 62 | 134 | 134 | 0% |
+| 8 | `upload_parse` | 3.2 | 1788 | 4307 | 4307 | 0% |
+| 8 | `embedding_pipeline` | 83.3 | 74 | 132 | 132 | 0% |
+| 32 | `search_vector` | 51.5 | 458 | 736 | 813 | 0% |
+| 32 | `search_hybrid` | 33.9 | 875 | 973 | 994 | 0% |
+| 32 | `export_collection` | 239.7 | 76 | 108 | 116 | 0% |
+| 32 | `document_create` | 47.2 | 557 | 917 | 970 | 0% |
+| 32 | `upload_parse` | 8.1 | 3515 | 7004 | 7637 | 0% |
+| 32 | `embedding_pipeline` | 140.9 | 158 | 309 | 429 | 0% |
+
+**门禁**（`verify-performance-baseline.py`，任一不满足即红）：
+
+- 相对基线：p95 ≤ 基线 × **2.5**，p99 ≤ 基线 × **3.0**，吞吐 ≥ 基线 × **0.3**；
+- 宽松绝对上限：`search_vector` 3 s、`search_hybrid` 4 s、`export` 3 s、`document_create` 4 s、
+  `upload_parse` 20 s、`embedding_pipeline` 6 s；
+- 错误率 ≤ **5%**。
+
+**余量**：相对阈值是主要约束；c=32 最紧的是 `upload_parse`（p95 7.0 s / 绝对上限 20 s，
+2.9×）和 `search_hybrid`（p95 0.97 s / 绝对上限 4 s，4.1×）。吞吐下限 0.3× 允许共享 CI
+机器明显降速；绝对上限是兜底，不用于卡正常抖动。
+
+**本轮修复的两个“只有持续压才暴露”的问题**：
+
+1. **OSIV 让每个请求全程占用数据库连接**。demo 的 `application.yml` 遮蔽了 core
+   jar 内的 `spring.jpa.open-in-view: false`，OSIV 实际默认开启。c=32 时
+   Hikari `total=20, active=20, idle=0, waiting=32`，p50 13–20 s、大量 503，并出现
+   177 条 `Apparent connection leak`（栈停在 `CollectionIdentityResolver.resolveActiveKeyIds`
+   与 `DocumentQueryService.findById`）。四个 demo 均已显式关闭 OSIV；修复后 c=32
+   0 错误、0 等待。
+2. **验收栈未启用 `postgresql` profile，HNSW 索引根本不存在**。`EmbeddingProfileBootstrap`
+   带 `@Profile("postgresql")`，而共享 `LocalStack` 与 demo 默认启动都没设置 profile，
+   导致引导未执行、三个后台 worker 未注册。9600 向量上 ANN 退化为 Seq Scan（24 ms），
+   修复后 HNSW 1.9 ms。共享 `scripts/lib/rag_local_stack.py` 与四个 demo
+   `application.yml` 现已默认 `postgresql`。
+
+### 3.13 慢 SQL 与执行计划（2026-11 实测）
+
+复现：
+
+```bash
+python3 scripts/verify-query-plans.py --docker --documents 1200 --chunks-per-doc 8
+```
+
+脚本自建预加载 `pg_stat_statements` 的临时 pgvector 容器（宿主机日常库通常未预加载），
+写入 9600 条向量后清空统计、跑 40 轮向量/混合检索与 10 次导出，再取 top SQL 并 EXPLAIN。
+
+| top SQL | calls | total (ms) | mean (ms) |
+|---------|-------|-----------|-----------|
+| 向量候选 CTE（`WITH candidates AS MATERIALIZED`） | 80 | 476.4 | 5.96 |
+| 证据回填（`local_chunk_id`/`embedding_id` 关联） | 40 | 1740.8 | 43.52 |
+| 新鲜度/状态统计（`COUNT(*) FILTER`） | 40 | 169.5 | 4.24 |
+| 文档列表批量查询 | 60 | 22.9 | 0.38 |
+| retrieval_logs insert/update、collection/profile 查询 | 80–90 | < 7 | < 0.1 |
+
+关键计划（`EXPLAIN (ANALYZE, BUFFERS)`）：
+
+| 路径 | 计划 | 耗时 |
+|------|------|------|
+| 向量 ANN（含 collection scope） | `Nested Loop` + `Index Scan(idx_rag_emb_p_1_1024_hnsw)` + `Memoize` + `Index Scan(rag_documents_pkey)`，**无 Seq Scan** | **1.94 ms** |
+| 向量 ANN（无 scope，诊断） | `Index Scan(idx_rag_emb_p_1_1024_hnsw)` | 0.72 ms |
+| 导出 keyset | `Index Scan(rag_documents_pkey)` | 0.14 ms |
+| 标题关键词 | `Bitmap Index Scan(idx_rag_documents_title_trgm)` | 0.07 ms |
+
+**结论**：关键检索路径仍走 HNSW，没有退化为 Seq Scan；导出与关键词路径都命中索引。
+验证脚本会断言 `vector_ann.hnsw_used=true` 且 `rag_embeddings` 上无 Seq Scan。
+
+**注意（索引可用性约束）**：HNSW 是 **部分索引**，谓词是
+`embedding_profile_id = <id> AND embedding_<dim> IS NOT NULL`。SQL 里的 profile id
+必须是**内联字面量**（生产代码即如此）；如果改成绑定参数，规划器无法证明
+`embedding_profile_id = $1` 蕴含部分索引谓词，会静默退回 Seq Scan。改动 ANN SQL
+时必须保持字面量，并跑本脚本复验。
+
+### 3.14 长时间 soak：资源趋势与 GC（12 分钟，2026-11 实测）
+
+复现：
+
+```bash
+python3 scripts/run-bounded-soak.py --minutes 12 --concurrency 4 \
+  --pid <app-pid> --dsn <postgres-dsn> --sample-seconds 15
+```
+
+`--pid` / `--dsn` 可选；缺失时只跑负载、跳过资源断言。nightly 用 `--minutes 10
+--sample-seconds 15` 覆盖短版。负载是 3 路连续混合检索 + 1 路 chat（每轮间隔 2 s），
+mock provider，真实 PostgreSQL，共 48 个采样点。
+
+判定规则：取**首尾各 1/4 样本的中位数**比较，`后 ≤ 前 × 相对上限 + 绝对上限`。
+允许 GC 造成的锯齿，不允许单调爬升；任一指标越界即 `degraded=true`、退出码 1。
+
+| 指标 | 前 1/4 中位数 | 后 1/4 中位数 | 比值 | 上限 | 结论 |
+|------|--------------|--------------|------|------|------|
+| Java 线程数 | 84 | 84 | 1.00 | 1.5× + 8 | 通过 |
+| 堆使用 | 255 MB | 335 MB | 1.31 | 1.5× + 64 MB | 通过（锯齿，0 次 Full GC） |
+| 进程 RSS | 803 MB | 671 MB | 0.84 | 2.0× + 128 MB | 通过 |
+| FD 数 | 55 | 56 | 1.02 | 1.5× + 20 | 通过 |
+| DB 连接数 | 7 | 8 | 1.14 | 1.5× + 4 | 通过（池上限 20） |
+
+负载面：5858 次检索（0 错误，p50 350 ms、p95 523 ms、p99 645 ms，后半 p95 漂移 1.04）
+与 213 次 chat（0 错误，p50 1367 ms、p95 1598 ms，漂移 0.88）。GC：young 194 次、
+old 0 次，总停顿 2.24 s（墙钟的 0.31%）。`idle in transaction` 仅 1 个采样点出现 2 条，
+其余 47 个点均为 0，属于请求进行中的瞬时状态而非泄漏。
+
+**soak 抓到的真实泄漏（已修）**：`ai-advisor-*` 线程随请求数线性增长，12 分钟从 153
+涨到 725（4.3×）。根因是 Spring AI 1.1.8 的 `RetrievalAugmentationAdvisor` 在未注入
+`TaskExecutor` 时，会为每个 advisor 实例新建 core=4 / max=16 的
+`ThreadPoolTaskExecutor` 且从不 shutdown；本仓每个 chat attempt 都会重建 advisor，
+于是每请求泄漏 3–4 条线程。修复：`PerformanceConfig` 新增共享有界
+`ragAdvisorExecutor`（core 8 / max 16 / 队列 256 / `CallerRunsPolicy`，
+并传递 MDC 与 request context），`ModeAwareChatClientFactory` 通过
+`setAdvisorTaskExecutor` 注入并传给 advisor builder。修复后同样负载下线程数稳定在
+84–86、`ai-advisor-*` 为 0；`ModeAwareChatClientFactoryTest` 增加回归用例：
+20 次 attempt 前后 `ai-advisor-*` 线程数不变，且检索任务确实落在注入的执行器上。
+
 ## 4. 容量边界
 
 | 维度 | 现状 | 边界与建议 |
@@ -340,7 +489,11 @@ readiness 探针 `timeoutSeconds` 必须大于 `DB_CONNECTION_TIMEOUT_MS`（默�
 | 检索 | p50 约 50–90 ms | 主要成本是 embedding 调用；SQL 部分已近常数。候选池上限 1000，过期向量过多时召回可能不足 |
 | 列表 | 页面固定 ≤20 行 | 已消除随数据量增长的 N+1；处理摘要每页 4 次批量查询 |
 | WebUI 首屏 | 初始资源 gzip 130.4 KB、未压缩 403.8 KB；Slow 4G FCP 2.44 s | 预算与门禁见 §3.8；gzip 余量 29.6 KB、Slow 4G 余量 18.7%；axios 与 recharts 已移出首屏 |
-| SSE 并发 | 单 key 16 条、全局 64 条；16 条峰值 RSS +3.0 MB、心跳线程固定 2 条 | 上限见 §3.9；第 17 条（单 key）起 HTTP 429 `TOO_MANY_REQUESTS`，不排队；emitter 超时 = `chat-stream-ms`（默认 180 s） |
+| SSE 并发 | 单 key 16 条、全局 64 条；16 条峰值线程 +45（Tomcat/boundedElastic 扩展），两轮后 `SseEmitter` 回落到 0、心跳线程固定 2 条 | 上限见 §3.9；第 17 条（单 key）起 HTTP 429 `TOO_MANY_REQUESTS`，不排队；emitter 超时 = `chat-stream-ms`（默认 180 s） |
+| 并发延迟基线 | c=32：检索 p95 0.74–0.97 s、导出 108 ms、文档创建 0.92 s、上传解析 7.0 s（200 文档 fixture） | 门禁 p95 ≤ 基线 2.5× 且不超过绝对上限；上传解析是当前最紧的边界，见 §3.12 |
+| 检索执行计划 | 9.6k 向量 ANN 走 HNSW 1.9 ms，无 Seq Scan；导出 keyset 0.14 ms | 改 ANN SQL 时 profile id 必须保持字面量，否则部分索引谓词不匹配会静默退化，见 §3.13 |
+| Soak | 12 分钟混合负载：线程 84→84、堆 255→335 MB（锯齿）、FD 55→56、DB 连接 7→8；GC 194 次 young / 0 次 old，停顿占 0.31% | 门禁按首尾 1/4 中位数比较（1.5× + 绝对上限），单调爬升即失败，见 §3.14 |
+| Advisor 线程池 | 共享 `ragAdvisorExecutor`：core 8 / max 16 / 队列 256，`CallerRunsPolicy` | 不要移除 advisor builder 的 `taskExecutor(...)`，否则每次 chat attempt 会重建 4/16 线程池，见 §3.14 |
 | WebUI 列表 | 每页 20 行，DOM 510 节点、heap 9.5 MB | 文档/Collection/评估历史均已可分页；200 条合成渲染 53–70 ms |
 | WebUI 导出 | Collection 卡片内置；fetch + ReadableStream 边收边写，支持进度与取消；5k 文档 2.73 MB、首字节 12–13 ms | 无写盘 API 的浏览器退回 Blob（平台边界）；50k 文档约 27 MB |
 | 导出 | 流式，单批 200 行，响应头给出批次数 | 内存不随行数线性增长；受网络与客户端消费速度限制。超大 Collection 建议在低峰导出 |

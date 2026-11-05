@@ -13,6 +13,9 @@ import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.core.task.support.ContextPropagatingTaskDecorator;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -34,6 +37,34 @@ import java.util.concurrent.atomic.AtomicLong;
 public class PerformanceConfig {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.springairag.core.admission.DependencyCallExecutor dependencyExecutor;
+
+    /**
+     * RAG advisor 专用线程池（知识模式多查询并行检索）。
+     *
+     * <p>Spring AI 的 {@code RetrievalAugmentationAdvisor} 在未注入
+     * {@code TaskExecutor} 时，会为每个 advisor 实例新建一个 core=4 / max=16
+     * 的 {@code ThreadPoolTaskExecutor} 且从不 shutdown。本仓每次 chat attempt
+     * 都会重新构建 advisor，如果沿用默认实现，线程数会随请求量线性增长
+     * （12 分钟 soak 实测 153 → 725）。这里提供一个共享的有界池：并行度保留，
+     * 但线程总量封顶，队列满时回退到调用线程执行（CallerRuns），不拒绝请求。
+     */
+    @Bean("ragAdvisorExecutor")
+    public TaskExecutor ragAdvisorExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(8);
+        executor.setMaxPoolSize(16);
+        executor.setQueueCapacity(256);
+        executor.setThreadNamePrefix("rag-advisor-");
+        ContextPropagatingTaskDecorator requestContext =
+                new ContextPropagatingTaskDecorator();
+        executor.setTaskDecorator(task -> com.springairag.core.logging.MdcContext.wrap(
+                requestContext.decorate(task)));
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        executor.initialize();
+        return executor;
+    }
 
     /**
      * Retrieval-dedicated thread pool

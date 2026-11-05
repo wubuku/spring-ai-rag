@@ -291,7 +291,93 @@ def main() -> None:
         else:
             print("[INFO] 指标端点未暴露 hikaricp.connections.active，跳过数值断言")
 
-        # ---- 场景 3：数据库临时不可达，再恢复 ----
+        # ---- 场景 3：持续并发 + 反复长事务 + 客户端中断 ----
+        # 目标不是制造极限吞吐，而是验证在“连接被反复占住、请求被取消”的
+        # 组合下，池仍能归还、失败仍是 503/504，且不会留下 idle-in-transaction。
+        print("[INFO] 持续并发 + 反复长事务 + 客户端中断")
+        lock_process = subprocess.Popen(
+            ["docker", "exec", "-i", container, "psql", "-U", "postgres",
+             "-d", stack.db_name, "-X", "-q"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True,
+        )
+        assert lock_process.stdin is not None
+        lock_process.stdin.write("".join(
+            "BEGIN;\nLOCK TABLE rag_documents IN ACCESS EXCLUSIVE MODE;\n"
+            "SELECT pg_sleep(1.5);\nROLLBACK;\n" for _ in range(4)))
+        lock_process.stdin.flush()
+
+        sustained_results: list[tuple] = []
+        stop_at = time.time() + 8
+
+        def sustained_request() -> None:
+            while time.time() < stop_at:
+                result = measure(url, timeout=20)
+                with slow_lock:
+                    sustained_results.append(result)
+
+        threads = [threading.Thread(target=sustained_request, daemon=True)
+                   for _ in range(6)]
+        for thread in threads:
+            thread.start()
+
+        aborted = 0
+        while time.time() < stop_at:
+            try:
+                with socket.create_connection(
+                        ("127.0.0.1", app_port), timeout=3) as client:
+                    client.sendall(
+                        ("GET /api/v1/rag/documents?page=0&size=10 HTTP/1.1\r\n"
+                        f"Host: 127.0.0.1:{app_port}\r\n"
+                        f"X-API-Key: {ROOT_API_KEY}\r\n"
+                        "Connection: close\r\n\r\n").encode())
+                aborted += 1
+            except OSError as error:
+                fail(f"客户端中断演练无法建立连接：{error}")
+            time.sleep(0.2)
+
+        for thread in threads:
+            thread.join(timeout=25)
+        if lock_process.stdin is not None:
+            lock_process.stdin.write("\\q\n")
+            lock_process.stdin.flush()
+        lock_process.wait(timeout=10)
+        lock_process = None
+
+        unexpected = [item for item in sustained_results
+                      if item[0] not in (200, 429, 503, 504)]
+        if unexpected:
+            fail(f"持续并发出现非 503/504/429 结果："
+                 f"{[(item[0], round(item[3], 2)) for item in unexpected][:5]}")
+        too_slow = [item for item in sustained_results if item[3] > 20]
+        if too_slow:
+            fail(f"持续并发存在超过 20s 的挂死请求："
+                 f"{[(item[0], round(item[3], 2)) for item in too_slow][:3]}")
+        pass_check(f"持续并发 {len(sustained_results)} 次请求、{aborted} 次客户端中断，"
+                   "全部有界返回且无 500")
+
+        deadline = time.time() + 20
+        recovered = False
+        while time.time() < deadline:
+            status_code, _, _ = documents(stack)
+            if status_code == 200:
+                recovered = True
+                break
+            time.sleep(0.5)
+        if not recovered:
+            fail("持续并发/中断结束后连接池未恢复")
+        active = hikari_active(stack)
+        if active is not None and active > 2:
+            fail(f"持续并发结束后 Hikari active={active}，疑似连接未归还")
+        idle_in_tx = stack.sql(
+            "SELECT count(*) FROM pg_stat_activity "
+            "WHERE state = 'idle in transaction'").strip()
+        if idle_in_tx != "0":
+            fail(f"持续并发结束后存在 {idle_in_tx} 条 idle-in-transaction")
+        pass_check(f"持续并发结束后池恢复（active={active if active is None else f'{active:g}'}，"
+                   "无 idle-in-transaction）")
+
+        # ---- 场景 4：数据库临时不可达，再恢复 ----
         print("[INFO] 停止数据库容器，模拟临时不可达")
         result = run(["docker", "stop", container], timeout=60)
         if result.returncode != 0:

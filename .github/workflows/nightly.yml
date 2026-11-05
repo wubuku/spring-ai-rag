@@ -452,7 +452,7 @@ jobs:
     name: Bounded soak (mock provider, no paid calls)
     if: github.event_name == 'schedule' || inputs.debug_report_failure != true
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     services:
       postgres:
@@ -552,7 +552,34 @@ jobs:
             --base-url http://127.0.0.1:18082 \
             --minutes 10 \
             --concurrency 4 \
+            --pid "$SERVER_PID" \
+            --dsn "postgresql://postgres:postgres@localhost:5432/rag_nightly_soak" \
+            --sample-seconds 15 \
             --output-dir .verification/soak/nightly 2>&1 | tee "$RUNNER_TEMP/soak.log"
+
+      # 性能门禁与慢 SQL 计划检查：跑 quick 档 1/8/32 基线，再取
+      # pg_stat_statements 的 top SQL 并断言关键检索路径仍走 HNSW/索引。
+      # 两者都自建一次性 PG（LocalStack / Docker 容器），不依赖上面的服务端进程。
+      - name: Install Python PostgreSQL client
+        run: pip install --disable-pip-version-check psycopg2-binary
+
+      - name: Performance baseline gate (quick profile)
+        run: |
+          set -o pipefail
+          mkdir -p .verification/performance
+          python3 scripts/verify-performance-baseline.py \
+            --run --profile quick \
+            --baseline scripts/testdata/performance-baseline.json \
+            --current-out .verification/performance/baseline.json 2>&1 \
+            | tee .verification/performance/baseline.log
+
+      - name: Slow SQL and query plan gate
+        run: |
+          set -o pipefail
+          python3 scripts/verify-query-plans.py \
+            --docker --documents 1200 --chunks-per-doc 8 \
+            --output .verification/performance/query-plans.json 2>&1 \
+            | tee .verification/performance/query-plans.log
 
       # 安全边界全入口回归：自建临时库 + mock provider + demo jar，
       # 覆盖受限 key 的跨 Collection / 跨 principal 读取。
@@ -588,6 +615,7 @@ jobs:
           name: nightly-soak
           path: |
             .verification/soak/nightly/
+            .verification/performance/
             ${{ runner.temp }}/soak.log
             ${{ runner.temp }}/security-boundary.log
             ${{ runner.temp }}/security-upgrade.log
