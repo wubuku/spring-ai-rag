@@ -62,7 +62,7 @@ jobs:
 
       - name: Upload gated IT results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-gated-it
           path: |
@@ -115,7 +115,7 @@ jobs:
 
       - name: Upload PostgreSQL matrix evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-postgres-${{ matrix.pg }}
           path: .verification/nightly/postgres-matrix-${{ matrix.pg }}.log
@@ -157,7 +157,7 @@ jobs:
 
       - name: Upload failure-mode evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-failure-modes
           path: |
@@ -255,7 +255,7 @@ jobs:
 
       - name: Upload resilience evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-resilience
           path: |
@@ -421,7 +421,7 @@ jobs:
 
       - name: Upload LongCat evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-real-llm-longcat
           path: |
@@ -602,7 +602,7 @@ jobs:
 
       - name: Upload real-LLM evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-real-llm
           path: |
@@ -779,7 +779,7 @@ jobs:
 
       - name: Upload soak evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-soak
           path: |
@@ -841,7 +841,7 @@ jobs:
 
       - name: Upload container smoke evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-container-smoke
           path: |
@@ -1012,7 +1012,7 @@ jobs:
 
       - name: Upload real WebUI evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-webui-real
           path: |
@@ -1182,7 +1182,7 @@ jobs:
 
       - name: Upload packaged WebUI evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-webui-real-packaged
           path: |
