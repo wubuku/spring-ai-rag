@@ -214,7 +214,7 @@ jobs:
 
       - name: Upload JaCoCo coverage reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: jacoco-reports
           path: '**/target/site/jacoco/'
@@ -223,7 +223,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-test-results
           path: |
@@ -234,7 +234,7 @@ jobs:
 
       - name: Upload gate logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-gate-logs
           path: .verification/ci/
@@ -351,7 +351,7 @@ jobs:
 
       - name: Upload WebUI coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: webui-coverage
           path: spring-ai-rag-webui/coverage/
@@ -360,7 +360,7 @@ jobs:
 
       - name: Upload Playwright report and diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: webui-playwright-report
           path: |
