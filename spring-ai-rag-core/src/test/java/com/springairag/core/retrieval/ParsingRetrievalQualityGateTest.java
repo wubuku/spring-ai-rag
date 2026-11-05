@@ -142,6 +142,33 @@ class ParsingRetrievalQualityGateTest {
     }
 
     @Test
+    @DisplayName("双栏中文正文夹英文术语：按栏重排，不因写片段变短而误判为表格")
+    void mixedScriptTwoColumnProseKeepsColumnOrder() throws Exception {
+        byte[] pdf;
+        try (var stream = getClass().getResourceAsStream(
+                "/retrieval/pdf-two-column-zh-ops.pdf")) {
+            assertNotNull(stream, "missing regression fixture");
+            pdf = stream.readAllBytes();
+        }
+        PdfTextExtractor.PdfExtraction extraction = PdfTextExtractor.extract(pdf, 2000);
+        assertEquals(1, extraction.layout().size());
+        assertEquals("COLUMN_BANDS", extraction.layout().get(0).decision(),
+                extraction.layout().get(0).summary());
+
+        // PDF 抽取会在行尾断行，断言前先去掉空白，避免把排版换行误判为丢内容。
+        String compact = extraction.text().replaceAll("\\s+", "");
+        int leftColumn = compact.indexOf("lease过期时间是60秒");
+        int rightColumn = compact.indexOf("重启前先摘除流量");
+        assertTrue(leftColumn >= 0, "left column answer must survive extraction");
+        assertTrue(rightColumn >= 0, "right column text must survive extraction");
+        assertTrue(leftColumn < rightColumn,
+                "left column must be emitted before the right column");
+        assertFalse(extraction.text().lines().anyMatch(line ->
+                        line.contains("lease 过期时间") && line.contains("重启前先摘除流量")),
+                "two-column prose must not interleave left and right lines");
+    }
+
+    @Test
     @DisplayName("版式诊断：分栏/行序决定与原因可解释，歧义样本可预期降级")
     void layoutDecisionsAreExplained() throws Exception {
         for (DocumentSpec document : spec.documents()) {

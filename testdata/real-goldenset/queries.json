@@ -1,0 +1,386 @@
+{
+  "version": "1",
+  "name": "real-embedding-retrieval-v1",
+  "description": "Human-annotated goldenset over real files (PDF multi-column/tables, DOCX, Markdown, HTML, UTF-8/GBK text, CSV). Every annotation names the file and the literal fragment terms that must appear in the retrieved chunk. Annotations were written by hand from the corpus; no model generated them.",
+  "corpus": [
+    { "file": "pdf-two-column-en.pdf", "format": "pdf", "lang": "en", "title": "Nebula Runtime Overview" },
+    { "file": "pdf-two-column-zh.pdf", "format": "pdf", "lang": "zh", "title": "星云平台部署指南" },
+    { "file": "pdf-table-three-column.pdf", "format": "pdf", "lang": "en", "title": "Nebula Appliance Matrix" },
+    { "file": "pdf-table-two-column.pdf", "format": "pdf", "lang": "en", "title": "Nebula Service Level Specification" },
+    { "file": "pdf-mixed-columns-table.pdf", "format": "pdf", "lang": "en", "title": "Incident Response Playbook" },
+    { "file": "pdf-mixed-zh-table.pdf", "format": "pdf", "lang": "zh", "title": "星云平台容量规划" },
+    { "file": "pdf-single-column-whitepaper.pdf", "format": "pdf", "lang": "en", "title": "Nebula Architecture Whitepaper" },
+    { "file": "pdf-single-column-zh-report.pdf", "format": "pdf", "lang": "zh", "title": "星云平台安全白皮书" },
+    { "file": "pdf-two-column-en-sdk.pdf", "format": "pdf", "lang": "en", "title": "Nebula SDK Reference" },
+    { "file": "pdf-two-column-zh-ops.pdf", "format": "pdf", "lang": "zh", "title": "星云平台运维手册" },
+    { "file": "docx-paragraph-table-en.docx", "format": "docx", "lang": "en", "title": "Nebula Billing Rules" },
+    { "file": "docx-paragraph-table-zh.docx", "format": "docx", "lang": "zh", "title": "星云平台计费说明" },
+    { "file": "docx-list-heading-en.docx", "format": "docx", "lang": "en", "title": "Release Checklist" },
+    { "file": "docx-list-heading-zh.docx", "format": "docx", "lang": "zh", "title": "发布检查清单" },
+    { "file": "docx-mixed-en.docx", "format": "docx", "lang": "en", "title": "Nebula Onboarding Guide" },
+    { "file": "docx-mixed-zh.docx", "format": "docx", "lang": "zh", "title": "星云平台接入指南" },
+    { "file": "md-table-en.md", "format": "md", "lang": "en", "title": "Quota Matrix" },
+    { "file": "md-code-en.md", "format": "md", "lang": "en", "title": "Rate Limit Middleware" },
+    { "file": "md-table-zh.md", "format": "md", "lang": "zh", "title": "配额对照表" },
+    { "file": "md-mixed-zh.md", "format": "md", "lang": "zh", "title": "故障排查手册" },
+    { "file": "md-heading-en.md", "format": "md", "lang": "en", "title": "Observability Metrics" },
+    { "file": "md-mixed-en.md", "format": "md", "lang": "en", "title": "Data Retention Policy" },
+    { "file": "html-table-en.html", "format": "html", "lang": "en", "title": "Region Availability" },
+    { "file": "html-table-zh.html", "format": "html", "lang": "zh", "title": "地域可用性" },
+    { "file": "html-mixed-zh.html", "format": "html", "lang": "zh", "title": "API 错误码大全" },
+    { "file": "html-heading-en.html", "format": "html", "lang": "en", "title": "Security Hardening" },
+    { "file": "html-noisy-en.html", "format": "html", "lang": "en", "title": "Deployment FAQ" },
+    { "file": "txt-utf8-zh.txt", "format": "txt", "lang": "zh", "title": "星云平台术语表" },
+    { "file": "txt-utf8-en.txt", "format": "txt", "lang": "en", "title": "Support Escalation Policy" },
+    { "file": "txt-ascii-en.txt", "format": "txt", "lang": "en", "title": "CLI Cheatsheet" },
+    { "file": "txt-gbk-zh.txt", "format": "txt", "lang": "zh", "title": "兼容性说明" },
+    { "file": "csv-metrics.csv", "format": "csv", "lang": "en", "title": "Capacity Benchmarks" }
+  ],
+  "queries": [
+    {
+      "id": "q-en-01",
+      "query": "What happens to live traffic during a control-plane upgrade?",
+      "lang": "en", "format": "pdf", "failureType": "normal",
+      "relevant": [{ "file": "pdf-two-column-en.pdf", "terms": ["control plane from the data plane"] }],
+      "note": "Two-column PDF; the answer is in the left column, not the title."
+    },
+    {
+      "id": "q-en-02",
+      "query": "How many attempts does the runtime make before giving up on an inference request?",
+      "lang": "en", "format": "pdf", "failureType": "normal",
+      "relevant": [{ "file": "pdf-two-column-en.pdf", "terms": ["at most three times"] }],
+      "note": "Paraphrase of 'retries ... at most three times'."
+    },
+    {
+      "id": "q-en-03",
+      "query": "What is the minimum billable unit for metered usage?",
+      "lang": "en", "format": "docx", "failureType": "normal",
+      "relevant": [{ "file": "docx-paragraph-table-en.docx", "terms": ["minimum billable unit of 60 seconds"] }],
+      "note": "DOCX paragraph before the discount table."
+    },
+    {
+      "id": "q-en-04",
+      "query": "Which committed plan gives an eighteen percent discount?",
+      "lang": "en", "format": "docx", "failureType": "table-cell",
+      "relevant": [{ "file": "docx-paragraph-table-en.docx", "terms": ["Committed 1 year", "18%"] }],
+      "note": "DOCX table cell; the query spells out 18 percent instead of the numeral."
+    },
+    {
+      "id": "q-en-05",
+      "query": "What is the SLO target for retrieval p95 latency?",
+      "lang": "en", "format": "md", "failureType": "normal",
+      "relevant": [{ "file": "md-heading-en.md", "terms": ["SLO target is 250 ms"] }],
+      "note": "Markdown section under a heading."
+    },
+    {
+      "id": "q-en-06",
+      "query": "How long are audit logs kept by default in the service level specification?",
+      "lang": "en", "format": "pdf", "failureType": "table-cell",
+      "relevant": [{ "file": "pdf-table-two-column.pdf", "terms": ["Audit retention", "400 days"] }],
+      "note": "Two-column table PDF; row pair must stay together."
+    },
+    {
+      "id": "q-en-07",
+      "query": "When does a region become selectable?",
+      "lang": "en", "format": "html", "failureType": "normal",
+      "relevant": [{ "file": "html-table-en.html", "terms": ["all of its zones report healthy"] }],
+      "note": "HTML with script/style noise around the answer."
+    },
+    {
+      "id": "q-en-08",
+      "query": "What TLS version is required at the edge?",
+      "lang": "en", "format": "html", "failureType": "normal",
+      "relevant": [{ "file": "html-heading-en.html", "terms": ["TLS 1.3 is required"] }],
+      "note": "Heading page in HTML."
+    },
+    {
+      "id": "q-en-09",
+      "query": "What stores declarative configuration in the architecture whitepaper?",
+      "lang": "en", "format": "pdf", "failureType": "normal",
+      "relevant": [{ "file": "pdf-single-column-whitepaper.pdf", "terms": ["three etcd nodes form a quorum"] }],
+      "note": "Single-column PDF; the answer is embedded mid-paragraph."
+    },
+    {
+      "id": "q-en-10",
+      "query": "When is a release treated as accepted after a failed rollback?",
+      "lang": "en", "format": "docx", "failureType": "normal",
+      "relevant": [{ "file": "docx-list-heading-en.docx", "terms": ["Rollback window is 30 minutes"] }],
+      "note": "DOCX bullet under a heading."
+    },
+    {
+      "id": "q-en-11",
+      "query": "How many concurrent requests are allowed by default?",
+      "lang": "en", "format": "md", "failureType": "table-cell",
+      "relevant": [{ "file": "md-table-en.md", "terms": ["Concurrent requests", "64"] }],
+      "note": "Markdown table row; the Chinese quota table holds a similar value and must not win on semantics alone."
+    },
+    {
+      "id": "q-en-12",
+      "query": "How long are embedding backups kept?",
+      "lang": "en", "format": "md", "failureType": "normal",
+      "relevant": [{ "file": "md-mixed-en.md", "terms": ["Embedding backups are kept for 7 days"] }],
+      "note": "Mixed-language Markdown page; answer in an English paragraph."
+    },
+    {
+      "id": "q-en-13",
+      "query": "How quickly must a Sev1 incident be acknowledged?",
+      "lang": "en", "format": "txt", "failureType": "normal",
+      "relevant": [{ "file": "txt-utf8-en.txt", "terms": ["Sev1: acknowledge within 15 minutes"] }],
+      "note": "Plain text file; one line per severity."
+    },
+    {
+      "id": "q-en-14",
+      "query": "Which command drains a node before maintenance?",
+      "lang": "en", "format": "txt", "failureType": "identifier",
+      "relevant": [{ "file": "txt-ascii-en.txt", "terms": ["nebulactl drain --node node-7"] }],
+      "note": "ASCII plain text CLI cheatsheet; a similar command also appears in a PDF."
+    },
+    {
+      "id": "q-zh-01",
+      "query": "控制面升级时在线流量会受影响吗？",
+      "lang": "zh", "format": "pdf", "failureType": "normal",
+      "relevant": [{ "file": "pdf-two-column-zh.pdf", "terms": ["不会中断在线流量"] }],
+      "note": "中文双栏 PDF，答案在左栏。"
+    },
+    {
+      "id": "q-zh-02",
+      "query": "生产环境至少需要几个控制面节点？",
+      "lang": "zh", "format": "pdf", "failureType": "normal",
+      "relevant": [{ "file": "pdf-two-column-zh.pdf", "terms": ["三个控制面节点"] }],
+      "note": "同一篇中文双栏 PDF 的第二段。"
+    },
+    {
+      "id": "q-zh-03",
+      "query": "密钥多久轮换一次？",
+      "lang": "zh", "format": "pdf", "failureType": "short",
+      "relevant": [{ "file": "pdf-single-column-zh-report.pdf", "terms": ["90 天"] }],
+      "note": "短查询；中文单栏 PDF。"
+    },
+    {
+      "id": "q-zh-04",
+      "query": "后台任务的 lease 过期时间是多少？",
+      "lang": "zh", "format": "pdf", "failureType": "normal",
+      "relevant": [{ "file": "pdf-two-column-zh-ops.pdf", "terms": ["lease 过期时间是 60 秒"] }],
+      "note": "中英混排查询命中中文双栏运维手册。"
+    },
+    {
+      "id": "q-zh-05",
+      "query": "接入星云平台一共分几步？",
+      "lang": "zh", "format": "docx", "failureType": "normal",
+      "relevant": [{ "file": "docx-mixed-zh.docx", "terms": ["接入分为 5 步"] }],
+      "note": "DOCX 正文段落。"
+    },
+    {
+      "id": "q-zh-06",
+      "query": "容量达到多少时会触发扩容？",
+      "lang": "zh", "format": "pdf", "failureType": "normal",
+      "relevant": [{ "file": "pdf-mixed-zh-table.pdf", "terms": ["扩容阈值是 75%"] }],
+      "note": "双栏正文含局部表格的中文 PDF。"
+    },
+    {
+      "id": "q-zh-07",
+      "query": "配额提升需要什么流程？",
+      "lang": "zh", "format": "md", "failureType": "normal",
+      "relevant": [{ "file": "md-table-zh.md", "terms": ["容量评审"] }],
+      "note": "中文 Markdown 表格后的说明段。"
+    },
+    {
+      "id": "q-zh-08",
+      "query": "历史文档补充向量叫什么？",
+      "lang": "zh", "format": "txt", "failureType": "paraphrase-zh",
+      "relevant": [{ "file": "txt-utf8-zh.txt", "terms": ["回填 backfill"] }],
+      "note": "中文同义改写命中术语表中的对应条目。"
+    },
+    {
+      "id": "q-zh-09",
+      "query": "包年套餐的折扣是多少？",
+      "lang": "zh", "format": "docx", "failureType": "table-cell",
+      "relevant": [{ "file": "docx-paragraph-table-zh.docx", "terms": ["包年", "35%"] }],
+      "note": "DOCX 表格行。"
+    },
+    {
+      "id": "q-zh-10",
+      "query": "平台接受多少维的向量？",
+      "lang": "zh", "format": "txt", "failureType": "normal",
+      "relevant": [{ "file": "txt-gbk-zh.txt", "terms": ["1024 维向量"] }],
+      "note": "GBK 编码纯文本；编码探测必须生效，否则该文档整体不可检索。"
+    },
+    {
+      "id": "q-short-01",
+      "query": "升级窗口",
+      "lang": "zh", "format": "pdf", "failureType": "short",
+      "relevant": [{ "file": "pdf-two-column-zh.pdf", "terms": ["45 分钟"] }],
+      "note": "两个词的中文短查询，容易只剩关键词匹配。"
+    },
+    {
+      "id": "q-short-02",
+      "query": "审计保留",
+      "lang": "zh", "format": "pdf", "failureType": "short",
+      "relevant": [{ "file": "pdf-table-two-column.pdf", "terms": ["Audit retention", "400 days"] }],
+      "note": "短中文查询命中英文表格单元格，跨语言短查询。"
+    },
+    {
+      "id": "q-short-03",
+      "query": "离线安装",
+      "lang": "zh", "format": "html", "failureType": "short",
+      "relevant": [{ "file": "html-noisy-en.html", "terms": ["1.2 GB"] }],
+      "note": "短中文查询命中中英混排 HTML。"
+    },
+    {
+      "id": "q-short-04",
+      "query": "灰度比例",
+      "lang": "zh", "format": "docx", "failureType": "short",
+      "relevant": [{ "file": "docx-list-heading-zh.docx", "terms": ["5% 灰度"] }],
+      "note": "短查询命中 DOCX 列表项。"
+    },
+    {
+      "id": "q-id-01",
+      "query": "NEBULA-400 的持续吞吐是多少？",
+      "lang": "zh", "format": "pdf", "failureType": "identifier",
+      "relevant": [{ "file": "pdf-two-column-en.pdf", "terms": ["12000 QPS"] }],
+      "note": "型号编号出现在英文 PDF 右栏；表格 PDF 中同型号是 9000，不能串。"
+    },
+    {
+      "id": "q-id-02",
+      "query": "NEBULA-300 占几个机架单元？",
+      "lang": "zh", "format": "pdf", "failureType": "table-cell",
+      "relevant": [{ "file": "pdf-table-three-column.pdf", "terms": ["NEBULA-300", "2U"] }],
+      "note": "三列表格 PDF 的整行命中，行内单元格不得错位。"
+    },
+    {
+      "id": "q-id-03",
+      "query": "NEBULA-SDK-2.4.0 新增了什么能力？",
+      "lang": "zh", "format": "pdf", "failureType": "identifier",
+      "relevant": [{ "file": "pdf-two-column-en-sdk.pdf", "terms": ["NEBULA-SDK-2.4.0", "streaming cancellation"] }],
+      "note": "版本号 + 英文能力描述。"
+    },
+    {
+      "id": "q-id-04",
+      "query": "NEBULA-CLI-1.9 怎么安装？",
+      "lang": "zh", "format": "docx", "failureType": "identifier",
+      "relevant": [{ "file": "docx-mixed-en.docx", "terms": ["NEBULA-CLI-1.9"] }],
+      "note": "CLI 版本号命中 DOCX。"
+    },
+    {
+      "id": "q-id-05",
+      "query": "RAG-4291 是什么错误？",
+      "lang": "zh", "format": "md", "failureType": "identifier",
+      "relevant": [{ "file": "md-mixed-zh.md", "terms": ["RAG-4291"] }],
+      "note": "错误码标点敏感，分词不应把连字符吃掉。"
+    },
+    {
+      "id": "q-id-06",
+      "query": "RAG-5001 代表什么？",
+      "lang": "en", "format": "html", "failureType": "identifier",
+      "relevant": [{ "file": "html-mixed-zh.html", "terms": ["RAG-5001"] }],
+      "note": "中文 HTML 页面中的英文错误码。"
+    },
+    {
+      "id": "q-table-01",
+      "query": "What is the P99 latency in the service level specification?",
+      "lang": "en", "format": "pdf", "failureType": "table-cell",
+      "relevant": [{ "file": "pdf-table-two-column.pdf", "terms": ["P99 latency", "42 ms"] }],
+      "note": "两列表格 PDF 的单元格值。"
+    },
+    {
+      "id": "q-table-02",
+      "query": "What RTO does Nebula promise?",
+      "lang": "en", "format": "pdf", "failureType": "table-cell",
+      "relevant": [{ "file": "pdf-table-two-column.pdf", "terms": ["RTO", "30 minutes"] }],
+      "note": "同一张表内还有 Support first response=30 minutes，必须命中 RTO 行所在块。"
+    },
+    {
+      "id": "q-table-03",
+      "query": "单次查询最多允许多少字符？",
+      "lang": "zh", "format": "md", "failureType": "table-cell",
+      "relevant": [{ "file": "md-table-zh.md", "terms": ["单次查询字符", "10000"] }],
+      "note": "中文 Markdown 表格单元格。"
+    },
+    {
+      "id": "q-table-04",
+      "query": "华东区域的跨可用区复制延迟是多少？",
+      "lang": "zh", "format": "html", "failureType": "table-cell",
+      "relevant": [{ "file": "html-table-zh.html", "terms": ["18 ms"] }],
+      "note": "HTML 表格单元格，正文里还有另一个 25 毫秒干扰值。"
+    },
+    {
+      "id": "q-table-05",
+      "query": "Which team owns the Mitigate phase in the incident playbook?",
+      "lang": "en", "format": "pdf", "failureType": "table-cell",
+      "relevant": [{ "file": "pdf-mixed-columns-table.pdf", "terms": ["Mitigate", "service owner"] }],
+      "note": "双栏正文中嵌入表格，行配对必须保持。"
+    },
+    {
+      "id": "q-table-06",
+      "query": "bulk ingest 的吞吐是多少？",
+      "lang": "mixed", "format": "csv", "failureType": "table-cell",
+      "relevant": [{ "file": "csv-metrics.csv", "terms": ["bulk_ingest", "2400 docs/min"] }],
+      "note": "CSV 行；中英混排短查询。"
+    },
+    {
+      "id": "q-cross-01",
+      "query": "Compare the service-level P99 latency with the hybrid search p99 from the benchmark.",
+      "lang": "en", "format": "pdf", "failureType": "cross-doc",
+      "relevant": [
+        { "file": "pdf-table-two-column.pdf", "terms": ["42 ms"] },
+        { "file": "csv-metrics.csv", "terms": ["search_hybrid", "95"] }
+      ],
+      "note": "跨 PDF 表格与 CSV：两个文档都必须在 top-10 内。"
+    },
+    {
+      "id": "q-cross-02",
+      "query": "What are the two different audit retention periods across documents?",
+      "lang": "en", "format": "pdf", "failureType": "cross-doc",
+      "relevant": [
+        { "file": "pdf-table-two-column.pdf", "terms": ["400 days"] },
+        { "file": "pdf-single-column-zh-report.pdf", "terms": ["180 天"] }
+      ],
+      "note": "跨语言跨文档：英文表格 400 天与中文白皮书 180 天。"
+    },
+    {
+      "id": "q-cross-03",
+      "query": "lease 过期时间与升级窗口分别是多少？",
+      "lang": "mixed", "format": "pdf", "failureType": "cross-doc",
+      "relevant": [
+        { "file": "pdf-two-column-zh-ops.pdf", "terms": ["60 秒"] },
+        { "file": "pdf-two-column-zh.pdf", "terms": ["45 分钟"] }
+      ],
+      "note": "同一格式两篇文档的组合问题。"
+    },
+    {
+      "id": "q-para-01",
+      "query": "平台怎么处理重试才不会重复扣费？",
+      "lang": "zh", "format": "pdf", "failureType": "paraphrase-zh",
+      "relevant": [{ "file": "pdf-two-column-en.pdf", "terms": ["Idempotency keys are recorded for 24 hours"] }],
+      "note": "中文同义改写命中英文 PDF 右栏。"
+    },
+    {
+      "id": "q-para-02",
+      "query": "向量维度和 Profile 不一致会返回什么？",
+      "lang": "zh", "format": "md", "failureType": "paraphrase-zh",
+      "relevant": [{ "file": "md-mixed-zh.md", "terms": ["RAG-5032"] }],
+      "note": "同义改写 + 错误码。"
+    },
+    {
+      "id": "q-para-03",
+      "query": "如何先让小部分用户用上新版本？",
+      "lang": "zh", "format": "docx", "failureType": "paraphrase-zh",
+      "relevant": [{ "file": "docx-list-heading-zh.docx", "terms": ["5% 灰度"] }],
+      "note": "同义改写命中 DOCX 列表项。"
+    },
+    {
+      "id": "q-para-04",
+      "query": "请求被限流后应该等多久再重试？",
+      "lang": "zh", "format": "md", "failureType": "paraphrase-zh",
+      "relevant": [{ "file": "md-code-en.md", "terms": ["Retry-After"] }],
+      "note": "中文改写命中英文 Markdown 代码块。"
+    },
+    {
+      "id": "q-para-05",
+      "query": "停止节点前要执行什么操作？",
+      "lang": "zh", "format": "pdf", "failureType": "paraphrase-zh",
+      "relevant": [{ "file": "pdf-two-column-en.pdf", "terms": ["nebulactl drain --node"] }],
+      "note": "中文改写命中英文 PDF 命令行片段；同义命令也在 ASCII 文本中出现。"
+    }
+  ]
+}

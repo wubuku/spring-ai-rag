@@ -216,6 +216,155 @@ Reproducibility boundaries:
   rerank is not enabled). Each run uses a timestamped collection, so repeated runs do not
   pollute existing data; local debugging can reuse one corpus with `--skip-create`.
 
+## Real-Embedding Retrieval Baseline (Human-Labeled Goldenset)
+
+This is a **separate layer** from the parsing/chunking quality gate:
+
+- `ParsingRetrievalQualityGateTest` uses feature-hashed fake embeddings. It proves the
+  parsing, chunking, and ranking pipeline is correct and reproducible under `mvn test`;
+  it does **not** represent semantic retrieval quality.
+- This goldenset uses a real embedding provider (BGE-M3 / 1024 dims) and measures only
+  semantic quality. It is not part of the PR fast layer and is not run by default in
+  nightly; it requires an explicit opt-in.
+
+Dataset and labels:
+
+- 32 documents under `testdata/real-goldenset/corpus/`: 10 multi-column PDFs, 6 DOCX,
+  6 MD, 5 HTML, 4 TXT (one GBK), and 1 CSV; they cover multi-column prose, tables,
+  mixed Chinese/English content, and code blocks.
+- 48 queries under `testdata/real-goldenset/queries.json`, **written and labeled by a
+  human**. A fragment is a hit only when every `relevant[].terms` entry appears in the
+  same chunk. Query types: normal / short / identifier / table-cell / cross-doc /
+  paraphrase-zh.
+- `scripts/test-support/generate-real-goldenset-corpus.py` is byte-for-byte
+  reproducible: PDF metadata/document ID and DOCX timestamps are fixed.
+
+Run (real paid calls, explicit switch):
+
+```bash
+# Isolated database plus RAG_ROOT_API_KEY / embedding key from .env;
+# never point this at a shared production database.
+python3 scripts/run-real-embedding-goldenset.py \
+  --base-url http://127.0.0.1:18091 \
+  --collection-key real-goldenset-<date> \
+  --ack-paid-models
+```
+
+Without `--ack-paid-models` (or `RAG_REAL_GOLDENSET_ACK_PAID_MODELS=1`) the script
+refuses to run. Keys are read only from `.env` and never printed. A full run issues
+about 32 document embeddings plus 5x48 query embeddings; rerunning with
+`--skip-create --manifest <previous manifest>` measures retrieval only and issues no
+document embeddings.
+
+Real baseline (2026-11-05, SiliconFlow `BAAI/bge-m3`, 1024 dims, `useRerank=false`,
+`minScore=0`, top-10, 48 queries):
+
+| Variant | R@5 | R@10 | MRR | Fragment MRR | nDCG@10 |
+|---------|-----|------|-----|--------------|---------|
+| Vector only (`useHybridSearch=false`) | 0.917 | 0.938 | 0.822 | 0.812 | 0.846 |
+| Hybrid 50/50 | 0.917 | 0.938 | 0.835 | 0.828 | 0.857 |
+| **Hybrid 55/45 (production default, baseline)** | **0.917** | **0.938** | **0.838** | **0.828** | **0.858** |
+| Hybrid 70/30 | 0.917 | 0.938 | 0.838 | 0.828 | 0.858 |
+| Hybrid 30/70 | 0.917 | 0.938 | 0.838 | 0.828 | 0.858 |
+| Keyword only (0/1) | 0.125 | 0.125 | 0.125 | 0.125 | 0.125 |
+
+Remote embedding float differences can swap individual query ranks between runs;
+MRR / nDCG@10 jitter by about +/-0.004. The table is the last full run on 2026-11-05.
+
+Group breakdown (production default 55/45):
+
+- Language: en (20) R@5/R@10 1.000/1.000, MRR 0.913, nDCG@10 0.930; zh (26)
+  0.846/0.885, MRR 0.768, nDCG@10 0.795; mixed (2) 1.000/1.000, MRR 1.000,
+  nDCG@10 0.960.
+- Format: HTML (5) and CSV (1) are all 1.0; DOCX (8) R@10 1.000, MRR 0.854,
+  nDCG@10 0.891; PDF (22) R@10 0.909, MRR 0.802, nDCG@10 0.821; MD (8) R@10
+  0.875, MRR 0.813, nDCG@10 0.822; TXT (4) R@10 1.000, MRR 0.813, nDCG@10 0.858.
+- Failure type: normal (17) all 1.0; table-cell (11) R@10 1.000, MRR 0.909;
+  identifier (6) R@10 1.000, MRR 0.792; cross-doc (3) R@10 1.000, MRR 0.833;
+  short (5) R@10 0.800, MRR 0.667; paraphrase-zh (6) R@10 0.667, MRR 0.440.
+
+Comparison and noise:
+
+- Vector only to hybrid: MRR 0.822 to 0.838 and nDCG@10 0.846 to 0.858. A paired
+  bootstrap over the same 48 queries (5000 resamples) gives a 95% CI for the nDCG@10
+  delta of **[-0.036, 0.000]**. It includes 0, so hybrid cannot be declared
+  significantly better than vector-only; the direction is consistent, nothing more.
+  The CI covers query sampling only, not corpora or model versions.
+- Weights: 50/50, 55/45, 70/30, and 30/70 differ by at most 0.004 in MRR / nDCG,
+  and repeated runs swap their ordering (50/50 and 70/30 were each slightly lower in
+  different runs). There is no stable ranking difference, so there is no evidence to
+  change the production weights and 55/45 stays. Fusion is weighted RRF with a fixed,
+  non-configurable K, so this experiment sweeps weights but not K.
+- Keyword-only R@10 is just 0.125: the English and Chinese full-text channels use AND
+  semantics and are routed by query language, so they usually return 0-2 candidates.
+  Weight changes cannot pull them into the top ranks; keyword search is an auxiliary
+  signal only.
+
+Representative failures and attribution (baseline):
+
+- **Cross-language paraphrase (embedding)**: q-para-01, "How does the platform handle
+  retries without double charging?", targets the English PDF sentence "Idempotency keys
+  are recorded for 24 hours" and misses top-10; top1 is the Chinese 429/Retry-After
+  troubleshooting manual. `double charging` and `idempotency` are not aligned in the
+  embedding; chunking and fusion weights are not the cause.
+- **Short query plus cross-language table fact (embedding + no keyword candidate)**:
+  q-short-02, "audit retention", targets the "Audit retention / 400 days" table and
+  misses top-10; top1 is "Audit logs ... 90 days". A four-character query is too weak,
+  and the Chinese query is routed to jieba, so the English table gets no keyword
+  candidate.
+- **Label ambiguity (not a system error)**: q-para-04 annotates only `Retry-After` in
+  `md-code-en.md`, but top1 `md-mixed-zh.md` also gives `Retry-After` and exponential
+  backoff, which is a correct answer; the query therefore earns document-level credit
+  only. q-para-05 is similar: top1 from the Chinese operations manual says to drain
+  traffic and wait for an empty queue before stopping a process, which is correct, while
+  the annotated English `nebulactl drain --node` misses top-10. Both stay in the
+  goldenset as known label boundaries; labels are not rewritten to fit the system.
+- **Identifier/model neighbors (embedding + keyword channel inactive)**: q-id-02
+  `NEBULA-300` puts the target at rank 2 behind an overview containing `NEBULA-400`;
+  q-id-05 `RAG-4291` puts the target at rank 2 behind an error-code catalogue containing
+  `RAG-4290`. Adjacent IDs are close in vector space, and a Chinese-plus-ID query is
+  routed to jieba AND semantics, so the hyphenated `websearch_to_tsquery` phrase match
+  never runs.
+- **Tables**: none of the 11 table-cell queries failed because a table row was split;
+  chunk previews confirm that real two- and three-column rows stay intact.
+
+Fixes and before/after:
+
+1. **Multi-column PDF layout misclassification (application defect)**: the old
+   `PdfTextExtractor` recorded one line start per `writeString` call, but PDFBox merges
+   left and right columns on the same baseline into one call; Chinese continuation
+   tails were also counted as short cells, so `pdf-two-column-zh-ops.pdf` was classified
+   as `ROW_ORDER` and emitted line by line interleaved. The fix splits `VisualLine` by
+   glyph gaps, computes statistics on merged side lines, and excludes continuation
+   lines from the short-cell ratio. Before the fix the fragment "lease expires after 60
+   seconds" was missing (a fragment loss); after the fix all 48 annotations are present
+   and that query ranks first. Regression test:
+   `mixedScriptTwoColumnProseKeepsColumnOrder`.
+2. **Chunk overlap splitting words (application defect)**: `BoundedTextChunker` stepped
+   the overlap start back by a raw character count, producing "...node uns" plus
+   "chedulable. ...". The fix snaps the start back to a word/sentence boundary within
+   32 characters. Baseline metrics are unchanged (hybrid 55/45 MRR/nDCG stay at
+   0.838/0.858; vector-only MRR moves by -0.0035, roughly one query rank). This is a
+   text-integrity fix, not a metric gain. Regression test:
+   `overlapStartSnapsToWordBoundary`.
+3. **Goldenset corpus generator (evaluation data only)**: the `china-s` width estimate
+   was too low and let two-column text cross the gutter; PDF/DOCX timestamps made the
+   output non-reproducible. Text width now uses full glyph width, and PDF metadata /
+   document ID and DOCX timestamps are fixed. Application runtime is unaffected.
+
+Known quality boundaries:
+
+- 32 documents and 48 queries are a small sample. The bootstrap CI is wide, so small
+  leads must not be called significant, and results do not extrapolate to other corpora
+  or model versions.
+- Fragment scoring is an exact whitespace-normalized substring check; semantically
+  equivalent chunks with different wording do not count. nDCG de-duplicates by document
+  and uses a 2/1/0 scale, so scores are conservative.
+- Chinese paraphrase, cross-language synonyms, and adjacent identifiers/model numbers
+  are the weakest areas; the keyword channel helps little there.
+- The baseline fixes `useRerank=false`; it says nothing about reranking, another
+  embedding model, or a different chunking profile.
+
 ## Versioned Live Retrieval Regression
 
 The goldenset compares reranking modes. The versioned regression gate prevents

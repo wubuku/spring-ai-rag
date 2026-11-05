@@ -1,0 +1,6 @@
+Support Escalation Policy
+
+Sev1: acknowledge within 15 minutes and page the incident commander.
+Sev2: acknowledge within 4 hours during business hours.
+Sev3: respond within two business days.
+Escalation to engineering requires a written impact summary.

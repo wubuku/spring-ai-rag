@@ -1,0 +1,4 @@
+scenario,throughput,p99_latency_ms
+bulk_ingest,2400 docs/min,180
+search_hybrid,1800 qps,95
+chat_generation,120 req/min,2400

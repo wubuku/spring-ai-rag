@@ -1,0 +1,8 @@
+CLI Cheatsheet
+
+nebulactl collection create --name docs
+nebulactl document embed --id 42
+nebulactl drain --node node-7
+nebulactl search --query "retention policy"
+
+Run nebulactl version to confirm the client build.

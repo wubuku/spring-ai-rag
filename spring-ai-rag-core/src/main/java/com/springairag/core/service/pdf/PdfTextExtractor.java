@@ -196,9 +196,32 @@ public final class PdfTextExtractor {
             if (text == null || text.isBlank() || positions == null || positions.isEmpty()) {
                 return;
             }
-            float x = positions.get(0).getXDirAdj();
-            float y = positions.get(0).getYDirAdj();
-            lines.add(new VisualLine(getCurrentPageNo(), x, y, text));
+            // PDFTextStripper 会把同一基线上、x 相距很远的左右两栏内容合并成一次
+            // writeString。只记录整行起点会让“按栏重排”拿到仍然混在一起的文本。
+            // 因此按字间距切分：普通词间距只有几磅，栏间距/单元格间距明显更大。
+            int page = getCurrentPageNo();
+            float gapThreshold = Math.max(12f, pageWidths.getOrDefault(page, 595f) * 0.02f);
+            TextPosition first = positions.get(0);
+            StringBuilder fragment = new StringBuilder();
+            TextPosition previous = null;
+            for (TextPosition position : positions) {
+                if (previous != null) {
+                    float gap = position.getXDirAdj()
+                            - (previous.getXDirAdj() + previous.getWidthDirAdj());
+                    if (gap > gapThreshold) {
+                        lines.add(new VisualLine(page, first.getXDirAdj(), first.getYDirAdj(),
+                                fragment.toString()));
+                        fragment.setLength(0);
+                        first = position;
+                    }
+                }
+                fragment.append(position.getUnicode());
+                previous = position;
+            }
+            if (!fragment.toString().isBlank()) {
+                lines.add(new VisualLine(page, first.getXDirAdj(), first.getYDirAdj(),
+                        fragment.toString()));
+            }
         }
 
         private List<PageLayout> layout() {
@@ -253,8 +276,8 @@ public final class PdfTextExtractor {
             float split = (clusters.get(primaryIndex)
                     + clusters.get(primaryIndex + 1)) / 2f;
 
-            double shortCellRatio = shortCellRatio(pageLines);
-            double longLineRatio = longLineRatio(pageLines);
+            double shortCellRatio = shortCellRatio(pageLines, split);
+            double longLineRatio = longLineRatio(pageLines, split);
             double pairedRowRatio = pairedRowRatio(pageLines, split);
             double continuationRatio = continuationRatio(pageLines, split);
 
@@ -347,31 +370,77 @@ public final class PdfTextExtractor {
             return clusters;
         }
 
-        private static double shortCellRatio(List<VisualLine> pageLines) {
-            if (pageLines.isEmpty()) {
-                return 0;
+        /**
+         * 统计只应作用于“视觉行”，而不是 PDFTextStripper 的 writeString 片段。
+         * 同一行内字体切换（例如中文正文夹着 lease、1/1000）会产生多个短片段，
+         * 用片段做长度/成对统计会把双栏正文误判成两列表格。
+         */
+        private List<VisualLine> mergedSideLines(List<VisualLine> pageLines,
+                                                        float split, boolean left) {
+            List<VisualLine> side = sorted(pageLines, split, left);
+            List<VisualLine> merged = new ArrayList<>();
+            VisualLine current = null;
+            for (VisualLine line : side) {
+                if (current == null || Math.abs(line.y() - current.y()) > 3f) {
+                    if (current != null) {
+                        merged.add(current);
+                    }
+                    current = line;
+                } else {
+                    current = new VisualLine(current.page(), current.x(), current.y(),
+                            current.text() + "   " + line.text());
+                }
             }
-            long shortLines = pageLines.stream()
-                    .filter(line -> strippedLength(line.text()) <= SHORT_CELL_MAX_CHARS)
-                    .count();
-            return (double) shortLines / pageLines.size();
+            if (current != null) {
+                merged.add(current);
+            }
+            return merged;
         }
 
-        private static double longLineRatio(List<VisualLine> pageLines) {
-            if (pageLines.isEmpty()) {
+        /**
+         * 短“单元格”只统计独立成行的短行。由上一行正文折断出来的续行
+         * （上一行足够长且没有句末标点）是正文特征，不应算作表格单元格；
+         * 否则中文双栏正文的尾行会被误判成表格。
+         */
+        private double shortCellRatio(List<VisualLine> pageLines, float split) {
+            long shortLines = 0;
+            long candidates = 0;
+            for (boolean left : new boolean[]{true, false}) {
+                VisualLine previous = null;
+                for (VisualLine line : mergedSideLines(pageLines, split, left)) {
+                    boolean continuation = previous != null
+                            && strippedLength(previous.text()) >= LONG_LINE_MIN_CHARS
+                            && !endsSentence(previous.text());
+                    if (!continuation) {
+                        candidates++;
+                        if (strippedLength(line.text()) <= SHORT_CELL_MAX_CHARS) {
+                            shortLines++;
+                        }
+                    }
+                    previous = line;
+                }
+            }
+            return candidates == 0 ? 0 : (double) shortLines / candidates;
+        }
+
+        private double longLineRatio(List<VisualLine> pageLines, float split) {
+            List<VisualLine> merged = new ArrayList<>();
+            merged.addAll(mergedSideLines(pageLines, split, true));
+            merged.addAll(mergedSideLines(pageLines, split, false));
+            if (merged.isEmpty()) {
                 return 0;
             }
-            long longLines = pageLines.stream()
+            long longLines = merged.stream()
                     .filter(line -> strippedLength(line.text()) >= LONG_LINE_MIN_CHARS)
                     .count();
-            return (double) longLines / pageLines.size();
+            return (double) longLines / merged.size();
         }
 
         /**
          * 左右两侧按 y 成对的行占比。表格通常逐行对齐；双栏正文的行距由
          * 各自栏的排版决定，成对比例可能很低，但这不是唯一判据。
          */
-        private static double pairedRowRatio(List<VisualLine> pageLines, float split) {
+        private double pairedRowRatio(List<VisualLine> pageLines, float split) {
             List<VisualLine> sorted = pageLines.stream()
                     .sorted(Comparator.comparingDouble(VisualLine::y)
                             .thenComparingDouble(VisualLine::x))
@@ -405,7 +474,7 @@ public final class PdfTextExtractor {
          * 同一栏内相邻长行是否像被排版折断的句子：前一行足够长且不以句末
          * 标点结束，则下一行更可能是正文接续，而不是独立表格单元格。
          */
-        private static double continuationRatio(List<VisualLine> pageLines,
+        private double continuationRatio(List<VisualLine> pageLines,
                                                float split) {
             double left = sideContinuationRatio(pageLines, split, true);
             double right = sideContinuationRatio(pageLines, split, false);
@@ -418,13 +487,9 @@ public final class PdfTextExtractor {
             return (left + right) / 2;
         }
 
-        private static double sideContinuationRatio(List<VisualLine> pageLines,
+        private double sideContinuationRatio(List<VisualLine> pageLines,
                                                     float split, boolean left) {
-            List<VisualLine> side = pageLines.stream()
-                    .filter(line -> left ? line.x() < split : line.x() >= split)
-                    .sorted(Comparator.comparingDouble(VisualLine::y)
-                            .thenComparingDouble(VisualLine::x))
-                    .toList();
+            List<VisualLine> side = mergedSideLines(pageLines, split, left);
             if (side.size() < 2) {
                 return -1;
             }

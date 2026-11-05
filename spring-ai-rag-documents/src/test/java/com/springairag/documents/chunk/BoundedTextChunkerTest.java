@@ -21,6 +21,22 @@ class BoundedTextChunkerTest {
     }
 
     @Test
+    void overlapStartSnapsToWordBoundary() {
+        // 固定重叠窗口会落在 "unschedulable" 内部；切块起点必须回退到词边界。
+        String original = "a".repeat(50) + " unschedulable " + "z".repeat(17)
+                + " " + "z".repeat(58);
+        ChunkingResult result = new BoundedTextChunker(100, 10, 31, 100000, 200).split(original);
+        assertTrue(result.chunks().size() > 1);
+        assertTrue(result.diagnostics().valid());
+        for (TextChunk chunk : result.chunks()) {
+            assertTrue(chunk.startPos() == 0
+                            || Character.isWhitespace(original.charAt(chunk.startPos() - 1)),
+                    "chunk starts mid-word at " + chunk.startPos() + ": "
+                            + chunk.text().substring(0, Math.min(20, chunk.text().length())));
+        }
+    }
+
+    @Test
     void invalidTableRemainsPlainText() {
         String original = "| Single | Row | Table |";
         assertEquals(original, chunker.split(original).chunks().getFirst().text());

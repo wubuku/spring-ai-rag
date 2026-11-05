@@ -10,6 +10,8 @@ import java.util.regex.Pattern;
 public final class BoundedTextChunker {
     private static final Pattern HEADING = Pattern.compile("^ {0,3}(#{1,6})\\s+(.+?)\\s*#*\\s*$");
     private static final Pattern FENCE = Pattern.compile("^ {0,3}(`{3,}|~{3,}).*$");
+    /** 重叠起点回退寻找边界的最大字符数，避免长串无分隔符时把起点拖得太远。 */
+    private static final int OVERLAP_SNAP_CHARS = 32;
 
     private final int size;
     private final int minSize;
@@ -185,6 +187,9 @@ public final class BoundedTextChunker {
                     break;
                 }
                 int next = Math.max(position + 1, boundary - Math.min(overlap, capacity / 2));
+                // 重叠窗口的起点同样要贴合词/句边界：直接按字符数回退会把
+                // "unschedulable" 切成 "uns" + "chedulable."，让下一块以残词开头。
+                next = snapToTokenBoundary(position, next);
                 if (ChunkValidator.splitsSurrogate(source, next)) {
                     next++;
                 }
@@ -219,6 +224,19 @@ public final class BoundedTextChunker {
                 emit(lines.get(groupStart).start(), lines.get(groupEnd).end(), prefix, kind, titles);
                 groupStart = groupEnd + 1;
             }
+        }
+
+        /** 在最多 {@link #OVERLAP_SNAP_CHARS} 个字符内把块起点回退到词/句边界。 */
+        private int snapToTokenBoundary(int position, int next) {
+            if (fixedOnly || next <= position) {
+                return next;
+            }
+            int lower = Math.max(position + 1, next - OVERLAP_SNAP_CHARS);
+            int snapped = next;
+            while (snapped > lower && !isBoundary(source.charAt(snapped - 1))) {
+                snapped--;
+            }
+            return snapped > lower ? snapped : next;
         }
 
         private void emit(int start, int end, String prefix, String kind, List<String> titles) {

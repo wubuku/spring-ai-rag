@@ -33,7 +33,7 @@ import { pathToFileURL } from 'node:url';
 // remember to extend a list.
 const BINARY_EXTENSIONS = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.bmp',
-  '.pdf', '.jar', '.zip', '.gz', '.tgz', '.class',
+  '.pdf', '.docx', '.jar', '.zip', '.gz', '.tgz', '.class',
   '.woff', '.woff2', '.ttf', '.otf', '.eot'
 ]);
 

@@ -183,6 +183,137 @@ PDF 版式判据（`PdfTextExtractor.PageLayout` 逐页记录，并在
   脚本每次使用带时间戳的新 collection，重复运行不会污染已有数据；本地调试可用
   `--skip-create` 复用同一批语料。
 
+## 真实 embedding 检索基线（人工标注 goldenset）
+
+与「解析与分块检索质量门禁」是**两套东西**，不能互相替代：
+
+- `ParsingRetrievalQualityGateTest` 使用测试内特征哈希假 embedding，只证明解析、
+  分块与排序管线正确，能在 `mvn test` 里稳定复现；它**不代表语义检索质量**。
+- 本节 goldenset 使用真实 embedding provider（BGE-M3 / 1024 维），只证明语义检索
+  质量；默认不进 PR 快层，nightly 默认流程也不跑，只在显式开关下触发。
+
+数据集与标注：
+
+- 语料 32 篇，位于 `testdata/real-goldenset/corpus/`：多栏 PDF 10、DOCX 6、MD 6、
+  HTML 5、TXT 4（含 GBK）、CSV 1；覆盖多栏正文、表格、中英混排与代码块。
+- 查询 48 条，位于 `testdata/real-goldenset/queries.json`，**人工编写并标注**
+  应命中的文档与片段关键词；`relevant[].terms` 必须全部出现在同一个 chunk 才算
+  片段命中。查询类型分 normal / short / identifier / table-cell / cross-doc /
+  paraphrase-zh。
+- `scripts/test-support/generate-real-goldenset-corpus.py` 字节级可复现：PDF
+  元数据/文档 ID 与 DOCX 时间戳均固定，重复生成同一份语料。
+
+运行（真实调用、显式开关）：
+
+```bash
+# 隔离库 + .env 中的 RAG_ROOT_API_KEY / 嵌入 Key；不要指向共享生产库
+python3 scripts/run-real-embedding-goldenset.py \
+  --base-url http://127.0.0.1:18091 \
+  --collection-key real-goldenset-<日期> \
+  --ack-paid-models
+```
+
+没有 `--ack-paid-models`（或环境变量 `RAG_REAL_GOLDENSET_ACK_PAID_MODELS=1`）时
+脚本直接拒绝运行；密钥只从 `.env` 读取且不打印。一次完整运行约产生 32 次文档
+嵌入 + 5×48 次查询嵌入；`--skip-create --manifest <前次 manifest>` 只复测检索，
+不再产生文档嵌入调用。
+
+真实基线（2026-11-05，SiliconFlow `BAAI/bge-m3`，1024 维，`useRerank=false`，
+`minScore=0`，top-10，48 查询）：
+
+| 变体 | R@5 | R@10 | MRR | 片段 MRR | nDCG@10 |
+|------|-----|------|-----|----------|---------|
+| 纯向量（`useHybridSearch=false`） | 0.917 | 0.938 | 0.822 | 0.812 | 0.846 |
+| 混合 50/50 | 0.917 | 0.938 | 0.835 | 0.828 | 0.857 |
+| **混合 55/45（生产默认，基线）** | **0.917** | **0.938** | **0.838** | **0.828** | **0.858** |
+| 混合 70/30 | 0.917 | 0.938 | 0.838 | 0.828 | 0.858 |
+| 混合 30/70 | 0.917 | 0.938 | 0.838 | 0.828 | 0.858 |
+| 纯关键词（0/1） | 0.125 | 0.125 | 0.125 | 0.125 | 0.125 |
+
+同一语料重复运行时，远程 embedding 的浮点差异会让个别查询的位次互换，
+MRR / nDCG@10 约有 ±0.004 的抖动；表中是 2026-11-05 最后一轮完整运行。
+
+分组（生产默认 55/45）：
+
+- 语言：en（20 条）R@5/R@10 1.000/1.000、MRR 0.913、nDCG@10 0.930；
+  zh（26 条）0.846/0.885、MRR 0.768、nDCG@10 0.795；mixed（2 条）
+  1.000/1.000、MRR 1.000、nDCG@10 0.960。
+- 格式：HTML（5）与 CSV（1）全为 1.0；DOCX（8）R@10 1.000、MRR 0.854、
+  nDCG@10 0.891；PDF（22）R@10 0.909、MRR 0.802、nDCG@10 0.821；
+  MD（8）R@10 0.875、MRR 0.813、nDCG@10 0.822；TXT（4）R@10 1.000、
+  MRR 0.813、nDCG@10 0.858。
+- 失败类型：normal（17）全 1.0；table-cell（11）R@10 1.000、MRR 0.909；
+  identifier（6）R@10 1.000、MRR 0.792；cross-doc（3）R@10 1.000、
+  MRR 0.833；short（5）R@10 0.800、MRR 0.667；paraphrase-zh（6）
+  R@10 0.667、MRR 0.440。
+
+对比与噪声：
+
+- 纯向量 → 混合：MRR 0.822→0.838、nDCG@10 0.846→0.858。对同一 48 条查询
+  做 paired bootstrap（5000 次）得到 nDCG@10 差值 95% CI **[-0.036, 0.000]**，
+  区间含 0，不能判定混合显著优于纯向量；只能记录方向一致，不能过度解读。
+  CI 只覆盖“查询抽样”，不覆盖语料与模型版本。
+- 权重：50/50、55/45、70/30、30/70 的 MRR / nDCG 差异不超过 0.004，且重复运行
+  会互换名次（例如 50/50 与 70/30 在两轮里分别略低），没有稳定排序差异。
+  当前没有证据支持改生产权重，保持 55/45。融合使用加权 RRF，K 固定且暂不可配，
+  因此本实验只扫权重、未扫 K。
+- 纯关键词通道 R@10 仅 0.125：英文/中文全文通道是 AND 语义且按语言路由，
+  每条查询通常只有 0–2 个候选，权重再高也难进入前列。关键词只能当辅助信号，
+  不能替代向量通道。
+
+典型失败与归因（基线）：
+
+- **跨语言同义改写（embedding）**：q-para-01「平台怎么处理重试才不会重复扣费？」
+  目标是英文 PDF 的 `Idempotency keys are recorded for 24 hours`，top-10 未命中；
+  top1 是中文 429/Retry-After 排查手册。`重复扣费 ↔ idempotency` 语义未对齐，
+  与分块、融合权重无关。
+- **短查询 + 跨语言表格事实（embedding + 关键词无候选）**：q-short-02「审计保留」
+  目标是 `Audit retention` / `400 days` 表格，top-10 未命中；top1 是
+  「Audit logs ... 90 days」。4 字查询信号太弱，且中文查询走 jieba 通道，
+  英文表格没有关键词候选。
+- **金标歧义（非系统错误）**：q-para-04「请求被限流后应该等多久再重试？」标注
+  只收 `md-code-en.md` 的 `Retry-After`，但 top1 `md-mixed-zh.md` 同样给出
+  `Retry-After` 与指数退避，语义上是正确答案；因此只拿到文档级分数。
+  q-para-05「停止节点前要执行什么操作？」同理：top1 中文运维手册的
+  「重启前先摘除流量…再停止进程」是正确答案，标注目标的英文
+  `nebulactl drain --node` 未进 top-10。这两条保留在 goldenset 中作为已知标注
+  边界，不修改标注去迎合系统。
+- **编号/型号近邻（embedding + 关键词通道失效）**：q-id-02 `NEBULA-300` 的目标
+  排第 2，第 1 是含 `NEBULA-400` 的总览；q-id-05 `RAG-4291` 的目标排第 2，
+  第 1 是含 `RAG-4290` 的错误码大全。相邻型号/数字在向量空间过近；中文+编号
+  查询又走 jieba 的 AND 语义，`websearch_to_tsquery` 的连字符短语匹配没有参与。
+- **表格**：11 条 table-cell 查询没有出现“表格行被拆散”导致的失败；chunk 预览
+  确认两列/三列表格的真实行保持完整。
+
+已修问题与前后对比：
+
+1. **多栏 PDF 版式误判（应用缺陷）**：`PdfTextExtractor` 原实现按整次
+   `writeString` 记录行起点，PDFBox 会把同一基线上相距很远的左右栏合并进一次
+   调用；中文续行尾段又被当成短单元格，导致 `pdf-two-column-zh-ops.pdf` 判成
+   `ROW_ORDER` 并逐行交错。修复：按字间距切分 `VisualLine`、统计改用按栏合并
+   后的行、续行不计入短单元格。修复前该语料 `lease 过期时间是 60 秒` 片段缺失
+   （fragment loss），修复后 48 条标注全部可定位，且该题排第 1。新增回归测试
+   `mixedScriptTwoColumnProseKeepsColumnOrder`。
+2. **分块重叠窗口切词（应用缺陷）**：`BoundedTextChunker` 的重叠起点直接按字符数
+   回退，产生 `...node uns` + `chedulable. ...`。修复：在 32 字符内回退到词/句
+   边界。修复后基线指标不变（混合 55/45 的 MRR/nDCG 仍为 0.838/0.858；纯向量
+   MRR -0.0035，约一条查询位次变化）。这是文本完整性修复，不是指标增益。新增
+   `overlapStartSnapsToWordBoundary`。
+3. **goldenset 语料生成器（只影响评测语料）**：`china-s` 字体宽度被低估会让双栏
+   文字越过 gutter；PDF/DOCX 时间戳会导致不可复现。已按整字宽估算文本宽度，并
+   固定 PDF 元数据/文档 ID 与 DOCX 时间戳。应用运行时不受影响。
+
+已知质量边界：
+
+- 32 文档 / 48 查询是小样本；bootstrap CI 宽，不能用来宣称小幅领先显著，
+  也不能外推到其他语料或模型版本。
+- 片段级判定是“去空白后的精确子串”，语义等价但换词的 chunk 不计分；nDCG 按
+  文档去重并按 2/1/0 分级，分数偏保守。
+- 中文改写、跨语言同义、相邻编号/型号是当前最弱项；关键词通道在这些场景帮助
+  有限。
+- 本基线固定 `useRerank=false`，不代表开启重排、换 embedding 模型或换分块
+  Profile 后的质量。
+
 ## 版本化真实检索回归
 
 Goldenset 用于比较重排开关；版本化回归用于阻止真实检索能力在后续提交中退化：
