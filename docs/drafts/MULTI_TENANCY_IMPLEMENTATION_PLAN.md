@@ -2,6 +2,8 @@
 
 > [English](MULTI_TENANCY_IMPLEMENTATION_PLAN.md) | [中文](MULTI_TENANCY_IMPLEMENTATION_PLAN.md)
 >
+> 实施进度（唯一账本，2026-11-13 起在隔离 worktree 维护）：[MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md](MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md)
+>
 > 状态：**复审 APPROVE + 二次挑战 4 项已处理；因 N1 属核心决策表述矛盾已归零重跑连续 `3/3`；待用户确认，禁止开始业务代码实现**。
 >
 > 语言：**仅中文**。本文是 `docs/drafts/` 活动规划，待规划批准后实施；不提供英文对照版，
