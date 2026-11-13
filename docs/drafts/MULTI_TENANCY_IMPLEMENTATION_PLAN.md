@@ -2,7 +2,7 @@
 
 > [English](MULTI_TENANCY_IMPLEMENTATION_PLAN.md) | [中文](MULTI_TENANCY_IMPLEMENTATION_PLAN.md)
 >
-> 状态：**已按对抗式审核最小清单整改并归零重跑连续 `3/3`；待用户/审核者确认批准，禁止开始业务代码实现**。
+> 状态：**复审 APPROVE + 二次挑战 4 项已处理；因 N1 属核心决策表述矛盾已归零重跑连续 `3/3`；待用户确认，禁止开始业务代码实现**。
 >
 > 语言：**仅中文**。本文是 `docs/drafts/` 活动规划，待规划批准后实施；不提供英文对照版，
 > 双语索引指向同一文件。
@@ -38,10 +38,10 @@
 | 隔离根 | `tenant_id CHAR(26)` 或 `VARCHAR(64)`？**冻结为 `VARCHAR(64)`**，slug 正则 `^[a-z0-9][a-z0-9_-]{0,63}$`，与 BlueCortexEE/技术路线一致；不用随机 UUID 作 GUC 值，避免运维排障与 header/日志契约漂移 |
 | 单租户 | `default` 租户行在首次迁移插入；单租户模式**仍写 `tenant_id`，仍走同一 SQL/任务路径**，只关闭 RLS 与 verifier；**SINGLE 模式启动校验所有凭据 `tenant_id='default'`，且生命周期端点拒绝创建非 `default` 租户**，防止「关 RLS + 多租户凭据」形成越权路径 |
 | 多租户 | 启动强制 `TenantMode.STRICT`：应用角色 `NOBYPASSRLS`、RLS `ENABLE+FORCE`、GUC 绑定、verifier、平台池隔离 |
-| GUC 策略 | 采用 **session 级 `set_config(..., false)` 为主防线 + checkout/归还 `RESET` + Hikari `connection-init-sql: RESET` 三件套**；transaction-local `set_config(..., true)` 仅作事务内加固。理由：本仓 20 个文件含非事务 `jdbcTemplate.update/batchUpdate`，`SET LOCAL` 在自动提交连接上语句结束即失效，会造成 STRICT 下静默读 0 行；见 [技术路线](MULTI_TENANCY_TECH_ROADMAP.md) §4.4 与 [外部经验](MULTI_TENANCY_EXTERNAL_LESSONS.md) §4.9 |
+| GUC 策略 | 采用 **session 级 `set_config(..., false)` 为主防线 + checkout/归还 `RESET` + Hikari `connection-init-sql: RESET` 三件套**；transaction-local `set_config(..., true)` 仅作事务内加固。理由：本仓存在一批含非事务 `jdbcTemplate.update/batchUpdate` 的文件（**准确数量以 WP1/WP5 现场清单为准**，不写死汇总数；不同 `rg` 表达式会得到 19 或 20），`SET LOCAL` 在自动提交连接上语句结束即失效，会造成 STRICT 下静默读 0 行；见 [技术路线](MULTI_TENANCY_TECH_ROADMAP.md) §4.4 与 [外部经验](MULTI_TENANCY_EXTERNAL_LESSONS.md) §4.9 |
 | 后台任务 | 统一 `TenantJobDispatcher`：任务载荷自带 `tenant_id`/actor/audit，执行前一致性断言；无上下文 fail-closed |
 | 回调/结果 | 长任务结果与 Provider 回调必须持久化 owner/tenant/receipt，禁止 volatile registry 与任意 task ID 查询 |
-| SSE/MCP | 每次投递重查当前 Collection ACL + 校验事件 tenant/collection 与订阅一致；无上下文 fail-closed |
+| SSE（MCP 为未来适用范围） | 每次投递重查当前 Collection ACL + 校验事件 tenant/collection 与订阅一致；无上下文 fail-closed；本仓 `src/main` 当前无 MCP 实现，引入时适用同一规则 |
 | Embedding 表 | `rag_embeddings`、chunk、同步 run、评估/反馈、文件、日志类表按租户归属；全局容量/单例表逐张裁决 |
 | 非目标 | billing/hard-limit、OAuth/OIDC/SSO、完整租户管理台、非 PostgreSQL 后端、真实 LLM 行为变化、租户级彻底删除/导出（阶段三可选子项） |
 | 真实 LLM | 本任务不改变模型行为；**不需要真实 LLM 联调**，`mvn test` + 真实 PG 集成测试 + WebUI 构建门禁即足够 |
@@ -115,7 +115,7 @@
 
 | # | 事实 | 近距离证据 |
 |---|---|---|
-| 1 | Flyway 当前 `V1–V74`，69 张表；23 条 `CREATE UNIQUE INDEX` + 11 条列级 inline `UNIQUE`（原「约 56 处」为 `grep UNIQUE` 行数口径，含注释/字符串）；55 个 `JdbcTemplate` 文件、22 个 JPA Repository | `spring-ai-rag-core/src/main/resources/db/migration/`；[AGENTS.md](../../AGENTS.md) §2；[外部经验](MULTI_TENANCY_EXTERNAL_LESSONS.md) §4.9 / §7.3 |
+| 1 | Flyway 当前 `V1–V74`，69 张表；**唯一约束与索引不写汇总数**（`CREATE UNIQUE INDEX`、列级 inline `UNIQUE`、表级 `UNIQUE(...)` / `CONSTRAINT ... UNIQUE` / `ADD CONSTRAINT ... UNIQUE` 多种形式，`grep` 口径易漂移），**以 WP1 逐张表清单为权威**；55 个 `JdbcTemplate` 文件、22 个 JPA Repository | `spring-ai-rag-core/src/main/resources/db/migration/`；[AGENTS.md](../../AGENTS.md) §2；[外部经验](MULTI_TENANCY_EXTERNAL_LESSONS.md) §4.9 / §7.3 |
 | 2 | 认证过滤器只做 key 校验，无租户字段；`AuthenticatedApiPrincipal` 无 `tenantId` | [`ApiKeyAuthFilter.java`](../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/ApiKeyAuthFilter.java)、[`AuthenticatedApiPrincipal.java`](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/AuthenticatedApiPrincipal.java) |
 | 3 | `RagSecurityProperties.enabled=false` 默认无认证；STRICT 模式必须显式拒绝此组合 | [`RagSecurityProperties.java`](../../spring-ai-rag-core/src/main/java/com/springairag/core/properties/RagSecurityProperties.java)、[安全边界](../security-boundary-zh-CN.md) |
 | 4 | ACL 在凭证白名单上，范围求交与越权拒绝在 `ApiKeyCollectionAccess` | [`ApiKeyCollectionAccess.java`](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)、`V24__api_key_allowed_collections.sql` |
@@ -128,7 +128,7 @@
 | 11 | 启动自动装配在 starter，存在 `@ConditionalOnMissingBean` 扩展点 | [`GeneralRagAutoConfiguration.java`](../../spring-ai-rag-starter/src/main/java/com/springairag/starter/GeneralRagAutoConfiguration.java) |
 | 12 | 既有并发红线禁止显式悲观锁、`SKIP LOCKED`、advisory lock；使用 CAS/lease/唯一约束 | [AGENTS.md](../../AGENTS.md) §2.15；`scripts/verify-no-pessimistic-locks.sh` |
 | 13 | 依赖版本只在根 `pom.xml` `dependencyManagement`；模块 pom 不写版本 | [AGENTS.md](../../AGENTS.md) §2.21；`scripts/verify-dependency-versions.mjs` |
-| 14 | 20 个文件含 `jdbcTemplate.update/batchUpdate` 且全文无 `@Transactional`；决定 GUC 不能靠 transaction-local 作为唯一主防线 | `rg -l 'jdbcTemplate\.(batch)?update' spring-ai-rag-core/src/main/java` 后逐个核对 `@Transactional`；[外部经验](MULTI_TENANCY_EXTERNAL_LESSONS.md) §4.9；ROADMAP §4.4 |
+| 14 | 存在一批含 `jdbcTemplate.update/batchUpdate` 且全文无 `@Transactional` 的文件（**准确数量以 WP1/WP5 现场清单为准**，不写死汇总数）；决定 GUC 不能靠 transaction-local 作为唯一主防线 | `rg -l 'jdbcTemplate' spring-ai-rag-core/src/main/java` 后逐个核对 `@Transactional`；[外部经验](MULTI_TENANCY_EXTERNAL_LESSONS.md) §4.9；ROADMAP §4.4 |
 
 外部经验教训的增量约束（认证/租户/ACL 分层、事务内切租户、after-commit 脏连接、回调权威、
 结果 owner、SSE 逐次授权、真实 PG 函数依赖演练）见
@@ -172,11 +172,11 @@ API Key / 受管 principal / 宿主可信登录态
 TenantResolver  ──> TenantContext（tenant_id + actor + audit + mode）
         |
         +--> 请求过滤器 / Controller / Service：同一套 SQL，RLS 兜底
-        +--> TenantJobDispatcher：21 scheduled + 5 async + SSE/MCP + after-commit
+        +--> TenantJobDispatcher：21 scheduled + 5 async + SSE + after-commit（MCP 为未来适用范围）
         +--> PlatformCapabilityRegistry：跨租户 discovery（最小投影、白名单、审计）
         |
         v
-App DataSource（NOBYPASSRLS, transaction-local GUC）
+App DataSource（NOBYPASSRLS, session 级 GUC 三件套：checkout/归还 RESET + set_config(false) + init-sql）
 Migrator 角色（Flyway）
 Platform DataSource（BYPASSRLS，仅登记 capability）
 ```
@@ -256,7 +256,7 @@ Platform DataSource（BYPASSRLS，仅登记 capability）
 | 每租户独立 schema / DB | 运维与连接爆炸，违背单仓 starter 默认行为不变；仅作为当前未支持多租户时的临时兜底 |
 | URL path 放 `tenantId` | 改动全站路由、Moonshot AI 兼容路径与 WebUI；客户端可猜租户；与本仓认证模型不匹配 |
 | 仅用 session 级 GUC、缺少 checkout/归还 RESET 与 init-sql | seedance 红测证明连接池复用会残留上家 GUC；本规划用「session 级 set + checkout/归还 RESET + init-sql」三件套，transaction-local 仅作事务内加固 |
-| transaction-local `SET LOCAL` 作为唯一主防线 | 本仓 20 个文件存在非事务 `jdbcTemplate.update/batchUpdate`，自动提交连接上 `set_config(..., true)` 随语句结束即失效，STRICT 下会静默读 0 行；ROADMAP §4.4 与 EE 教训已否决；本规划仅把它作为事务内加固 |
+| transaction-local `SET LOCAL` 作为唯一主防线 | 本仓存在一批非事务 `jdbcTemplate.update/batchUpdate` 文件（数量以 WP1/WP5 清单为准），自动提交连接上 `set_config(..., true)` 随语句结束即失效，STRICT 下会静默读 0 行；ROADMAP §4.4 与 EE 教训已否决；本规划仅把它作为事务内加固 |
 | 第一版即交付完整 SaaS 运营面 | 会把 69 表迁移与 SSO/billing/删除导出绑成一个不可验收批次；拆到阶段三/四 |
 
 ---
@@ -315,7 +315,7 @@ Platform DataSource（BYPASSRLS，仅登记 capability）
   starter `GeneralRagAutoConfiguration` 条件装配。
 - 退出：过滤器/数据源单测覆盖「先设上下文再借连接」「事务内禁止切租户」「checkout/归还 reset」
   「非事务自动提交路径 GUC 仍有效」「GUC 回读不一致即拒绝」「连接池复用无上家 GUC」；
-  新增静态门禁清单核对 20 个非事务 JDBC 文件确实在租户作用域内正确绑定 GUC；
+  新增静态门禁按 WP1 现场清单核对全部非事务 JDBC 文件确实在租户作用域内正确绑定 GUC；
   现有认证与 Collection ACL 回归全绿。
 
 **WP6 — 端点 guard、平台 capability、审计**
@@ -418,8 +418,12 @@ Mock Playwright 不替代真实 PG 集成；文档门禁不替代代码测试。
    遗留无归属行沿用 V71 fail-closed 语义）。每个不可逆点必须有升级演练与备份点。
 4. **失败停止**：verifier 失败拒绝启动；迁移断言失败回滚事务；HNSW 基准不达标停止发布；
    红队用例未被拒绝视为阻断。
-5. **回退**：`SINGLE` 回退只需把模式改回 `SINGLE` 并使用原应用角色；**不回滚已执行 Flyway 迁移**，
-   不删除 `tenant_id` 列/约束；需要回到纯单库行为时按备份恢复流程重建库。
+5. **回退**：STRICT → `SINGLE` 回退**不是只改一个配置**：WP3 `TenantModeGuard` 会校验所有凭据
+   `tenant_id='default'`，若 STRICT 期间创建了非 `default` 租户及其凭据，服务将按设计**拒绝启动**
+   （正确 fail-closed）。因此回退前置条件是：先按受控流程停用/清理非 `default` 凭据与租户绑定，
+   或改走备份恢复重建单租户库；再切回 `SINGLE` 并使用原应用角色。**不回滚已执行 Flyway 迁移**，
+   不删除 `tenant_id` 列/约束；需要回到纯单库行为时按备份恢复流程重建库。清理动作记审计，
+   不删除业务数据行。
 6. **可观测**：MDC/审计事件带 tenant/actor/audit；新增「无租户任务」「verifier 拒绝」「平台 capability 拒绝」
    「SSE 撤权拒绝」「跨租户写拒绝」计数；不记录 raw credential、密钥或租户私有正文。
 7. **密钥**：三角色凭据只放 `.env`/部署 secret；文档与脚本不写任何真实 key；
@@ -471,13 +475,22 @@ Mock Playwright 不替代真实 PG 集成；文档门禁不替代代码测试。
 | R3 初稿 | 实施顺序、验收矩阵、发布/回滚/恢复、交付风险 | 文件头把「批准后才创建」的进度账本写成 Markdown 链接，门禁判定链接目标缺失 | 改为行内代码文本 | 归零 |
 | 对抗式审核（外部） | 独立复核 9 项：基线/迁移/RLS/请求链路/后台任务/性能/完整性/门禁/红队 | **REQUEST_CHANGES**：FAIL×2（① transaction-local 作为 GUC 主防线与本仓 20 个非事务 JDBC 文件矛盾，STRICT 下静默读 0 行；② SINGLE 模式 + 多租户凭据 = 跨租户越权路径无守卫）＋ CONCERN×4（凭据表 migrator 表述、读路径无「0 行≠成功」机制、MCP 与 `@TransactionalEventListener` 幽灵范围、§7 矩阵缺 WP9/WP10 + WP2 缺大表迁移机制 + seedance 路径扑空） | 按最小清单全部整改：§0/§5.3.4/§5.7/WP5 改为 session 级三件套 + transaction-local 仅事务内加固；§0/§5.6/WP3/WP9 增加 SINGLE 守卫（凭据全 default 校验 + 拒绝创建非 default）；§5.2 凭据表钉死无 RLS 平台表 + app 角色 digest 查找；§5.3.4 增加 GUC 回读断言；§5.4/§5.5/WP7/§7 MCP 与 after-commit 按实际清点降级（0 MCP / 3 处 TransactionSynchronization）；§7 补 SINGLE 守卫、WP9、WP10 三行并扩 verifier 负向集；WP2 增补 embedding 大表 CONCURRENTLY/分批回填/锁窗口；§3 修订唯一约束口径并补事实行 14；头部补 seedance 路径换算指针 | 归零 |
 
-### 11.2 整改后连续三轮（归零重跑；期间未再修改规划正文）
+### 11.2 二次挑战（复审 APPROVE 附带的 4 项轻微修正）
+
+| 项 | 发现 | 处理 | 计数 |
+|---|---|---|---|
+| N1（必修） | §5.1 架构图仍写「transaction-local GUC」与「SSE/MCP」，§0 决策表「SSE/MCP」行，与已冻结的 session 三件套 / MCP 非当前实现面直接矛盾 | 架构图两处 + §0 决策行改为 session 三件套 / SSE（MCP 未来适用范围） | **核心决策表述矛盾 → 归零重跑** |
+| N2 | §3#1 唯一约束汇总口径不完整（漏表级 UNIQUE(...) / CONSTRAINT / ADD CONSTRAINT） | 改为「不写汇总数，以 WP1 逐张表清单为权威」，避免口径漂移 | 同上 |
+| N3 | 非事务 JDBC 文件数 20 vs 审核者实测 19（不同 `rg` 表达式命中不同文件） | 改为「存在一批，准确数量以 WP1/WP5 现场清单为准」，同步 §3#14 / §5.7 / WP5 | 同上 |
+| N4 | §8.5 未说明 STRICT→SINGLE 回退与 SINGLE 守卫的交互 | 写明「非 default 凭据会触发 fail-closed 拒绝启动」，清理/停用凭据或走备份重建为回退前置条件，清理记审计、不删业务行 | 同上 |
+
+### 11.3 二次挑战修正后连续三轮（归零重跑；期间未再修改规划正文）
 
 | 轮次 | 固定范围 | 时间 | 发现 | 处理 | 结果 |
 |---|---|---|---|---|---|
 | R1 | 冷读者、九项闭合、范围/非目标、默认决策、遗留项 | 2026-11-13 | 无实质问题 | §1.3 冷读者复述、§2 范围/非目标、§0 冻结决策（含 GUC 三件套与 SINGLE 守卫）、§9 遗留默认与触发条件均闭合；无「实现时再看看」核心空洞 | `1/3` |
-| R2 | 代码/数据/API/安全/并发/兼容可行性，锚点存在性 | 2026-11-13 | 无实质问题 | 重新实测：非事务 JDBC 文件 20、`TransactionSynchronization` 3、`@TransactionalEventListener` 0、MCP 0、`CREATE UNIQUE INDEX` 23、UNIQUE 行 56，与 §3 表述一致；所有相对链接可达；ROADMAP §4.4 / EXTERNAL_LESSONS §4.9 支撑 GUC 决策；门禁 17 项全绿 | `2/3` |
-| R3 | 实施顺序、验收矩阵、发布/回滚/恢复、交付风险 | 2026-11-13 | 无实质问题 | WP1–WP12 依赖闭环（WP2 大表专项 → WP3 守卫 → WP5 三件套 → WP9 原子创建 → WP11 红队）；§7 矩阵覆盖全部 WP 退出条件（含新增 SINGLE/生命周期/配额三行）；§8 发布顺序、不可逆点、回退可执行；与 delivery-workflow §8 Git 交付顺序一致 | `3/3` |
+| R2 | 代码/数据/API/安全/并发/兼容可行性，锚点存在性 | 2026-11-13 | 无实质问题 | 复核：唯一约束与非事务 JDBC 数量已改为「以 WP1 清单为权威」，不再依赖易漂移汇总数；`TransactionSynchronization` 3、`@TransactionalEventListener` 0、MCP 0 与代码一致；所有相对链接可达；ROADMAP §4.4 / EXTERNAL_LESSONS §4.9 支撑 GUC 决策；门禁 17 项全绿 | `2/3` |
+| R3 | 实施顺序、验收矩阵、发布/回滚/恢复、交付风险 | 2026-11-13 | 无实质问题 | WP1–WP12 依赖闭环（WP2 大表专项 → WP3 守卫 → WP5 三件套 → WP9 原子创建 → WP11 红队）；§7 矩阵覆盖全部 WP 退出条件；§8.5 回退写明 STRICT→SINGLE 的 fail-closed 前置条件后更可执行；与 delivery-workflow §8 Git 交付顺序一致 | `3/3` |
 
 最终结论：整改后连续三轮完整检查未发现实质问题，规划达到可实施状态；
 但仍须获得用户明确批准（或外部审核者复核通过），方可按 §10 创建进度账本并进入业务实现。
