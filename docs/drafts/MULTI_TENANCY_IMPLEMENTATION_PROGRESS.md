@@ -15,14 +15,14 @@
 | 分支 | `feature/multi-tenancy-phase1` |
 | 基线 commit | `04e2e678`（本地 `main`，规划终审核 APPROVE 后的规划 checkpoint） |
 | 主工作区 | `/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`，`main` @ `04e2e678`，创建 worktree 时 clean |
-| 工作区状态 | **WP5 已收口**：principal 扩展 + resolver SPI + TenantContext + 请求过滤器 + app DataSource session 级 GUC 三件套 + GUC 回读断言 + 静态门禁接入门禁总入口。见 §2d |
-| 当前唯一 `in_progress` | **WP6 — 端点 guard、平台 capability、审计** |
-| 已完成工作包 | WP1、WP2（V75–V79）、WP3（V80）、WP4（V81）、WP5（请求链路）；证据见 §2b/§2c/§2d |
-| 紧接着要做 | WP6：TenantMembershipGuard + PlatformCapabilityRegistry + 端点 guard 覆盖测试，先红后绿；退出条件见规划 §6 WP6 |
+| 工作区状态 | **WP6 已收口**：TenantMembershipGuard + PlatformCapabilityRegistry + EndpointDeclaration/TenantEndpointGuard + 业务包静态边界 + 门禁总入口扩展。见 §2e |
+| 当前唯一 `in_progress` | **WP7 — 21 scheduled + 5 async + after-commit 收敛** |
+| 已完成工作包 | WP1–WP6；证据见 §2b/§2c/§2d/§2e |
+| 紧接着要做 | WP7：TenantJobDispatcher + 21 scheduled / 5 async / 3 处 TransactionSynchronization / SSE 逐包清点收敛，先红后绿；退出条件见规划 §6 WP7 |
 | 规划检查计数 | `3/3`（终审核 APPROVE，规划基线冻结；本阶段未触发归零） |
 | 实现检查计数 | 未开始（按 delivery-workflow §7，编码完成后才计数） |
 
-## 1. 恢复入口（当前：WP6 — 端点 guard、平台 capability、审计；WP3 以下为历史快照）
+## 1. 恢复入口（当前：WP7 — 后台任务收敛；WP3 以下为历史快照）
 
 **目标产物（规划 §6 WP3）**：`V7x__tenant_rls.sql`（ENABLE + FORCE + policy）、
 `TenantRlsVerifier`、`TenantModeGuard`、`scripts/verify-multi-tenancy-rls.sh`；
@@ -196,6 +196,30 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
 - **待办（不阻断 WP6，但阻断发布）**：凭据加载投影（`ApiKeyManagementService.authenticate`）
   尚未带出 `tenant_id` 与租户状态——`PrincipalTenantResolver` 的数据来源需在 WP9 租户绑定
   落地时打通；本版 STRICT 解析依赖 principal 快照中的 tenantId，缺值即 fail-closed。
+
+## 2e. WP6 收尾快照（2026-11-14）
+
+- **产物（core 包 `com.springairag.core.tenant`）**：
+  - `TenantMembershipGuard`：上下文存在 / 工作项 tenant 与上下文一致 / 租户状态 ACTIVE 三项校验，
+    补上「RLS 只保证绑定租户合法，不保证工作项属于该租户」的第二层断言（规划 §4.4 / §5.3.6）。
+  - `TenantScope` / `AclPolicy` / `EndpointDeclaration` / `TenantEndpointGuard`：
+    端点 tenant + ACL + capability 声明快照；漏声明、缺 tenant、缺 ACL、平台路径未显式
+    `PLATFORM_ONLY` 一律启动失败（新增端点漏声明即红）。
+  - `PlatformCapability` 命名枚举 + `PlatformCapabilityRegistry`：跨租户 discovery 只返回
+    `TenantProjection`（tenantId + status）最小身份投影；actor 白名单 + 每次调用
+    `PlatformAuditEvent` 审计；未登记 capability / 白名单外 actor 拒绝。
+  - `PlatformBoundaryArchTest` + `scripts/verify-multi-tenancy-endpoint-guard.sh`：
+    业务包（alertdelivery/budget/chat/ratelimit/repository/service/usage/retrieval 等）
+    不得 import 平台实现（规划 §4.6 / §6 WP6）。
+  - `TenantConfiguration` 追加 registry / membership guard / endpoint guard 三个 bean。
+- **红→绿证据**：`TenantEndpointGuardTest` 5/5、`PlatformCapabilityRegistryTest` 4/4
+  （其中 1 例红测暴露测试自身漏 `allowActor`，按仓纪律修测试不放宽实现）、
+  `PlatformBoundaryArchTest` 1/1、`TenantMembershipGuardTest` 4/4；合计 14/14。
+- **静态门禁**：`verify-multi-tenancy-endpoint-guard.sh` 接入 `verify-project-docs.sh`
+  （**18 → 19 项**），并带 rg 预检 fail-closed。
+- **待办（不阻断 WP7，但阻断发布）**：`TenantEndpointGuard` 当前由装配层注入空声明集合，
+  实际受保护端点清单需在 WP12 门禁收口时从 `ApiRoutePolicyRegistry.describe()` 驱动，
+  把「所有写/读端点必须声明」从测试夹具升级为启动期全覆盖；WP6 已提供可拒绝漏声明的组件与红测。
 
 ## 3. 环境与隔离边界（WORKTREE.md 硬门禁）
 

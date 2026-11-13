@@ -392,6 +392,7 @@ check_scripts_and_commands() {
       scripts/verify-no-pessimistic-locks.sh \
       scripts/verify-multi-tenancy-rls.sh \
       scripts/verify-multi-tenancy-guc.sh \
+      scripts/verify-multi-tenancy-endpoint-guard.sh \
       scripts/run-claude-grok.sh; do
     [[ -x "$script" ]] || {
       echo "Documented script is missing or not executable: $script" >&2
@@ -574,5 +575,16 @@ check_multi_tenant_guc_gate() {
   "$script"
 }
 run_check "Multi-tenancy GUC gate" check_multi_tenant_guc_gate
+
+# WP6：端点 tenant+ACL 声明覆盖与业务包平台边界静态门禁。
+check_multi_tenant_endpoint_guard_gate() {
+  local script="scripts/verify-multi-tenancy-endpoint-guard.sh"
+  [[ -x "$script" ]] || {
+    echo "Multi-tenancy endpoint guard gate is missing or not executable: $script" >&2
+    return 1
+  }
+  "$script"
+}
+run_check "Multi-tenancy endpoint guard gate" check_multi_tenant_endpoint_guard_gate
 
 echo "Project documentation verification: $PASS_COUNT checks passed."

@@ -80,6 +80,27 @@ public class TenantConfiguration {
         return new TenantDataSourceBeanPostProcessor();
     }
 
+    /** WP6：平台 capability 注册表（跨租户 discovery 最小投影 + 白名单 + 审计）。 */
+    @Bean
+    @ConditionalOnMissingBean(PlatformCapabilityRegistry.class)
+    public PlatformCapabilityRegistry platformCapabilityRegistry() {
+        return new PlatformCapabilityRegistry();
+    }
+
+    /** WP6：租户成员/状态守卫。 */
+    @Bean
+    @ConditionalOnMissingBean(TenantMembershipGuard.class)
+    public TenantMembershipGuard tenantMembershipGuard() {
+        return new TenantMembershipGuard();
+    }
+
+    /** WP6：端点 tenant + ACL 声明覆盖校验（实际端点清单由调用方提供）。 */
+    @Bean
+    @ConditionalOnMissingBean(TenantEndpointGuard.class)
+    public TenantEndpointGuard tenantEndpointGuard() {
+        return new TenantEndpointGuard(java.util.Set.of());
+    }
+
     /**
      * 凭据加载契约说明（WP5）：{@link ApiKeyManagementService#authenticate(String)} 的
      * 投影需带凭据表 tenant_id 与租户状态，由 {@link PrincipalTenantResolver} 校验。
