@@ -61,6 +61,7 @@ public interface TenantRlsVerifier {
             verifyRole(failures);
             verifyRlsCoverage(failures);
             verifyPolicySemantics(failures);
+            verifyTriggerFunctionBodies(failures);
             verifyNoGucReadsZeroRows(failures);
             if (!failures.isEmpty()) {
                 throw new IllegalStateException("TenantRlsVerifier failed: " + String.join("; ", failures));
@@ -167,6 +168,50 @@ public interface TenantRlsVerifier {
                 if (!qual.contains("current_setting('app.current_tenant_id'")) {
                     failures.add("表 " + lower + " policy 未绑定 app.current_tenant_id GUC");
                 }
+            }
+        }
+
+        /**
+         * WP11：函数体依赖断裂检测。
+         *
+         * <p>V27 的不可变 collection_key 约束由 trigger 调用
+         * {@code fn_rag_collection_key_immutable()} 实现；若函数体丢失、
+         * 被改成不抛异常的空实现，或 trigger 断了引用，约束会「静默失效」。
+         * 启动 verifier 必须把这种退化判为拒绝启动，而不是只看 policy 数量。</p>
+         */
+        private void verifyTriggerFunctionBodies(List<String> failures) {
+            Integer functionExists = jdbc.queryForObject("""
+                    SELECT count(*) FROM pg_proc p
+                    JOIN pg_namespace n ON n.oid = p.pronamespace
+                    WHERE n.nspname = 'public'
+                      AND p.proname = 'fn_rag_collection_key_immutable'
+                    """, Integer.class);
+            if (functionExists == null || functionExists == 0) {
+                failures.add("fn_rag_collection_key_immutable() 函数体缺失（V27 trigger 依赖断裂）");
+                return;
+            }
+            Integer triggerExists = jdbc.queryForObject("""
+                    SELECT count(*) FROM pg_trigger t
+                    JOIN pg_class c ON c.oid = t.tgrelid
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE n.nspname = 'public' AND c.relname = 'rag_collection'
+                      AND t.tgname = 'trg_rag_collection_key_immutable'
+                      AND NOT t.tgisinternal
+                    """, Integer.class);
+            if (triggerExists == null || triggerExists == 0) {
+                failures.add("trg_rag_collection_key_immutable trigger 缺失（collection_key 不可变约束静默失效）");
+            }
+            // 函数体必须引用旧值 NEW/OLD 且包含异常路径；空函数体视为静默失效。
+            String definition = jdbc.queryForObject("""
+                    SELECT prosrc FROM pg_proc p
+                    JOIN pg_namespace n ON n.oid = p.pronamespace
+                    WHERE n.nspname = 'public'
+                      AND p.proname = 'fn_rag_collection_key_immutable'
+                    LIMIT 1
+                    """, String.class);
+            if (definition == null || definition.isBlank()
+                    || !definition.toUpperCase().contains("RAISE")) {
+                failures.add("fn_rag_collection_key_immutable() 函数体退化（空实现/无 RAISE 拒绝路径）");
             }
         }
 

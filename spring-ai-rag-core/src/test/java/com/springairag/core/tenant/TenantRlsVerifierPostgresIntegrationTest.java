@@ -148,6 +148,43 @@ class TenantRlsVerifierPostgresIntegrationTest {
     }
 
     @Test
+    @DisplayName("负向 7：函数体依赖断裂（collection_key 不可变函数被掏空）→ 拒绝启动")
+    void triggerFunctionBodyBreakIsRejected() {
+        // V27 的 collection_key 不可变约束靠 trigger + 函数体实现；只验 policy 数量会漏掉
+        // 「函数还在但被改成空实现」这种静默失效——约束不再抛错但也不报错。
+        admin.execute("""
+                CREATE OR REPLACE FUNCTION fn_rag_collection_key_immutable()
+                RETURNS trigger AS $$
+                BEGIN
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                """);
+        try {
+            IllegalStateException ex = assertThrows(IllegalStateException.class, verifier()::verify);
+            assertTrue(ex.getMessage().contains("fn_rag_collection_key_immutable"),
+                    "应报函数体退化，实际：" + ex.getMessage());
+        } finally {
+            restoreImmutableFunction();
+        }
+        assertDoesNotThrow(verifier()::verify, "恢复 V27 函数体后应重新通过");
+    }
+
+    @Test
+    @DisplayName("负向 8：trigger 缺失（不可变约束静默失效）→ 拒绝启动")
+    void missingImmutableTriggerIsRejected() {
+        admin.execute("DROP TRIGGER IF EXISTS trg_rag_collection_key_immutable ON rag_collection");
+        try {
+            IllegalStateException ex = assertThrows(IllegalStateException.class, verifier()::verify);
+            assertTrue(ex.getMessage().contains("trg_rag_collection_key_immutable"),
+                    "应报 trigger 缺失，实际：" + ex.getMessage());
+        } finally {
+            restoreImmutableFunction();
+        }
+        assertDoesNotThrow(verifier()::verify, "恢复 V27 trigger 后应重新通过");
+    }
+
+    @Test
     @DisplayName("负向 6：SINGLE 模式存在非 default 凭据 → 拒绝启动（fail-closed）")
     void singleModeWithNonDefaultCredentialsIsRejected() {
         // V48 起 rag_api_key 有 principal_id FK / NOT NULL / credential_version NOT NULL；
@@ -164,6 +201,33 @@ class TenantRlsVerifierPostgresIntegrationTest {
         assertTrue(ex.getMessage().contains("default"));
         admin.execute("DELETE FROM rag_api_key WHERE key_id = 'rogue-key'");
         admin.execute("DELETE FROM rag_api_principal WHERE principal_id = 'rogue-principal'");
+    }
+
+
+    /** 还原 V27 的 collection_key 不可变函数与 trigger（负向用例必须自清理）。 */
+    private static void restoreImmutableFunction() {
+        admin.execute("""
+                CREATE OR REPLACE FUNCTION fn_rag_collection_key_immutable()
+                RETURNS trigger
+                LANGUAGE plpgsql
+                AS $$
+                BEGIN
+                    IF OLD.collection_key IS NOT NULL
+                            AND NEW.collection_key IS DISTINCT FROM OLD.collection_key THEN
+                        RAISE EXCEPTION 'collection_key is immutable'
+                            USING ERRCODE = '23514';
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$;
+                """);
+        admin.execute("DROP TRIGGER IF EXISTS trg_rag_collection_key_immutable ON rag_collection");
+        admin.execute("""
+                CREATE TRIGGER trg_rag_collection_key_immutable
+                BEFORE UPDATE OF collection_key ON rag_collection
+                FOR EACH ROW
+                EXECUTE FUNCTION fn_rag_collection_key_immutable();
+                """);
     }
 
     private static void restorePolicy() {

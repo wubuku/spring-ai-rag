@@ -397,6 +397,7 @@ check_scripts_and_commands() {
       scripts/verify-multi-tenancy-wp8.sh \
       scripts/verify-multi-tenancy-lifecycle.sh \
       scripts/verify-multi-tenancy-quota.sh \
+      scripts/verify-multi-tenancy-redteam.sh \
       scripts/run-claude-grok.sh; do
     [[ -x "$script" ]] || {
       echo "Documented script is missing or not executable: $script" >&2
@@ -634,5 +635,16 @@ check_multi_tenant_quota_gate() {
   "$script"
 }
 run_check "Multi-tenancy quota gate" check_multi_tenant_quota_gate
+
+# WP11：红队矩阵静态门禁（10 维负向证据齐全 + 总入口自登记）。
+check_multi_tenant_redteam_gate() {
+  local script="scripts/verify-multi-tenancy-redteam.sh"
+  [[ -x "$script" ]] || {
+    echo "Multi-tenancy red-team gate is missing or not executable: $script" >&2
+    return 1
+  }
+  "$script"
+}
+run_check "Multi-tenancy red-team gate" check_multi_tenant_redteam_gate
 
 echo "Project documentation verification: $PASS_COUNT checks passed."

@@ -10,7 +10,7 @@
 #   1. V80 迁移存在，RLS 表清单与 TenantTableCatalog 的 TENANT_PRIVATE 一致；
 #   2. policy 命名 tenant_isolation 且表达式绑定 app.current_tenant_id；
 #   3. 凭据表带 tenant_id、无 RLS（V80 起）；
-#   4. 负向用例清单齐全（5 类 STRICT + SINGLE 凭据），以集成测试类名/方法名存在性校验。
+#   4. 负向用例清单齐全（WP3 5 类 STRICT + SINGLE 凭据 + WP11 函数体/trigger 2 类），以集成测试类名/方法名存在性校验。
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -77,13 +77,14 @@ grep -q "凭据表 % 不得启用 RLS" "${RLS_SQL}" || fail "V80 缺凭据表无
 grep -q "CREDENTIAL.*无 RLS" "${CATALOG}" || fail "catalog 未声明 CREDENTIAL 无 RLS"
 pass "凭据表绑定列 + 无 RLS 契约齐全"
 
-# 4) 负向用例存在性（5 类 STRICT + SINGLE 凭据）。
+# 4) 负向用例存在性（WP3 5 类 + SINGLE 凭据 + WP11 函数体/trigger 2 类）。
 for method in strictBaselinePasses permissivePolicyIsRejected bypassRlsRoleIsRejected \
               missingRlsTableIsRejected permissivePlatformRoleIsRejected \
-              singleModeWithNonDefaultCredentialsIsRejected; do
+              singleModeWithNonDefaultCredentialsIsRejected \
+              triggerFunctionBodyBreakIsRejected missingImmutableTriggerIsRejected; do
   grep -q "${method}" "${IT}" || fail "集成测试缺负向用例 ${method}"
 done
-pass "5 类 STRICT 负向 + SINGLE 凭据负向用例齐全"
+pass "WP3 5 类 STRICT + SINGLE 凭据 + WP11 函数体/trigger 负向用例齐全"
 
 # 5) 真实 PG 演练（可选）。
 if [[ "${1:-}" == "--pg" ]]; then

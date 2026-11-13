@@ -15,14 +15,14 @@
 | 分支 | `feature/multi-tenancy-phase1` |
 | 基线 commit | `04e2e678`（本地 `main`，规划终审核 APPROVE 后的规划 checkpoint） |
 | 主工作区 | `../spring-ai-rag`，`main` @ `04e2e678`，创建 worktree 时 clean |
-| 工作区状态 | **WP10 已收口**：V84 三张 PLATFORM_GLOBAL 配额表 + 租户级 DAY/MONTH CAS 硬阈值 + 用量事件显式 tenant_id + `tenantScope=current` 租户聚合 + PG 8/8 + focused 7/7 + 门禁 23 项。见 §2i |
-| 当前唯一 `in_progress` | **WP11 — 红队、升级演练、备份恢复** |
-| 已完成工作包 | WP1–WP10；证据见 §2b/§2c/§2d/§2e/§2f/§2g/§2h/§2i |
-| 紧接着要做 | WP11：红队矩阵（漏写谓词/平台池误用/header 伪造/异步丢上下文/函数体断裂/policy 宽松/superuser/verifier 关闭/SSE 撤权/任意 task ID）；V74 存量升级与 SINGLE→STRICT 演练；备份恢复与回滚说明；退出条件见规划 §6 WP11 |
+| 工作区状态 | **WP11 已收口**：红队矩阵门禁 10/10 维、函数体/trigger 断裂 PG 负向 +9 例、V74→V84 双路径升级演练 PASS、SINGLE→STRICT/回退/备份恢复说明落档；总门禁 24/24。见 §2j |
+| 当前唯一 `in_progress` | **WP12 — 文档、门禁、发布** |
+| 已完成工作包 | WP1–WP11；证据见 §2b/…/§2i/§2j |
+| 紧接着要做 | WP12：中英正式文档成对收口、WebUI 验证、`scripts/verify-release.sh`、§7 验收矩阵全绿、实现检查 `3/3`、Git 交付；退出条件见规划 §6 WP12 |
 | 规划检查计数 | `3/3`（终审核 APPROVE，规划基线冻结；本阶段未触发归零） |
 | 实现检查计数 | 未开始（按 delivery-workflow §7，编码完成后才计数） |
 
-## 1. 恢复入口（当前：WP10 — 租户级配额与用量；WP9 以下为历史快照）
+## 1. 恢复入口（当前：WP12 — 文档、门禁、发布；WP11 及以下为历史快照）
 
 **WP10 目标产物（规划 §6 WP10）**：在既有 per-principal quota 上增加 tenant 维度
 聚合与硬阈值（**不是 billing / hard-limit 结算**）；平台全局容量表逐张裁决结果落地；
@@ -500,6 +500,75 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
   4. **用量/配额维度尚未落地**（WP10）。
 
 
+
+## 2j. WP11 收尾快照（2026-11-14）
+
+**WP11 目标产物（规划 §6 WP11，已交付）**：红队矩阵 10 维负向证据被门禁钉死；
+函数体依赖断裂进入启动 verifier；V74→V84 双路径升级演练实测 PASS；
+SINGLE→STRICT 切换 / 回退 / 备份恢复执行语义落档。详细演练事实见
+[升级演练记录](MULTI_TENANCY_UPGRADE_REHEARSAL.md) §3.1 / §5。
+
+### WP11 交付内容
+
+1. **函数体依赖断裂（红→绿）**：`JdbcTenantRlsVerifier.verifyTriggerFunctionBodies` 检查
+   `fn_rag_collection_key_immutable` 函数存在、`trg_rag_collection_key_immutable` 在
+   `rag_collection` 上存在、函数体含 `RAISE` 拒绝路径（空实现视为静默失效）。
+   新增 PG 负向 `#triggerFunctionBodyBreakIsRejected`（掏空函数体）与
+   `#missingImmutableTriggerIsRejected`（丢 trigger），均以 `restoreImmutableFunction`
+   自清理并在 finally 后复验正向通过——不污染后续测试。
+2. **header 伪造**：`TenantHeaderForgeryTest`（2 例）：无 principal 时伪造
+   `X-Tenant-Id` 不产生 TenantContext；有 principal 时租户来自认证链绑定，header 无法覆盖。
+3. **红队矩阵门禁**：`scripts/verify-multi-tenancy-redteam.sh`（rg 预检 fail-closed），
+   10 维映射到既有负向测试/门禁：漏写谓词、平台池误用、header 伪造、异步丢上下文
+   （4 层：用量 recorder / after-commit / scheduled / dispatcher）、函数体断裂、
+   policy 宽松、superuser/BYPASSRLS/verifier 关闭/漏 RLS/宽松 platform 角色/SINGLE 凭据、
+   SSE 撤权、任意 task ID、总入口自登记。已注册 `verify-project-docs.sh`
+   （documented executable 清单 + run_check），总门禁 23→**24 项**。
+4. **RLS 门禁扩清单**：`verify-multi-tenancy-rls.sh` 负向用例存在性校验补入两个 WP11 用例，
+   并同步措辞（不再写「5 类」固定口径）。
+5. **升级演练实测（真实 PostgreSQL 16.8，本机 5432，脚本自建自删临时库）**：
+   `./scripts/verify-flyway-schema-paths.sh --early 74 --keep` 全 PASS——
+   空库→V84（84 migrations）、V74 标记行守恒、双路径 `pg_dump --schema-only`
+   归一化逐字一致（2293 行）、迁移历史条数一致（84）、重跑不破坏数据。
+   日志目录 `/tmp/rag-flyway-verify.48XOOG`（任务级取证，不入仓）。
+   **诚实标注未运行项**：有真实大表数据的在线 `CONCURRENTLY` 锁窗口/每批 10k 行回填实测，
+   列为上线前运维专项演练，不以空库结果外推。
+6. **SINGLE→STRICT / 回退 / 备份恢复**：`MULTI_TENANCY_UPGRADE_REHEARSAL.md` §5 新增：
+   切换 5 项前置条件、STRICT→SINGLE 回退的 `TenantModeGuard` fail-closed 语义与
+   清理/备份恢复两条前置路径（不删业务行、保留审计）、`rag-backup.py` 逻辑备份边界
+   （非 PITR/非 RPO=0，停写 quiesced 前置），并链接既有中英备份文档与演练脚本。
+7. **账本勘误**：WP10 提交 hash 修正 `484d1174`→`6fc3f760`（amend 后最终值）。
+
+### WP11 验证台账（本包即时取证）
+
+| 验证 | 状态 | 结果 |
+|---|---|---|
+| `mvn -o -q -pl spring-ai-rag-core -am test-compile` | **已运行（绿）** | 编译红点清零 |
+| focused：`-Dtest='TenantHeaderForgeryTest,TenantRlsVerifierContractTest,TenantRlsVerifierPostgresIntegrationTest' -Dtenant-rls.it.enabled=true`（实现前红基线运行 11/11；新负向加入后） | **已运行（绿）** | **13/13**（PG 9/9 + forgery 2/2 + contract 2/2），0 fail 0 skip |
+| `./scripts/verify-multi-tenancy-redteam.sh`（首跑预期红：`WHERE tenant_id` 口径、总门禁登记、canRead 转义） | **已运行（红→修→绿）** | 3 处门禁断言口径修正后 **PASS 10/10 维** |
+| `./scripts/verify-flyway-schema-paths.sh --early 74 --keep` | **已运行（绿）** | 双路径全 PASS，迁移历史 84，日志 /tmp/rag-flyway-verify.48XOOG |
+| `git add -A && ./scripts/verify-project-docs.sh` | **已运行（绿）** | **24/24**（含新红队门禁） |
+| `./scripts/verify-no-pessimistic-locks.sh` | **已运行（绿）** | 无显式悲观锁 / advisory lock |
+| `node scripts/verify-dependency-versions.mjs` | **已运行（绿）** | 55 依赖 / 1658 管理版本 |
+| `node scripts/verify-integration-test-switches.mjs` | **已运行（绿）** | 42 开关 / 299 测试 / 42 类全部有 run path |
+| `mvn -o -pl spring-ai-rag-core -am clean test` | **已运行（绿）** | **8587 tests, 0 failures, 0 errors, 306 skipped** |
+| 文档绝对路径检查（升级演练草稿） | **已运行（绿）** | `rg '/Users/yangjiefeng'` 无匹配，跨仓引用为相对路径文本 |
+
+### WP11 提交
+
+WP11 收口提交标题：`feat(multi-tenancy): WP11 红队矩阵、函数体断裂负向与升级演练收口`。
+hash 以 `git log -1 --oneline` 为准；本账本不内嵌自身提交 hash，避免 amend 后自指陈旧
+（WP10 曾因「先插 hash 再 amend」产生 `484d1174`/`6fc3f760` 不一致，已在 §2i 修正）。
+
+### WP11 决策与教训
+
+- 红队门禁映射「证据存在性」而非硬编码数量，新增负向用例时先改门禁再改文档（红→绿顺序保持）。
+- verifier 函数体检查按 `prosrc` 判 `RAISE`，避免把「函数在但恒不抛」误判为健康；
+  负向用例必须自清理并在 finally 复验正向，否则污染同容器后续断言。
+- V84 双路径演练覆盖了 WP2/WP3 历史演练结论（79/80 迁移历史），但**不覆盖**大表在线
+  `CONCURRENTLY` 锁窗口；两者都是上线前演练矩阵的一部分，文档不得互相替代。
+- 升级演练日志保留 `/tmp`（任务级取证），仓库只落结论与命令复现路径，避免二进制产物入 git。
+
 ## 3. 环境与隔离边界（WORKTREE.md 硬门禁）
 
 - 本 worktree 目前**未创建任何 `.env` / `.env.*`**，未改主工作区任何环境文件。
@@ -602,4 +671,4 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
 
 ### WP10 提交
 
-`484d1174` — `feat(multi-tenancy): WP10 租户级配额与用量硬阈值`。
+`6fc3f760` — `feat(multi-tenancy): WP10 租户级配额与用量硬阈值`（amend 后最终 hash）。
