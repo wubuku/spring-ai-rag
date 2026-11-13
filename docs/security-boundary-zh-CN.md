@@ -223,6 +223,7 @@ python3 scripts/verify-security-boundary.py
 - 同一 managed principal 的多个 key 共享归属（文件按 principal 而非按 key），这是设计语义，不是越权。
 - 审计日志、导出产物属于数据面（按部署侧权限管理）；应用日志与指标的保密边界见 §9。
 - 未启用认证时没有 principal 概念，插件/工具调用等内部路径按全量处理；这是隔离环境的既有行为。
+- 多租户（WP8 阶段）SSE 授权是「建连时 ACL + 每次**投递**重查」双层：key 在订阅存续期间被撤销或过期后，下一次事件投递即被丢弃，旧订阅不再收事件；`RagDocumentController.embedDocumentStream` 已接线，其余 SSE 入口按 `TenantAuthorizedSsePublisher` 逐步收口（当前实现面为 request-scoped 短流，无长期订阅注册表，风险敞口有限）。任意 task ID 不触发外部 Provider 查询，结果以 V82 证据表的 owner 四元组（tenant/collection/owner/receipt）为权威。
 
 ---
 

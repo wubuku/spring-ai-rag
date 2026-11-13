@@ -121,12 +121,12 @@ public final class TenantContext {
         };
     }
 
-    /** {@link #wrap(Runnable)} 的 Supplier 版本。 */
+    /** {@link #wrap(Runnable)} 的 Supplier 版本：与 Runnable 一致，在 wrap() 调用时捕获快照。 */
     public static <T> Supplier<T> wrap(Supplier<T> task) {
         Objects.requireNonNull(task, "task must not be null");
+        TenantContext snapshot = CURRENT.get();
         return () -> {
             TenantContext previous = CURRENT.get();
-            TenantContext snapshot = CURRENT.get();
             if (snapshot == null) {
                 return task.get();
             }

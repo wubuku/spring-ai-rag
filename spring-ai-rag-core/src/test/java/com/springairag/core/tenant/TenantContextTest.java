@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -87,6 +88,31 @@ class TenantContextTest {
             }
         } finally {
             TenantContext.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("Supplier wrap 在提交时捕获快照，目标线程执行后恢复原值")
+    void supplierWrapCapturesSnapshotAtSubmissionTime() throws Exception {
+        TenantContext submitted = new TenantContext("tenant-a", "principal-1", TenantMode.STRICT);
+        TenantContext workerOriginal = new TenantContext("tenant-worker", "principal-2", TenantMode.STRICT);
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            TenantContext.set(submitted);
+            Supplier<String> wrapped = TenantContext.wrap(
+                    () -> TenantContext.currentTenantId());
+            TenantContext.clear();
+            pool.submit(() -> {
+                TenantContext.set(workerOriginal);
+                return null;
+            }).get(5, TimeUnit.SECONDS);
+            assertEquals("tenant-a", pool.submit(wrapped::get).get(5, TimeUnit.SECONDS),
+                    "wrap 必须在提交线程捕获快照，后续清理不得丢失任务租户");
+            assertEquals("tenant-worker", pool.submit(TenantContext::currentTenantId).get(5, TimeUnit.SECONDS),
+                    "任务结束后必须恢复线程池原有上下文");
+        } finally {
+            TenantContext.clear();
+            pool.shutdownNow();
         }
     }
 

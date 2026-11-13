@@ -21,7 +21,9 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import com.springairag.core.tenant.TenantContext;
 import com.springairag.core.tenant.TenantScopedJob;
+import com.springairag.core.tenant.TenantWorkItemAssert;
 
 /**
  * 事件唤醒、低频扫描兜底、租约化的有界 embedding job worker。
@@ -104,7 +106,7 @@ public class EmbeddingJobWorker {
             return;
         }
         try {
-            workers.submit(this::dispatchLoop);
+            workers.submit(TenantContext.wrap(this::dispatchLoop));
         } catch (RejectedExecutionException e) {
             dispatchScheduled.set(false);
             if (!shuttingDown.get()) {
@@ -153,14 +155,18 @@ public class EmbeddingJobWorker {
             }
             EmbeddingJob job = claimed.getFirst();
             try {
-                workers.submit(() -> {
+                // WP8：dispatchLoop 已在逐租户 scope 内；内层任务必须显式携带快照，
+                // 且执行前断言 claim 行 tenant 与 scope 一致（防「合法但错 GUC」串台）。
+                workers.submit(TenantContext.wrap(() -> {
                     try {
+                        TenantWorkItemAssert.assertMatchesScope(
+                                job.tenantId(), "embedding job " + job.id());
                         process(job, leaseOwner);
                     } finally {
                         slots.release();
                         wakeUp();
                     }
-                });
+                }));
             } catch (RejectedExecutionException e) {
                 slots.release();
                 if (!shuttingDown.get()) {

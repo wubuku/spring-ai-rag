@@ -22,7 +22,14 @@ public interface TenantRlsVerifier {
     /** 执行全项校验；任一项失败抛 {@link IllegalStateException} 并拒绝启动。 */
     void verify();
 
-    /** RLS 覆盖清单 = catalog 中 TENANT_PRIVATE 表（单一事实来源）。 */
+    /**
+     * RLS 覆盖清单 = catalog 中 TENANT_PRIVATE 表（单一事实来源）。
+     *
+     * <p>V82 起 WP8 新增证据表自带 RLS，但由 V82 自身的终态断言与
+     * {@code scripts/verify-multi-tenancy-wp8.sh} 校验；V80 迁移清单是已执行事实，
+     * 不能回写。启动 verifier 仍按 catalog 动态取全部 TENANT_PRIVATE 表，
+     * 因此新增表自动进入双向比对（pg_class 中不存在的表会被检出）。</p>
+     */
     static List<String> rlsProtectedTables() {
         return TenantTableCatalog.entries().stream()
                 .filter(e -> e.ownership() == TenantTableCatalog.TableOwnership.TENANT_PRIVATE)

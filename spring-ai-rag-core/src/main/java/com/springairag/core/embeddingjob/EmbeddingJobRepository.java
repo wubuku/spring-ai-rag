@@ -28,7 +28,7 @@ public class EmbeddingJobRepository {
             available_at, lease_owner, lease_expires_at, cancel_requested_at,
             last_error, created_at, started_at, finished_at, updated_at,
             origin, requested_by_principal_id, request_generation,
-            document_kind, chunker_version, terminal_reason
+            document_kind, chunker_version, terminal_reason, tenant_id
             """;
 
     private final JdbcTemplate jdbcTemplate;
@@ -1419,7 +1419,8 @@ public class EmbeddingJobRepository {
                 longColumnOrZero(rs, "request_generation"),
                 columnOrNull(rs, "document_kind"),
                 columnOrNull(rs, "chunker_version"),
-                columnOrNull(rs, "terminal_reason"));
+                columnOrNull(rs, "terminal_reason"),
+                columnOrNull(rs, "tenant_id"));
     }
 
     private static String columnOrNull(ResultSet rs, String column) {

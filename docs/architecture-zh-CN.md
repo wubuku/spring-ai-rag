@@ -1074,6 +1074,36 @@ hash，操作按 owner 隔离、可恢复且有界。审计日志不由普通擦
 
 ---
 
+## 9. 多租户隔离架构（WP2–WP8）
+
+多租户化按「列绑定 + RLS 兜底 + 请求链路显式上下文 + 后台任务传播」四层落地：
+
+- **Schema 层**：V75–V82 给 73 张业务表建立租户底座——租户私有表带
+  `tenant_id NOT NULL`、复合唯一/复合外键与 tenant-leading 索引，45 张（WP2–WP4）
+  外加 3 张 WP8 证据表启用 `ENABLE + FORCE ROW LEVEL SECURITY` 与规范 policy
+  `tenant_isolation`（绑定会话 GUC `app.current_tenant_id`）；平台全局表与凭据表
+  不开 RLS（凭据认证先于租户解析）。逐张裁决见
+  `docs/drafts/MULTI_TENANCY_TABLE_CATALOG.md`。
+- **请求链路层**：`TenantContextFilter` 从 principal 快照解析 `TenantContext`；
+  app DataSource 由 `TenantGucDataSource` 包装，每次借出连接设置 session 级
+  GUC 三件套（checkout RESET → `set_config(..., false)` → 归还 RESET）并做回读
+  断言，回读不一致即 fail-closed。**transaction-local 只作为事务内加固，
+  非事务自动提交路径必须依赖 session 级 GUC**。
+- **后台任务层**：`TenantJobDispatcher` 统一调度（无上下文 fail-closed 拒绝 +
+  审计告警），`TenantTaskDecorator` 包装线程池；after-commit 回调在**注册时**捕获
+  上下文快照；内层 worker（embedding/评估/告警投递）提交处显式
+  `TenantContext.wrap`。
+- **结果与 SSE 层**：任意 task ID 不触发外部 Provider 查询，结果 owner 四元组
+  （tenant/collection/owner/receipt）持久化于 V82 证据表；Provider 回调按
+  「验签 → receipt → replay → 权威查询」顺序判定；SSE 每次**投递**重查 ACL，
+  撤权立即停止推送（见 [SSE 协议](SSE-PROTOCOL.md#81-多租户逐次授权wp8)）。
+- **模式与守卫**：`rag.tenant.mode=SINGLE`（默认，固定 default）或
+  `STRICT`（principal 绑定租户）；SINGLE 下启动校验凭据租户全为 default，
+  拒绝创建非 default 租户，配 `TenantModeGuard` fail-closed。
+
+配置与运行语义见[多租户配置](configuration-zh-CN.md#多租户配置-wp5)；
+安全边界与残余风险见[安全边界](security-boundary-zh-CN.md)。
+
 ## 附录：技术栈
 
 | 组件 | 技术 | 版本 |

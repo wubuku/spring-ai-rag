@@ -108,6 +108,10 @@ public final class TenantTableCatalog {
             entry("rag_collection_operation_slot", TableOwnership.TENANT_PRIVATE, "collection 操作槽随 collection 归属租户", POOL_NONE),
             entry("rag_long_running_operation_run_refs", TableOwnership.TENANT_PRIVATE, "run 引用随操作归属租户", POOL_NONE),
             entry("rag_collection_purge_operation_targets", TableOwnership.TENANT_PRIVATE, "清除目标随预览归属租户", POOL_NONE),
+            // ---- WP8 新增（V82）：结果/回调持久化证据表，自带 RLS + 规范 policy ----
+            entry("rag_tenant_result_receipt", TableOwnership.TENANT_PRIVATE, "结果 owner 四元组（tenant/collection/owner/receipt）持久化证据，禁止任意 task ID 触发外部 Provider 查询", POOL_NONE),
+            entry("rag_tenant_callback_receipt", TableOwnership.TENANT_PRIVATE, "回调权威 receipt + response-lost durable intent，按 operation/client_token 幂等绑定 Provider task", POOL_NONE),
+            entry("rag_tenant_callback_replay_nonce", TableOwnership.TENANT_PRIVATE, "回调 replay nonce 持久化，首次 claim 成功、重复即拒绝；callback 与 manual audit principal 分离", POOL_NONE),
 
             // ---- 平台全局（20）：单例 / 全局容量 / 全局配置 / 平台运营遥测 ----
             entry("rag_slo_configs", TableOwnership.PLATFORM_GLOBAL, "SLO 目标是平台级配置（slo_name 全局唯一）", "平台池：运营/告警模块读写"),

@@ -96,6 +96,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import com.springairag.core.tenant.TenantAuthorizedSsePublisher;
+import com.springairag.core.tenant.TenantSseAccessChecker;
+import com.springairag.core.tenant.TenantSseEvent;
+import com.springairag.core.tenant.TenantSseSubscription;
+import com.springairag.core.tenant.TenantContext;
+
 /**
  * Document management controller.
  *
@@ -118,6 +124,8 @@ public class RagDocumentController {
     private final DocumentVersionService documentVersionService;
     private final EmbeddingProfileProvider embeddingProfileProvider;
     private final CollectionIdentityResolver collectionIdentityResolver;
+    /** WP8：SSE 逐次授权发布器；由 setter 注入，测试构造器可保持原签名。 */
+    private TenantAuthorizedSsePublisher tenantAuthorizedSsePublisher;
     // Batch 820. The six fields below are injected with `@Autowired(required = false)`,
     // which reads as "this collaborator may be absent". It cannot: every one of them
     // is an unconditional @Service / @Component, so the container always wires them.
@@ -169,6 +177,13 @@ public class RagDocumentController {
     @Autowired(required = false)
     public void setDispatchService(EmbeddingDispatchService dispatchService) {
         this.dispatchService = dispatchService;
+    }
+
+    /** WP8：注入当前 ACL 重查器；未装配时短流退化为建连时授权（见调用点注释）。 */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setTenantSseAccessChecker(TenantSseAccessChecker checker) {
+        this.tenantAuthorizedSsePublisher = checker == null
+                ? null : new TenantAuthorizedSsePublisher(checker);
     }
 
     @Autowired(required = false)
@@ -715,8 +730,27 @@ public class RagDocumentController {
             @RequestParam(defaultValue = "false") boolean force) {
         requireDocumentAccess(id);
         SseEmitter emitter = SseEmitters.create();
+        // WP8：每次 progress 投递前重查当前 Collection ACL，撤权后旧流立即停止推送。
+        String tenantId = TenantContext.currentTenantId();
+        String actorId = ApiKeyCollectionAccess.currentPolicy() == null
+                ? null : ApiKeyCollectionAccess.currentPolicy().getPrincipalId();
+        String collectionId = resolveStreamCollectionId(id);
+        TenantSseSubscription subscription = tenantAuthorizedSsePublisher == null
+                || tenantId == null || actorId == null || collectionId == null
+                ? null
+                : new TenantSseSubscription(tenantId, actorId, collectionId);
         try {
             documentEmbedService.embedDocumentWithProgress(id, force, event -> {
+                if (subscription != null) {
+                    TenantSseEvent authorizedEvent = new TenantSseEvent(
+                            tenantId, collectionId, "progress", "document " + id);
+                    if (tenantAuthorizedSsePublisher
+                            .publishIfAuthorized(subscription, authorizedEvent).isEmpty()) {
+                        // 撤权/越权：丢弃本次推送，不再发送后续 progress。
+                        log.info("SSE 投递被当前 ACL 拒绝，停止推送：document={}", id);
+                        return;
+                    }
+                }
                 SseEmitters.sendProgress(emitter, "progress", event, "document " + id);
             });
             SseEmitters.sendDone(emitter, Map.of("documentId", id));
@@ -1280,6 +1314,14 @@ public class RagDocumentController {
     }
     private void auditDelete(String entityType, String entityId, String message, Map<String, Object> details) {
         if (auditLogService != null) auditLogService.logDelete(entityType, entityId, message, details);
+    }
+
+    /** WP8：从当前可见 document 读取 collection 标识，供 SSE 逐次授权比对。 */
+    private String resolveStreamCollectionId(Long id) {
+        return documentQueryService.findById(id)
+                .map(RagDocument::getCollectionId)
+                .map(String::valueOf)
+                .orElse(null);
     }
 
     private void requireDocumentAccess(Long id) {

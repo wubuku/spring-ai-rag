@@ -1670,7 +1670,7 @@ between arithmetic commands and `set -e`.
 The scope implementation has DTO, resolver, ACL, SQL-fragment, vector/full-text
 provider, Chat/Search/JSON, MockMvc, OpenAPI, WebUI, and PostgreSQL coverage.
 The real PostgreSQL/Testcontainers test starts `pgvector/pgvector:pg16`, runs
-Flyway V1–V81 from an empty schema, and exercises the vector query with actual
+Flyway V1–V82 from an empty schema, and exercises the vector query with actual
 PostgreSQL `bigint[]` bindings:
 
 ```bash
@@ -1720,7 +1720,7 @@ caught it.
 
 The JSONB implementation has both mocked HTTP/service coverage and a real
 PostgreSQL/Testcontainers test. The latter starts `pgvector/pgvector:pg16`,
-executes Flyway V1–V81 from an empty database, and verifies JSONB round-trip,
+executes Flyway V1–V82 from an empty database, and verifies JSONB round-trip,
 nested `payloadContains`, V34 GIN planner use, payload-only versioning,
 identical descriptions with distinct records, and cascade cleanup:
 
@@ -1776,7 +1776,7 @@ The script starts isolated PostgreSQL, the mock upstream, a Core standalone serv
 and a Starter consumer that does not scan `com.springairag`. Official Python SDK
 `2.14.0` and Node SDK `7.34.0` verify models, JSON, SSE, idempotency replay, error
 envelopes, and authentication against both topologies. It also proves that the
-external Starter consumer can run Flyway V1–V81 and expose the same `/v1` client
+external Starter consumer can run Flyway V1–V82 and expose the same `/v1` client
 contract. The isolated topology additionally exercises the live Native/OpenAI
 consumer contract and async Collection Purge HTTP lifecycle against its temporary
 PostgreSQL database. Evidence is written to
@@ -1921,6 +1921,41 @@ TTL row once, two index managers building one HNSW index at startup, and a crash
 invalid index being repaired by another instance. Cross-instance chat lease races and crash
 takeover are covered by `ChatSessionPostgresIntegrationTest` (`-Dchat.it.enabled=true`). See
 [Multi-Instance Semantics](multi-instance-semantics.md).
+
+### Multi-tenancy real PostgreSQL gated suites (WP2–WP8)
+
+Each multi-tenancy work package has its own opt-in switch for its real
+PostgreSQL suite. All of them are aggregated by `./scripts/verify-gated-it.sh`;
+to re-run one suite directly, pass its switch explicitly:
+
+```bash
+mvn -o -pl spring-ai-rag-core -am test \
+  -Dtenant-base.it.enabled=true \
+  -Dtest=TenantBaseMigrationPostgresIntegrationTest
+mvn -o -pl spring-ai-rag-core -am test \
+  -Dtenant-rls.it.enabled=true \
+  -Dtest=TenantRlsVerifierPostgresIntegrationTest
+mvn -o -pl spring-ai-rag-core -am test \
+  -Dtenant-isolation.it.enabled=true \
+  -Dtest=TenantRlsIsolationPostgresIntegrationTest
+mvn -o -pl spring-ai-rag-core -am test \
+  -Dtenant-guc-ds.it.enabled=true \
+  -Dtest=TenantGucDataSourcePostgresIntegrationTest
+mvn -o -pl spring-ai-rag-core -am test \
+  -Dtenant-jobs.it.enabled=true \
+  -Dtest=TenantJobDispatcherPostgresIntegrationTest
+mvn -o -pl spring-ai-rag-core -am test \
+  -Dtenant-wp8.it.enabled=true \
+  -Dtest=TenantWp8EvidencePostgresIntegrationTest
+```
+
+These suites need only a disposable PostgreSQL (Testcontainers
+`pgvector/pgvector:pg16`) and never call a real model provider. Migration and
+assertion connections explicitly set `lock_timeout=30s` and
+`statement_timeout=900000` so a non-transactional DDL wait on a concurrent
+transaction fails fast instead of hanging. The HNSW + RLS performance benchmark
+is a separate gate with `-Dtenant-hnsw-bench.it.enabled=true`; its command and
+thresholds are in [quality defaults](quality-defaults.md).
 
 ### Running the Whole Gated Inventory
 

@@ -1244,6 +1244,46 @@ declare capability semantics with `@ApiRoutePolicy`.
 
 ---
 
+## 9. Multi-tenancy Isolation Architecture (WP2–WP8)
+
+Multi-tenancy is delivered as four layers: column binding + RLS backstop +
+explicit request context + background-task propagation:
+
+- **Schema layer**: V75–V82 establish the tenant base for 73 business tables —
+  tenant-private tables carry `tenant_id NOT NULL`, composite unique/FK
+  constraints and tenant-leading indexes; 45 tables (WP2–WP4) plus the 3 WP8
+  evidence tables enable `ENABLE + FORCE ROW LEVEL SECURITY` with the canonical
+  policy `tenant_isolation` bound to the session GUC `app.current_tenant_id`;
+  platform-global and credential tables stay RLS-free (authentication precedes
+  tenant resolution). Per-table adjudication lives in
+  `docs/drafts/MULTI_TENANCY_TABLE_CATALOG.md`.
+- **Request layer**: `TenantContextFilter` resolves `TenantContext` from the
+  principal snapshot; the app DataSource is wrapped by `TenantGucDataSource`,
+  which applies the session-level GUC trio on every checkout (RESET on checkout
+  → `set_config(..., false)` → RESET on return) and asserts the GUC readback,
+  failing closed on mismatch. **transaction-local is an in-transaction
+  hardening only; non-transactional autocommit paths must rely on the
+  session-level GUC.**
+- **Background-task layer**: `TenantJobDispatcher` centralizes scheduling
+  (fail-closed rejection without context plus audit alert), `TenantTaskDecorator`
+  wraps thread pools; after-commit callbacks capture the context snapshot **at
+  registration time**; inner workers (embedding/evaluation/alert delivery) wrap
+  submissions with `TenantContext.wrap`.
+- **Results and SSE layer**: any task ID never triggers an external Provider
+  query; the result owner quadruple (tenant/collection/owner/receipt) is
+  persisted in the V82 evidence tables; Provider callbacks follow
+  "verify signature → receipt → replay → authoritative query"; SSE re-checks
+  ACL on **every delivery**, so revocation stops pushes immediately (see
+  [SSE protocol](SSE-PROTOCOL.md#81-多租户逐次授权wp8)).
+- **Modes and guards**: `rag.tenant.mode=SINGLE` (default, fixed to `default`)
+  or `STRICT` (principal bound to a tenant); under SINGLE, startup verifies all
+  credential rows are `default` and creating a non-`default` tenant is refused,
+  backed by the fail-closed `TenantModeGuard`.
+
+Configuration and runtime semantics are in
+[configuration](configuration.md#多租户配置-wp5); security boundaries and residual
+risks are in [security boundary](security-boundary.md).
+
 ## Appendix: Tech Stack
 
 | Component | Technology | Version |

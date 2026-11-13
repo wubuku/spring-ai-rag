@@ -17,6 +17,7 @@ cd "$(dirname "$0")/.."
 CATALOG="spring-ai-rag-core/src/main/java/com/springairag/core/tenant/TenantTableCatalog.java"
 MIGRATION_DIR="spring-ai-rag-core/src/main/resources/db/migration"
 RLS_SQL="${MIGRATION_DIR}/V80__tenant_rls.sql"
+WP8_SQL="${MIGRATION_DIR}/V82__tenant_result_callback_evidence.sql"
 GUARD="spring-ai-rag-core/src/main/java/com/springairag/core/tenant/TenantModeGuard.java"
 VERIFIER="spring-ai-rag-core/src/main/java/com/springairag/core/tenant/TenantRlsVerifier.java"
 IT="spring-ai-rag-core/src/test/java/com/springairag/core/tenant/TenantRlsVerifierPostgresIntegrationTest.java"
@@ -26,6 +27,7 @@ pass() { echo "PASS: $*"; }
 
 [ -f "${CATALOG}" ] || fail "缺 ${CATALOG}"
 [ -f "${RLS_SQL}" ] || fail "缺 ${RLS_SQL}（WP3 V80 迁移）"
+[ -f "${WP8_SQL}" ] || fail "缺 ${WP8_SQL}（WP8 V82 证据表迁移）"
 [ -f "${GUARD}" ] || fail "缺 ${GUARD}"
 [ -f "${VERIFIER}" ] || fail "缺 ${VERIFIER}"
 [ -f "${IT}" ] || fail "缺 ${IT}（负向启动集成测试）"
@@ -36,8 +38,8 @@ grep -q "rlsVerifier.verify()" "${GUARD}" || fail "guard 未委托 verifier"
 grep -q "tenant_id <> 'default'" "${GUARD}" || fail "guard 缺 SINGLE 非 default 凭据校验"
 
 # 1) V80 表清单与 catalog 的 TENANT_PRIVATE 双向一致（不写死张数）。
-python3 - "${CATALOG}" "${RLS_SQL}" <<'PY' || fail "V80 表清单与 catalog 不一致"
-import re, sys
+python3 - "${CATALOG}" "${RLS_SQL}" "${WP8_SQL}" <<'PY' || fail "V80 表清单与 catalog 不一致"
+import pathlib, re, sys
 cat, sql = open(sys.argv[1]).read(), open(sys.argv[2]).read()
 priv = {n.lower().replace('spring_ai_chat_memory','spring_ai_chat_memory')
         for n,o in re.findall(r'entry\("([^"]+)",\s*TableOwnership\.(\w+)', cat)
@@ -49,8 +51,14 @@ priv = {('spring_ai_chat_memory' if n.upper() == 'SPRING_AI_CHAT_MEMORY' else n)
 m = re.search(r'tables TEXT\[\] := ARRAY\[\n(.*?)\n    \];', sql, re.S)
 listed = {x.strip().strip("',") for x in m.group(1).splitlines()
           if x.strip().startswith("'")}
-assert priv == listed, f"catalog={sorted(priv-listed)} / sql-only={sorted(listed-priv)}"
-print(f"catalog TENANT_PRIVATE={len(priv)}，V80 清单={len(listed)}，一致")
+# V82 新增的 WP8 证据表由 V82 迁移自带 RLS + 终态断言校验；V80 是已执行事实，不回写。
+wp8 = pathlib.Path(sys.argv[3]).read_text()
+wp8_tables = {t for t in re.findall(r"'(rag_tenant_[a-z_]+)'", wp8)}
+assert listed <= priv, f"V80 清单含非 TENANT_PRIVATE 表：{sorted(listed-priv)}"
+assert priv - listed == wp8_tables, (
+    f"catalog 与 V80+V82 覆盖不一致：未覆盖={sorted(priv-listed-wp8_tables)} "
+    f"V82 幽灵={sorted(wp8_tables-(priv-listed))}")
+print(f"catalog TENANT_PRIVATE={len(priv)}，V80 清单={len(listed)}，V82 新增={len(wp8_tables)}，一致")
 PY
 pass "V80 表清单与 catalog 双向一致"
 

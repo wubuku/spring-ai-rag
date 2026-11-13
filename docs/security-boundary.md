@@ -235,6 +235,7 @@ The script creates a temporary database and mock provider and deletes both on ex
 - Multiple keys of one managed principal share ownership (files are owned per principal, not per key). That is design semantics, not cross-tenant access.
 - Audit logs and export artifacts are data-plane data (governed by deployment permissions); the confidentiality boundary for application logs and metrics is in §9.
 - With authentication disabled there is no principal concept; internal paths (plugins/tools) operate globally. That is the established behavior for isolated environments.
+- Multi-tenancy (WP8 stage) uses two SSE authorization layers: connection-time ACL plus re-check on **every delivery**. If a key is revoked or expires while subscribed, the next event delivery is dropped and the old subscription receives nothing. `RagDocumentController.embedDocumentStream` is wired; remaining SSE entrypoints adopt `TenantAuthorizedSsePublisher` incrementally (current implementation surface is request-scoped short streams with no long-lived subscription registry, so the exposure is bounded). Any task ID never triggers an external Provider query; results are authoritative via the owner quadruple (tenant/collection/owner/receipt) in the V82 evidence tables.
 
 ---
 

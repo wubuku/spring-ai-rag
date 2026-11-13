@@ -394,6 +394,7 @@ check_scripts_and_commands() {
       scripts/verify-multi-tenancy-guc.sh \
       scripts/verify-multi-tenancy-endpoint-guard.sh \
       scripts/verify-multi-tenancy-jobs.sh \
+      scripts/verify-multi-tenancy-wp8.sh \
       scripts/run-claude-grok.sh; do
     [[ -x "$script" ]] || {
       echo "Documented script is missing or not executable: $script" >&2
@@ -598,5 +599,16 @@ check_multi_tenant_jobs_gate() {
   "$script"
 }
 run_check "Multi-tenancy jobs gate" check_multi_tenant_jobs_gate
+
+# WP8：结果 owner / 回调权威 / SSE 逐次授权 / 内层 worker 租户传播静态门禁。
+check_multi_tenant_wp8_gate() {
+  local script="scripts/verify-multi-tenancy-wp8.sh"
+  [[ -x "$script" ]] || {
+    echo "Multi-tenancy WP8 gate is missing or not executable: $script" >&2
+    return 1
+  }
+  "$script"
+}
+run_check "Multi-tenancy WP8 gate" check_multi_tenant_wp8_gate
 
 echo "Project documentation verification: $PASS_COUNT checks passed."
