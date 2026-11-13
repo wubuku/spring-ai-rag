@@ -206,17 +206,17 @@ PoC `src/main/java/.../good/` 有整套推荐实现骨架、`src/main/resources/
 
 ### 4.6 seedance drafts 目录其余 9 份文档的教训
 
-| 文档（相对仓库根） | 一手教训 |
+| 文档（相对仓库根，团队统一布局） | 一手教训 |
 |---|---|
 | `../seedance-research/docs/multitenancy/drafts/基于DISCRIMINATOR-实现规划.md` | Hibernate 原生 `DISCRIMINATOR` 策略从未完整实现（HHH-6054 / HHH-7249 长期未解决）；业界通行做法是 Filter + Interceptor 组合替代，而 seedance 后续又进一步退役了 Filter/Interceptor，改为 RLS + GUC 数据库兜底。本仓技术路线 C「表永远租户化 + RLS」与该演进终点一致，且本仓无 Filter/Interceptor 双机制包袱，可直接走终态。 |
-| `.../删除TenantInterceptor-实施方案.md` | 应用层双写机制最终**全部退役**，写期填列收敛到 `@TenantId` 单一机制；收口原则是「同一写期机制只留一个，冗余兜底物理删除」。本仓没有 JPA `TenantEntity` 体系，统一靠 `TenantContext` + RLS 兜底，原则同构。 |
-| `.../删除scenemill.multitenancy.connection-provider.enabled-实施记录.md` | 曾有 `connection-provider.enabled` 作为「伪 opt-out」：schema、角色、GUC、实体继承、verifier 五层已硬绑定多租户，一个配置开关并不能真正关闭，只会让人误以为可关。教训：**不要引入无法真正关闭多租户的配置开关**；本仓 `rag.tenant.mode=SINGLE` 必须是有真实语义的模式（关 RLS + 有守卫），不是伪 opt-out。 |
-| `.../超级租户-运维预留设计.md` | 超级租户 `super-tenant.enabled=false` **骨架先行、默认关闭**；激活必须叠加受信网络 / 专用凭据 / 专用入口 / 权限模型 / 审计至少两层控制；`X-Tenant-Id: *` 类 header 激活被明确否决。本仓阶段三的平台 capability 白名单 + 审计即此设计的同构落地。 |
-| `.../租户级Credits-分配与回收-实施规划.md` | 租户管理员分配 / 收回成员配额的完整需求拆解：9 个原始子需求 + 12 条隐含需求；关键裁决是**复用余额字段但按角色重新解读语义**（root = 未分配池，member = 个人配额）+ 新增分配审计表。本仓 WP10 的租户级配额聚合可借鉴其语义分层与审计表设计。 |
-| `.../用户自助注册B4三段式单事务化-实施方案.md` | 「幽灵租户」问题：注册先提交 tenant 行再写 user，user 写失败即产生无主租户，需人工清理。修法：`JdbcTemplate` bootstrap + `SECURITY DEFINER` 查前置数据 → `setTenantId` → 才第一次 JPA 访问 → 单事务原子。本仓 WP9 租户创建需保证**租户行 + 初始 principal 原子**。 |
-| `.../邀请码用户注册B5三段式单事务化-实施方案.md` | 5 层失配模型（GUC、`@TenantId`、Session 缓存、ThreadLocal、RLS）与 Hibernate 6.2.7 `Session.tenantIdentifier` 在 Session 构造时缓存锁死的硬约束；**显式 `setTenantId` + 字段生成器双保险**；邀请码并发读改写 race 需 CAS。本仓用 `JdbcTemplate` 不走 Hibernate Session，多数失配不适用，但「显式设置 + 生成器双保险」与「并发配额回收用 CAS」两条通则直接适用。 |
-| `.../实施记录.md` | P0–P6 + L3 完整演进：角色拆分（app / platform，以及 NOLOGIN BYPASSRLS 的第三角色）→ GUC → DEFINER 函数 → 平台池 → 删除 Filter/Interceptor → 启动 verifier → 合 `main` 时 978 测试全绿。**分期交付纪律**：短命子分支 → PR 合 feature → L3 验收 → 一次合 main，每期都有可复现验收。 |
-| `.../部署指南.md` | 三库对照（dev / test / staging）、幂等角色脚本、生产与 staging 角色不走本地默认密码脚本、V183 清理 `sse_tickets` 表的幂等可重跑设计；**生产 provisioning 与本地开发脚本分离**。本仓 WP11 升级演练脚本同样要分开「本地演示」与「生产 provisioning」。 |
+| `../seedance-research/docs/multitenancy/drafts/删除TenantInterceptor-实施方案.md` | 应用层双写机制最终**全部退役**，写期填列收敛到 `@TenantId` 单一机制；收口原则是「同一写期机制只留一个，冗余兜底物理删除」。本仓没有 JPA `TenantEntity` 体系，统一靠 `TenantContext` + RLS 兜底，原则同构。 |
+| `../seedance-research/docs/multitenancy/drafts/删除scenemill.multitenancy.connection-provider.enabled-实施记录.md` | 曾有 `connection-provider.enabled` 作为「伪 opt-out」：schema、角色、GUC、实体继承、verifier 五层已硬绑定多租户，一个配置开关并不能真正关闭，只会让人误以为可关。教训：**不要引入无法真正关闭多租户的配置开关**；本仓 `rag.tenant.mode=SINGLE` 必须是有真实语义的模式（关 RLS + 有守卫），不是伪 opt-out。 |
+| `../seedance-research/docs/multitenancy/drafts/超级租户-运维预留设计.md` | 超级租户 `super-tenant.enabled=false` **骨架先行、默认关闭**；激活必须叠加受信网络 / 专用凭据 / 专用入口 / 权限模型 / 审计至少两层控制；`X-Tenant-Id: *` 类 header 激活被明确否决。本仓阶段三的平台 capability 白名单 + 审计即此设计的同构落地。 |
+| `../seedance-research/docs/multitenancy/drafts/租户级Credits-分配与回收-实施规划.md` | 租户管理员分配 / 收回成员配额的完整需求拆解：9 个原始子需求 + 12 条隐含需求；关键裁决是**复用余额字段但按角色重新解读语义**（root = 未分配池，member = 个人配额）+ 新增分配审计表。本仓 WP10 的租户级配额聚合可借鉴其语义分层与审计表设计。 |
+| `../seedance-research/docs/multitenancy/drafts/用户自助注册B4三段式单事务化-实施方案.md` | 「幽灵租户」问题：注册先提交 tenant 行再写 user，user 写失败即产生无主租户，需人工清理。修法：`JdbcTemplate` bootstrap + `SECURITY DEFINER` 查前置数据 → `setTenantId` → 才第一次 JPA 访问 → 单事务原子。本仓 WP9 租户创建需保证**租户行 + 初始 principal 原子**。 |
+| `../seedance-research/docs/multitenancy/drafts/邀请码用户注册B5三段式单事务化-实施方案.md` | 5 层失配模型（GUC、`@TenantId`、Session 缓存、ThreadLocal、RLS）与 Hibernate 6.2.7 `Session.tenantIdentifier` 在 Session 构造时缓存锁死的硬约束；**显式 `setTenantId` + 字段生成器双保险**；邀请码并发读改写 race 需 CAS。本仓用 `JdbcTemplate` 不走 Hibernate Session，多数失配不适用，但「显式设置 + 生成器双保险」与「并发配额回收用 CAS」两条通则直接适用。 |
+| `../seedance-research/docs/multitenancy/drafts/实施记录.md` | P0–P6 + L3 完整演进：角色拆分（app / platform，以及 NOLOGIN BYPASSRLS 的第三角色）→ GUC → DEFINER 函数 → 平台池 → 删除 Filter/Interceptor → 启动 verifier → 合 `main` 时 978 测试全绿。**分期交付纪律**：短命子分支 → PR 合 feature → L3 验收 → 一次合 main，每期都有可复现验收。 |
+| `../seedance-research/docs/multitenancy/drafts/部署指南.md` | 三库对照（dev / test / staging）、幂等角色脚本、生产与 staging 角色不走本地默认密码脚本、V183 清理 `sse_tickets` 表的幂等可重跑设计；**生产 provisioning 与本地开发脚本分离**。本仓 WP11 升级演练脚本同样要分开「本地演示」与「生产 provisioning」。 |
 
 ### 4.7 PoC 可复用资产（原考古未提取）
 
@@ -225,9 +225,12 @@ PoC `src/main/java/.../good/` 有整套推荐实现骨架、`src/main/resources/
 1. **角色与表 owner 模板**：`../seedance-research/multitenancy-verification/src/main/resources/db/init/002_roles.sql`
    给出 `demo_owner`（NOLOGIN、NOSUPERUSER、NOBYPASSRLS，专做表 owner）、`demo_app`（NOBYPASSRLS）、
    `demo_platform`（BYPASSRLS，**用列级 GRANT 收窄到最小列集**）、`demo_unrestricted_platform`
-   （BYPASSRLS + 全表 GRANT，专作 verifier 负向对照）、`demo_migrator`（BYPASSRLS 但 NOSUPERUSER，专跑迁移）
-   五个角色。列级 GRANT 收窄、owner 与 app 角色分离、独立负向对照角色，都是原考古没有提到的细节。
-2. **RLS 与复合外键模板**：`.../db/init/001_schema.sql` 是 12 张租户表的完整模板，每张
+   （BYPASSRLS + 全表 GRANT，专作 verifier 负向对照）、`demo_super_nobypass`
+   （**SUPERUSER + NOBYPASSRLS**，专作「superuser 仍绕过 RLS」的负向对照）、`demo_migrator`
+   （BYPASSRLS 但 NOSUPERUSER，专跑迁移）**六个角色**。列级 GRANT 收窄、owner 与 app 角色分离、
+   独立负向对照角色，以及「superuser 属性即便带 NOBYPASSRLS 也不可当业务角色」都是原考古没提到的细节。
+2. **RLS 与复合外键模板**：`../seedance-research/multitenancy-verification/src/main/resources/db/init/001_schema.sql`
+   是 12 张租户表的完整模板，每张
    `ENABLE + FORCE ROW LEVEL SECURITY` 加同式 policy；`callback_receipt` 用
    `(job_id, tenant_id, project_id, actor_id)` 四列复合外键指向 `job`，是「结果 / 回调行自带 owner 四元组」
    的可执行写法。本仓 WP2 复合外键、WP8 结果 owner 表可直接对照。
@@ -235,7 +238,7 @@ PoC `src/main/java/.../good/` 有整套推荐实现骨架、`src/main/resources/
    下 `audit/`、`authorization/`（含 `EndpointAuthorizationCatalog`）、`bootstrap/`
    （含 `CallbackTenantBootstrapper` / `DurableCallbackTenantBootstrapper`）、`callback/`
    （receipt / registry / verifier / processor / owner-discovery-port）、`context/`、`identity/`、`platform/`
-   （discovery / operator port）、`result/`、`sse/` 各组，均有 Java 接口与配套场景测试。
+   （discovery / operator port）、`result/`、`sse/`、`tenant/`、`web/` **共 11 组**，均有 Java 接口与配套场景测试。
    本仓 WP5–WP8 的 `TenantResolver`、`TenantMembershipGuard`、`TenantJobDispatcher`、
    回调 receipt / intent / replay / owner / audit 契约、SSE 逐次授权，在 PoC 里已有**同构参考实现**，
    实施时按本仓命名重写，不重复发明。
@@ -246,6 +249,8 @@ PoC `src/main/java/.../good/` 有整套推荐实现骨架、`src/main/resources/
 BOS「函数体以文本存储、`RENAME COLUMN` 后真断裂」是同一类问题：**文本层搬运不可靠**。
 把参考项目的 SQL / 接口 / 模板落到本仓时，必须整体复制后用工具校验（diff / lint / 编译），
 不要靠手抄改写；文档里引用外部材料也优先按稳定文件名与目录定位，不手抄行号。
+本补遗在 2026-11-13 的第二次只读核查中又发现「5 角色 / 9 组」两处手抄计数误差与
+`.../` 省略前缀，已按实际目录与 `002_roles.sql` 全文修正；这正是本节纪律的第二次实例证据。
 
 ### 4.9 本仓数字口径修订与 GUC 主防线取舍证据
 
@@ -406,7 +411,7 @@ ls docs/drafts/MULTI_TENANCY*
 | BOS 交付 | 2026-11-12 合并 `main`，`28359f69`，V126，DB-1..DB-18 逐门裁决 |
 | 本仓规模（原路线统计，已按 2026-11-13 复核） | 69 表、**74** 迁移（V1–V74）、55 `JdbcTemplate` 文件、22 JPA Repository、21 `@Scheduled`、5 `@Async`；「约 56 唯一约束」为 `grep UNIQUE` 行数口径，真实为 23 条 `CREATE UNIQUE INDEX` + 11 条列级 inline `UNIQUE`（见 §4.9） |
 | 补遗：seedance drafts 目录 | `../seedance-research/docs/multitenancy/drafts/` 共 11 份文档，原考古只列 2 份；其余 9 份教训见 §4.6 |
-| 补遗：PoC 可复用资产 | `multitenancy-verification/src/main/resources/db/init/001_schema.sql`（12 表 RLS + 复合 FK 模板）、`002_roles.sql`（5 角色 + 列级 GRANT）、`src/main/java/.../good/`（9 组推荐实现骨架） |
+| 补遗：PoC 可复用资产 | `multitenancy-verification/src/main/resources/db/init/001_schema.sql`（12 表 RLS + 复合 FK 模板）、`002_roles.sql`（6 角色 + 列级 GRANT + superuser 负向对照）、`src/main/java/.../good/`（11 组推荐实现骨架） |
 | 补遗：本仓非事务 JDBC 面 | 20 个文件含 `jdbcTemplate.update/batchUpdate` 且无 `@Transactional`；决定 GUC 主防线取向（§4.9） |
 | 对抗式审核结论 | Herdr 会话 `d3c09735-fc3e-4d0f-ae20-f1fb3d50f6b4`，2026-11-13，REQUEST_CHANGES：2 FAIL（GUC 主防线 / SINGLE 越权守卫）+ 4 CONCERN；整改清单见 §6.3 末 6 行 |
 
