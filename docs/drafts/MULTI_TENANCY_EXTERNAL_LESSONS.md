@@ -26,6 +26,11 @@
 | AI-Native-BOS 有什么独特经验 | 第 5 节 | 术语分层、承重列、真实迁移演练、函数静默失效 |
 | 具体要往本仓路线补哪些条目 | 第 6 节 | 已覆盖 / 需补强 / 新增盲点三张清单 |
 | 怎么复核而不用重做探索 | 第 7 节 | 复现命令 + 事实快照 |
+| 之前漏考察了哪些种子材料 | 第 4.5–4.8 节 | seedance drafts 目录 11 份文档、PoC `good/` 实现骨架与 SQL 模板 |
+| 前人「走过弯路后否决/删除」的教训 | 第 4.6 节 | DISCRIMINATOR 否决、Filter/Interceptor/Interceptor 双机制收敛、connection-provider 伪 opt-out 删除、超级租户骨架不启用 |
+| 前人实现细节可复用资产 | 第 4.7–4.8 节 | PoC 三角色 SQL 模板、good/ 推荐实现骨架、JdbcTemplate bootstrap 三段式、显式 setTenantId 双保险 |
+| 本仓数字口径修订 | 第 7.3 节 | 「约 56 处唯一约束」实为 grep 行数；真实口径 23 条 CREATE UNIQUE INDEX + 11 条列级 UNIQUE |
+| 三件套 vs transaction-local 的取舍依据 | 第 4.9 节 | 本仓 20 个含 jdbcTemplate.update 且无 @Transactional 的文件，决定主防线取向 |
 
 ---
 
@@ -191,6 +196,71 @@ Surefire **81 tests / 0 failures / 0 errors / 0 skipped**，`ArchitectureBoundar
 
 ---
 
+### 4.5 2026-11-13 复核补遗（原考古遗漏的材料，本轮补齐）
+
+本节是 2026-11-13 对第 4.1 节清单的**增量复核**：原考古只下钻了 PoC 的 `docs/`、
+`MULTITENANCY-CHECKLIST.md`、`RLS-NOBYPASSRLS-GUC.md`、两份审查报告和 2 份 drafts；
+实际 `../seedance-research/docs/multitenancy/drafts/` 有 **11 份文档**、
+PoC `src/main/java/.../good/` 有整套推荐实现骨架、`src/main/resources/db/init/` 有可直接复用的
+三角色 SQL 模板。原考古漏掉了这些「前人走过弯路后否决 / 删除 / 收口」的一手教训。
+
+### 4.6 seedance drafts 目录其余 9 份文档的教训
+
+| 文档（相对仓库根） | 一手教训 |
+|---|---|
+| `../seedance-research/docs/multitenancy/drafts/基于DISCRIMINATOR-实现规划.md` | Hibernate 原生 `DISCRIMINATOR` 策略从未完整实现（HHH-6054 / HHH-7249 长期未解决）；业界通行做法是 Filter + Interceptor 组合替代，而 seedance 后续又进一步退役了 Filter/Interceptor，改为 RLS + GUC 数据库兜底。本仓技术路线 C「表永远租户化 + RLS」与该演进终点一致，且本仓无 Filter/Interceptor 双机制包袱，可直接走终态。 |
+| `.../删除TenantInterceptor-实施方案.md` | 应用层双写机制最终**全部退役**，写期填列收敛到 `@TenantId` 单一机制；收口原则是「同一写期机制只留一个，冗余兜底物理删除」。本仓没有 JPA `TenantEntity` 体系，统一靠 `TenantContext` + RLS 兜底，原则同构。 |
+| `.../删除scenemill.multitenancy.connection-provider.enabled-实施记录.md` | 曾有 `connection-provider.enabled` 作为「伪 opt-out」：schema、角色、GUC、实体继承、verifier 五层已硬绑定多租户，一个配置开关并不能真正关闭，只会让人误以为可关。教训：**不要引入无法真正关闭多租户的配置开关**；本仓 `rag.tenant.mode=SINGLE` 必须是有真实语义的模式（关 RLS + 有守卫），不是伪 opt-out。 |
+| `.../超级租户-运维预留设计.md` | 超级租户 `super-tenant.enabled=false` **骨架先行、默认关闭**；激活必须叠加受信网络 / 专用凭据 / 专用入口 / 权限模型 / 审计至少两层控制；`X-Tenant-Id: *` 类 header 激活被明确否决。本仓阶段三的平台 capability 白名单 + 审计即此设计的同构落地。 |
+| `.../租户级Credits-分配与回收-实施规划.md` | 租户管理员分配 / 收回成员配额的完整需求拆解：9 个原始子需求 + 12 条隐含需求；关键裁决是**复用余额字段但按角色重新解读语义**（root = 未分配池，member = 个人配额）+ 新增分配审计表。本仓 WP10 的租户级配额聚合可借鉴其语义分层与审计表设计。 |
+| `.../用户自助注册B4三段式单事务化-实施方案.md` | 「幽灵租户」问题：注册先提交 tenant 行再写 user，user 写失败即产生无主租户，需人工清理。修法：`JdbcTemplate` bootstrap + `SECURITY DEFINER` 查前置数据 → `setTenantId` → 才第一次 JPA 访问 → 单事务原子。本仓 WP9 租户创建需保证**租户行 + 初始 principal 原子**。 |
+| `.../邀请码用户注册B5三段式单事务化-实施方案.md` | 5 层失配模型（GUC、`@TenantId`、Session 缓存、ThreadLocal、RLS）与 Hibernate 6.2.7 `Session.tenantIdentifier` 在 Session 构造时缓存锁死的硬约束；**显式 `setTenantId` + 字段生成器双保险**；邀请码并发读改写 race 需 CAS。本仓用 `JdbcTemplate` 不走 Hibernate Session，多数失配不适用，但「显式设置 + 生成器双保险」与「并发配额回收用 CAS」两条通则直接适用。 |
+| `.../实施记录.md` | P0–P6 + L3 完整演进：角色拆分（app / platform，以及 NOLOGIN BYPASSRLS 的第三角色）→ GUC → DEFINER 函数 → 平台池 → 删除 Filter/Interceptor → 启动 verifier → 合 `main` 时 978 测试全绿。**分期交付纪律**：短命子分支 → PR 合 feature → L3 验收 → 一次合 main，每期都有可复现验收。 |
+| `.../部署指南.md` | 三库对照（dev / test / staging）、幂等角色脚本、生产与 staging 角色不走本地默认密码脚本、V183 清理 `sse_tickets` 表的幂等可重跑设计；**生产 provisioning 与本地开发脚本分离**。本仓 WP11 升级演练脚本同样要分开「本地演示」与「生产 provisioning」。 |
+
+### 4.7 PoC 可复用资产（原考古未提取）
+
+原考古只提了 `src/test/java/` 的反模式与场景测试；实际还有三类**可直接对照搬运**的资产：
+
+1. **角色与表 owner 模板**：`../seedance-research/multitenancy-verification/src/main/resources/db/init/002_roles.sql`
+   给出 `demo_owner`（NOLOGIN、NOSUPERUSER、NOBYPASSRLS，专做表 owner）、`demo_app`（NOBYPASSRLS）、
+   `demo_platform`（BYPASSRLS，**用列级 GRANT 收窄到最小列集**）、`demo_unrestricted_platform`
+   （BYPASSRLS + 全表 GRANT，专作 verifier 负向对照）、`demo_migrator`（BYPASSRLS 但 NOSUPERUSER，专跑迁移）
+   五个角色。列级 GRANT 收窄、owner 与 app 角色分离、独立负向对照角色，都是原考古没有提到的细节。
+2. **RLS 与复合外键模板**：`.../db/init/001_schema.sql` 是 12 张租户表的完整模板，每张
+   `ENABLE + FORCE ROW LEVEL SECURITY` 加同式 policy；`callback_receipt` 用
+   `(job_id, tenant_id, project_id, actor_id)` 四列复合外键指向 `job`，是「结果 / 回调行自带 owner 四元组」
+   的可执行写法。本仓 WP2 复合外键、WP8 结果 owner 表可直接对照。
+3. **`good/` 推荐实现骨架**：`../seedance-research/multitenancy-verification/src/main/java/org/dddml/multitenancy/verification/good/`
+   下 `audit/`、`authorization/`（含 `EndpointAuthorizationCatalog`）、`bootstrap/`
+   （含 `CallbackTenantBootstrapper` / `DurableCallbackTenantBootstrapper`）、`callback/`
+   （receipt / registry / verifier / processor / owner-discovery-port）、`context/`、`identity/`、`platform/`
+   （discovery / operator port）、`result/`、`sse/` 各组，均有 Java 接口与配套场景测试。
+   本仓 WP5–WP8 的 `TenantResolver`、`TenantMembershipGuard`、`TenantJobDispatcher`、
+   回调 receipt / intent / replay / owner / audit 契约、SSE 逐次授权，在 PoC 里已有**同构参考实现**，
+   实施时按本仓命名重写，不重复发明。
+
+### 4.8 搬运纪律（补遗过程中得到的直接教训）
+
+本节写作时，第一次插入曾因手抄路径与术语出现错字和占位符，已整体重写清理。这与
+BOS「函数体以文本存储、`RENAME COLUMN` 后真断裂」是同一类问题：**文本层搬运不可靠**。
+把参考项目的 SQL / 接口 / 模板落到本仓时，必须整体复制后用工具校验（diff / lint / 编译），
+不要靠手抄改写；文档里引用外部材料也优先按稳定文件名与目录定位，不手抄行号。
+
+### 4.9 本仓数字口径修订与 GUC 主防线取舍证据
+
+- 第 7.3 节原写「约 56 唯一约束」实为 `grep -i UNIQUE` 的**行数**（含注释、SQL 字符串、
+  多行语句）。真实口径：`CREATE UNIQUE INDEX` 23 条、列级 inline `UNIQUE` 11 条、
+  `CREATE UNIQUE` / `ADD CONSTRAINT ... UNIQUE` 语句合计 24 条。规划 §3 若引用该数字，
+  必须标注「行数口径」或改用「23 条唯一索引 + 11 条列级唯一」的口径，避免对抗式审核误判。
+- 2026-11-13 对抗式审核（Herdr 会话 `d3c09735-fc3e-4d0f-ae20-f1fb3d50f6b4`）独立复核：
+  本仓有 **20 个文件含 `jdbcTemplate.update/batchUpdate` 且全文无 `@Transactional`**。
+  这正是 seedance / EE 否决 `SET LOCAL`（transaction-local GUC）作为唯一主防线的同一类现实：
+  自动提交连接上 `set_config(..., true)` 在语句结束即失效，下一条语句 RLS 读 0 行。
+  因此本仓 GUC 主防线应取 **session 级 `set_config(..., false)` + checkout/归还 `RESET`
+  + `connection-init-sql` 三件套**，transaction-local 仅作事务内加固；或显式把
+  「非事务租户作用域 DB 访问清零」列为工作包与门禁。该结论已作为规划 FAIL 项进入修订清单（第 6.5 节）。
+
 ## 5. AI-Native-Business-Operating-System 考古
 
 ### 5.1 材料清单
@@ -284,6 +354,19 @@ RLS `ENABLE + FORCE`、`NOBYPASSRLS` 应用角色、无 GUC fail-closed、migrat
 | 文档与门禁计数标口径、比对动态基线，不写死数字 | BOS V126 §2.1.x | 验收清单 + 文档治理 |
 | Tenant / Workspace / 应用版本声明层级的术语分层 | BOS `context-boundaries.md` | 阶段三 WebUI 与管理面设计 |
 
+| 不要引入无法真正关闭多租户的伪 opt-out 配置；`SINGLE` 必须是有语义的模式 | seedance 删除 connection-provider.enabled | §5.6 兼容模式定义 + WP3 守卫 |
+| 超级租户骨架先行、默认关闭，激活叠加至少两层控制；否决 `*:` 类 header 提权 | seedance 超级租户运维预留 | §9 遗留项 + 平台 capability 设计 |
+| 租户创建保证「租户行 + 初始 principal」单事务原子，避免幽灵租户 | seedance B4 三段式 | WP9 生命周期 |
+| 配额聚合复用「root 池 / 成员配额」语义分层 + 分配审计表；并发回收用 CAS | seedance 租户级 Credits / B5 race | WP10 配额 |
+| 生产 provisioning 与本地开发脚本分离；升级清理脚本幂等可重跑 | seedance 部署指南 | WP11 升级演练 |
+| 搬运参考 SQL / 接口模板必须整体复制 + 工具校验，禁止手抄改写 | 本文 §4.8 / BOS §5.3 | WP2 / WP8 实施纪律 |
+| GUC 主防线取 session 级三件套，transaction-local 仅作事务内加固 | 本文 §4.9 + EE 教训 | §0 / §5.3.4 / WP5 |
+| SINGLE 下凭据 tenant 必须全为 `default` 且拒绝创建非 default 租户 | 对抗式审核 FAIL 项 | §5.6 / WP3 / WP9 |
+| 凭据表为无 RLS 平台表，app 角色按 digest 精确查找；禁止 migrator 走业务认证 | 对抗式审核 CONCERN | §5.2 / WP5 |
+| 读路径 GUC 回读断言，落实「读 0 行 ≠ 成功」 | 对抗式审核 CONCERN | §5.3 / §7 |
+| 验收矩阵补 WP9/WP10；WP2 补 embedding 大表 CONCURRENTLY / 分批回填 / 锁窗口 | 对抗式审核 CONCERN | §7 / WP2 |
+| MCP / `@TransactionalEventListener` 幽灵范围按实际清点降级（当前 0 / 3） | 对抗式审核 CONCERN | §5.5 / WP7 / §7 |
+
 ### 6.4 仍未被任何参考项目解决、不要误当成已有答案
 
 HNSW + RLS 的召回/吞吐（原路线风险 3 仍是开放项）；租户级删除/导出覆盖 vector/bytea 的
@@ -321,7 +404,11 @@ ls docs/drafts/MULTI_TENANCY*
 | seedance 生产材料 | `MULTITENANCY-CHECKLIST.md`、`RLS-NOBYPASSRLS-GUC.md`、principal-architect-review 系列 |
 | BOS 决策备忘 | 2026-11-10，六轮复核，真实 PG 16.8，函数体断裂 43、policy 基线 102/34 |
 | BOS 交付 | 2026-11-12 合并 `main`，`28359f69`，V126，DB-1..DB-18 逐门裁决 |
-| 本仓规模（原路线统计） | 69 表、73 迁移、约 56 唯一约束、55 `JdbcTemplate` 文件、22 JPA Repository、21 `@Scheduled`、5 `@Async` |
+| 本仓规模（原路线统计，已按 2026-11-13 复核） | 69 表、**74** 迁移（V1–V74）、55 `JdbcTemplate` 文件、22 JPA Repository、21 `@Scheduled`、5 `@Async`；「约 56 唯一约束」为 `grep UNIQUE` 行数口径，真实为 23 条 `CREATE UNIQUE INDEX` + 11 条列级 inline `UNIQUE`（见 §4.9） |
+| 补遗：seedance drafts 目录 | `../seedance-research/docs/multitenancy/drafts/` 共 11 份文档，原考古只列 2 份；其余 9 份教训见 §4.6 |
+| 补遗：PoC 可复用资产 | `multitenancy-verification/src/main/resources/db/init/001_schema.sql`（12 表 RLS + 复合 FK 模板）、`002_roles.sql`（5 角色 + 列级 GRANT）、`src/main/java/.../good/`（9 组推荐实现骨架） |
+| 补遗：本仓非事务 JDBC 面 | 20 个文件含 `jdbcTemplate.update/batchUpdate` 且无 `@Transactional`；决定 GUC 主防线取向（§4.9） |
+| 对抗式审核结论 | Herdr 会话 `d3c09735-fc3e-4d0f-ae20-f1fb3d50f6b4`，2026-11-13，REQUEST_CHANGES：2 FAIL（GUC 主防线 / SINGLE 越权守卫）+ 4 CONCERN；整改清单见 §6.3 末 6 行 |
 
 ### 7.4 下钻顺序建议
 
@@ -331,7 +418,10 @@ ls docs/drafts/MULTI_TENANCY*
 4. `../seedance-research/docs/multitenancy/MULTITENANCY-CHECKLIST.md` → 拿 Spring/JPA 生产约束。
 5. `../AI-Native-Business-Operating-System/docs/drafts/verification/2026-11-12-tenant-rename-fullstack-v126/README.md`
    → 拿真实迁移验收门设计。
-6. 回到本仓 `MULTI_TENANCY_TECH_ROADMAP.md` 第 8 / 11 节落地条目与验收清单。
+6. `../seedance-research/docs/multitenancy/drafts/` 11 份文档（尤其 §4.6 的 9 份否决 / 删除 / 收口记录）。
+7. `../seedance-research/multitenancy-verification/src/main/resources/db/init/001_schema.sql` 与 `002_roles.sql`
+   → 拿 RLS / 复合 FK / 列级 GRANT 模板；`src/main/java/.../good/` → 拿推荐实现骨架。
+8. 回到本仓 `MULTI_TENANCY_TECH_ROADMAP.md` 第 8 / 11 节落地条目与验收清单。
 
 ---
 
@@ -344,3 +434,7 @@ ls docs/drafts/MULTI_TENANCY*
   禁止把跨仓路径做成 Markdown 链接。
 - 中文单语文档；按项目文档治理规则，`docs/drafts/README.md` 与 `docs/drafts/README-zh-CN.md`
   都指向本文件并标注「仅中文」。
+- 2026-11-13 追加 §4.5–4.9 补遗：seedance drafts 11 份文档、PoC `good/` 与 SQL 模板、
+  本仓数字口径修订、GUC 主防线取舍证据；同时把对抗式审核的整改清单并入 §6.3。
+  本轮补遗**已覆盖原考古的材料盲点**，但规划文档的整改仍按 `MULTI_TENANCY_IMPLEMENTATION_PLAN.md`
+  单独推进，两者不混写。
