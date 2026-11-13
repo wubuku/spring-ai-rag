@@ -1074,7 +1074,7 @@ hash，操作按 owner 隔离、可恢复且有界。审计日志不由普通擦
 
 ---
 
-## 9. 多租户隔离架构（WP2–WP8）
+## 9. 多租户隔离架构（WP2–WP9）
 
 多租户化按「列绑定 + RLS 兜底 + 请求链路显式上下文 + 后台任务传播」四层落地：
 
@@ -1100,6 +1100,14 @@ hash，操作按 owner 隔离、可恢复且有界。审计日志不由普通擦
 - **模式与守卫**：`rag.tenant.mode=SINGLE`（默认，固定 default）或
   `STRICT`（principal 绑定租户）；SINGLE 下启动校验凭据租户全为 default，
   拒绝创建非 default 租户，配 `TenantModeGuard` fail-closed。
+- **生命周期层（WP9）**：`rag_tenant.deleted_at` 软删标记（V83，纯事务 DDL）；
+  `TenantLifecycleService` 把「租户行 + 初始 principal」放进同一个
+  `TransactionTemplate.execute`，避免「幽灵租户」；`TenantLifecycleController`
+  为平台面端点，经 `PlatformCapability.TENANT_LIFECYCLE` 做 actor 白名单 + 审计，
+  并且未配置 root 凭据时 fail-closed；状态机 `ACTIVE/SUSPENDED/DISABLED` 单向收紧。
+  凭据认证投影补 `tenantId/tenantStatus`，`rag_api_key` 行继承 principal 绑定租户；
+  `GET /api/v1/rag/auth/me` 与 WebUI 侧栏只读展示当前租户 / 模式 / 状态，
+  不提供租户切换器与邀请码。
 
 配置与运行语义见[多租户配置](configuration-zh-CN.md#多租户配置-wp5)；
 安全边界与残余风险见[安全边界](security-boundary-zh-CN.md)。

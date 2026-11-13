@@ -2089,3 +2089,30 @@ credential or a non-`ACTIVE` tenant fails closed and never falls back to `defaul
 Related static gates: `scripts/verify-multi-tenancy-rls.sh` (WP3) and
 `scripts/verify-multi-tenancy-guc.sh` (WP5, GUC three-piece plus the non-transactional
 JDBC inventory).
+
+### Tenant lifecycle actor whitelist (WP9)
+
+The whitelist of callers allowed to run platform-side tenant operations
+(create / suspend / resume / disable / soft-delete) is configured through
+`rag.tenant.lifecycle-actors`; by default only `environment-root` is allowed:
+
+```yaml
+rag:
+  tenant:
+    mode: SINGLE
+    lifecycle-actors:
+      - environment-root
+```
+
+- An actor outside the whitelist gets 403, and **every call is audited** as a capability
+  event (actor / target tenant / allowed or not); no tenant-private content is recorded.
+- The actor is taken from the authenticated principal identity. A self-declared actor in
+  a request header is never accepted.
+- The lifecycle endpoints fail closed (403) when the root credential is not configured, so
+  that no static or database credential can bypass the platform whitelist and create a
+  tenant.
+- The lifecycle endpoints are platform-side (`/api/v1/rag/tenants`) and, like the
+  credential tables, do not go through business-tenant RLS. No cross-tenant entry point
+  exists on the business data plane.
+
+Related static gate: `scripts/verify-multi-tenancy-lifecycle.sh` (WP9).

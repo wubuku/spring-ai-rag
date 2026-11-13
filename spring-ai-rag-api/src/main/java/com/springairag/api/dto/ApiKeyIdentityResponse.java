@@ -41,6 +41,26 @@ public class ApiKeyIdentityResponse {
             example = "[\"customer-42:records:v1\"]")
     private List<String> allowedCollectionKeys;
 
+    /** WP9：当前凭据绑定的租户（root / legacy-static 固定 default）。 */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    @Schema(description = "Tenant bound to the current credential", example = "default",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    private String tenantId;
+
+    /** WP9：当前运行模式（SINGLE / STRICT）；WebUI 只做只读提示。 */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    @Schema(description = "Current tenant runtime mode", example = "SINGLE",
+            allowableValues = {"SINGLE", "STRICT"},
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    private String tenantMode;
+
+    /** WP9：绑定租户的状态（root / legacy-static 固定 ACTIVE）。 */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    @Schema(description = "Status of the bound tenant", example = "ACTIVE",
+            allowableValues = {"ACTIVE", "SUSPENDED", "DISABLED"},
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    private String tenantStatus;
+
     public ApiKeyIdentityResponse() {
     }
 
@@ -100,4 +120,10 @@ public class ApiKeyIdentityResponse {
     public void setAllowedCollectionKeys(List<String> allowedCollectionKeys) {
         this.allowedCollectionKeys = allowedCollectionKeys;
     }
+    public String getTenantId() { return tenantId; }
+    public void setTenantId(String tenantId) { this.tenantId = tenantId; }
+    public String getTenantMode() { return tenantMode; }
+    public void setTenantMode(String tenantMode) { this.tenantMode = tenantMode; }
+    public String getTenantStatus() { return tenantStatus; }
+    public void setTenantStatus(String tenantStatus) { this.tenantStatus = tenantStatus; }
 }

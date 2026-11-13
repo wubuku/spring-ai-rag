@@ -482,3 +482,21 @@ returns to Unlock; a new tab stays locked; an injected in-page script scanning
 storage/globals/form values finds no credential; logout clears storage; no request
 URL or `Referer` contains the credential, which appears only in the `X-API-Key`
 request header.
+
+## Tenant lifecycle platform-side boundary (WP9)
+
+- The `/api/v1/rag/tenants` endpoints are platform-side: only an actor with a
+  configured environment root credential, root authentication, and a place in the
+  `rag.tenant.lifecycle-actors` whitelist may call them. When the root credential
+  is not configured the endpoints fail closed (403); no static or database
+  credential can create a tenant.
+- Every lifecycle call is audited as a capability event (actor / target tenant /
+  allowed or not) without tenant-private content. Rejecting a non-`default`
+  tenant creation in SINGLE mode records a `REJECT` audit entry as well.
+- After a tenant is `DISABLED` or soft-deleted (`deleted_at`), the tenant-status
+  subquery in the authentication projection returns no row and
+  `PrincipalTenantResolver` fails closed (treated as non-`ACTIVE`), so existing
+  credentials stop resolving immediately.
+- The business data plane has no cross-tenant entry point: credential tables and
+  the tenant lifecycle platform table do not use RLS but are only accessed on the
+  authentication and platform-management paths, never on business queries.

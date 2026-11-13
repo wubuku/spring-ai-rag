@@ -58,6 +58,10 @@ public class RagApiPrincipal {
     @Column(name = "expiry_alert_checked_at")
     private LocalDateTime expiryAlertCheckedAt;
 
+    /** WP9：绑定的租户 id（V80 起该列存在；认证先于租户解析，凭据表无 RLS）。 */
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId = "default";
+
     public String getPrincipalId() { return principalId; }
     public void setPrincipalId(String principalId) { this.principalId = principalId; }
     public String getName() { return name; }
@@ -88,4 +92,6 @@ public class RagApiPrincipal {
     public void setExpiryAlertCheckedAt(LocalDateTime value) {
         expiryAlertCheckedAt = value;
     }
+    public String getTenantId() { return tenantId; }
+    public void setTenantId(String tenantId) { this.tenantId = tenantId; }
 }

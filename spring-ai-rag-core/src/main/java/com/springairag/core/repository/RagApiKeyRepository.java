@@ -29,6 +29,10 @@ public interface RagApiKeyRepository extends JpaRepository<RagApiKey, Long> {
         Long getPolicyVersion();
         Integer getRequestsPerMinute();
         String getCapabilities();
+        /** WP9：凭据绑定的租户 id（V80 起 rag_api_key/rag_api_principal 带该列）。 */
+        String getTenantId();
+        /** WP9：绑定租户的当前状态（rag_tenant.status；查不到视为非 ACTIVE）。 */
+        String getTenantStatus();
     }
 
     /**
@@ -99,7 +103,10 @@ public interface RagApiKeyRepository extends JpaRepository<RagApiKey, Long> {
             + "k.credentialVersion AS credentialVersion, p.role AS role, "
             + "p.allowedCollectionIds AS allowedCollectionIds, p.expiresAt AS expiresAt, "
             + "p.policyVersion AS policyVersion, p.requestsPerMinute AS requestsPerMinute, "
-            + "p.capabilities AS capabilities "
+            + "p.capabilities AS capabilities, "
+            + "p.tenantId AS tenantId, "
+            + "(SELECT t.status FROM RagTenant t WHERE t.tenantId = p.tenantId "
+            + " AND t.deletedAt IS NULL) AS tenantStatus "
             + "FROM RagApiKey k, RagApiPrincipal p "
             + "WHERE k.keyHash = :keyHash AND k.principalId = p.principalId "
             + "AND k.enabled = true AND k.revokedAt IS NULL "

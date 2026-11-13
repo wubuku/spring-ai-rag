@@ -1244,7 +1244,7 @@ declare capability semantics with `@ApiRoutePolicy`.
 
 ---
 
-## 9. Multi-tenancy Isolation Architecture (WP2–WP8)
+## 9. Multi-tenancy Isolation Architecture (WP2–WP9)
 
 Multi-tenancy is delivered as four layers: column binding + RLS backstop +
 explicit request context + background-task propagation:
@@ -1279,6 +1279,17 @@ explicit request context + background-task propagation:
   or `STRICT` (principal bound to a tenant); under SINGLE, startup verifies all
   credential rows are `default` and creating a non-`default` tenant is refused,
   backed by the fail-closed `TenantModeGuard`.
+- **Lifecycle layer (WP9)**: V83 adds the `rag_tenant.deleted_at` soft-delete
+  marker as pure transactional DDL; `TenantLifecycleService` puts the tenant row
+  and its initial principal inside one `TransactionTemplate.execute` so a failed
+  principal insert cannot leave a "ghost tenant"; `TenantLifecycleController` is
+  a platform-side endpoint guarded by `PlatformCapability.TENANT_LIFECYCLE`
+  (actor whitelist + audit) and fails closed when root credentials are not
+  configured. The `ACTIVE/SUSPENDED/DISABLED` state machine only tightens.
+  The authentication projection carries `tenantId/tenantStatus`, and
+  `rag_api_key` rows inherit the principal's tenant binding;
+  `GET /api/v1/rag/auth/me` and the WebUI sidebar display the current tenant,
+  mode and status in read-only form, with no tenant switcher or invite code.
 
 Configuration and runtime semantics are in
 [configuration](configuration.md#多租户配置-wp5); security boundaries and residual

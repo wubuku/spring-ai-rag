@@ -11,26 +11,32 @@
 | 项 | 值 |
 |---|---|
 | 记录时间 | 2026-11-14 |
-| 工作区 | 隔离 worktree `/Users/yangjiefeng/Documents/wubuku/spring-ai-rag-multi-tenancy` |
+| 工作区 | 隔离 worktree `../spring-ai-rag-multi-tenancy` |
 | 分支 | `feature/multi-tenancy-phase1` |
 | 基线 commit | `04e2e678`（本地 `main`，规划终审核 APPROVE 后的规划 checkpoint） |
-| 主工作区 | `/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`，`main` @ `04e2e678`，创建 worktree 时 clean |
-| 工作区状态 | **WP8 已收口**：结果 owner / 回调权威 / SSE 逐次授权 + 内层 worker 租户传播 + V82 证据表 + 门禁 21 项。见 §2g |
-| 当前唯一 `in_progress` | **WP9 — 租户生命周期与状态** |
-| 已完成工作包 | WP1–WP8；证据见 §2b/§2c/§2d/§2e/§2f/§2g |
-| 紧接着要做 | WP9：`TenantLifecycleService` 创建/暂停/恢复/禁用/软删；`rag_api_key`/`rag_api_principal` 绑定租户（`ApiKeyManagementService.authenticate` 投影补 `tenant_id`，WP5 遗留）；SINGLE 拒绝非 default 创建；租户行 + 初始 principal 单事务原子；WebUI 只读展示（typecheck + 构建 + Vitest + Mock Playwright）；先红后绿；退出条件见规划 §6 WP9 |
+| 主工作区 | `../spring-ai-rag`，`main` @ `04e2e678`，创建 worktree 时 clean |
+| 工作区状态 | **WP9 已收口**：租户生命周期/状态机 + 凭据绑定租户 + 平台 capability 守卫 + WebUI 只读展示 + V83 软删列 + 门禁 22 项。见 §2h |
+| 当前唯一 `in_progress` | **WP10 — 租户级配额与用量** |
+| 已完成工作包 | WP1–WP9；证据见 §2b/§2c/§2d/§2e/§2f/§2g/§2h |
+| 紧接着要做 | WP10：在既有 per-principal quota 上增加 tenant 维度聚合与硬阈值（非 billing）；平台全局容量表逐张裁决落地；用量 API 增加 tenant 聚合且不暴露跨租户数据；并发 CAS/配额冲突/超限/恢复测试绿；`configuration*`/`rest-api*` 中英成对同步；先红后绿；退出条件见规划 §6 WP10 |
 | 规划检查计数 | `3/3`（终审核 APPROVE，规划基线冻结；本阶段未触发归零） |
 | 实现检查计数 | 未开始（按 delivery-workflow §7，编码完成后才计数） |
 
-## 1. 恢复入口（当前：WP9 — 租户生命周期与状态；WP3 以下为历史快照）
+## 1. 恢复入口（当前：WP10 — 租户级配额与用量；WP9 以下为历史快照）
 
-**WP9 目标产物（规划 §6 WP9）**：`TenantLifecycleService`（创建/暂停/恢复/禁用/软删）；
-`rag_api_key` / `rag_api_principal` 绑定租户；管理端点仅平台 capability 可调；
-WebUI 只读展示当前租户与模式提示（TS + 构建 + Vitest + Mock Playwright）。
+**WP10 目标产物（规划 §6 WP10）**：在既有 per-principal quota 上增加 tenant 维度
+聚合与硬阈值（**不是 billing / hard-limit 结算**）；平台全局容量表逐张裁决结果落地；
+用量 API 增加 tenant 聚合且不暴露跨租户数据；`docs/configuration*`、`rest-api*`
+中英成对同步。参考 `../seedance-research/docs/multitenancy/drafts/租户级Credits-分配与回收-实施规划.md`
+的分层语义，但改写为本仓自包含通用能力（delivery-workflow §2）。
+退出：配额冲突 / 并发 CAS / 超限 / 恢复测试绿；用量 API 无跨租户可见数据；
+文档门禁绿。先红后绿，逐包提交后更新本账本。
+
+**WP9 目标产物（规划 §6 WP9，已完成，见 §2h）**：`TenantLifecycleService` 创建/暂停/
+恢复/禁用/软删 + 状态机；`rag_api_key` / `rag_api_principal` 绑定租户；
+管理端点仅平台 capability（root + 白名单 + 审计）可调；WebUI 只读展示当前租户与模式提示。
 SINGLE 下创建非 `default` 租户返回冲突并记审计（与 `TenantModeGuard` 同契约）；
-租户行 + 初始 principal 单事务原子，避免幽灵租户。
-退出：生命周期 403/冲突/幂等/审计 + SINGLE 拒绝非 default 创建负向 + 创建原子性测试；
-不实现租户切换器与邀请码。先红后绿，逐包提交后更新本账本。
+租户行 + 初始 principal 单事务原子，避免幽灵租户；不实现租户切换器与邀请码。
 
 **WP8 目标产物（规划 §6 WP8，已完成，见 §2g）**：长任务/导入/评估结果 owner/tenant/receipt；
 任意 task ID 查询不得触发外部 Provider；Provider 回调按 operation 校验 receipt、
@@ -103,6 +109,17 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
 | WP8 静态门禁 `verify-multi-tenancy-wp8.sh` / `verify-multi-tenancy-rls.sh` | **已运行（绿）** | 两者全 PASS；WP8 门禁已接入 `verify-project-docs.sh`（20 → 21 项） |
 | 门控开关对账 `node scripts/verify-integration-test-switches.mjs` | **已运行（绿）** | 40 个开关 / 285 个测试 / 40 个门控类全部可发现且由 `verify-gated-it.sh` 聚合；修复了 WP2–WP8 期间 7 个租户 IT 未登记聚合 runner 的累积漂移 |
 | 编译复核 `mvn -o -q -pl spring-ai-rag-core -am test-compile` | **已运行（绿）** | 监控方提示的「checker/controller patch 后仍有编译错误」已不存在，红点清零 |
+
+| WP9 红点证据 | **已运行（红）** | WP9 装配引入的红点已实测留证：全量 `clean test` 41 个 `OpenApiContractTest` 上下文错误（`tenantLifecycleController` 缺 `TenantLifecycleService` bean），修复后 8568 全绿；WP9 合同测试的「先红」阶段未单独留日志，如实标注为缺口（不计入 §7 验收证据） |
+| WP9 合同测试 `TenantWp9ContractTest` | **已运行（绿）** | 5/5：原子创建 / SINGLE 拒绝非 default / 凭据绑定 / 软删幂等 / capability 守卫 |
+| WP9 凭据绑定投影测试 `TenantCredentialBindingProjectionTest` | **已运行（绿）** | 2/2：认证投影带 tenantId/tenantStatus；`credential()` 继承 principal.tenantId 不回落 default |
+| WP9 HTTP 契约 `TenantLifecycleControllerTest` + `ApiKeyIdentityControllerTest` | **已运行（绿）** | 12 + 9 用例绿（403 / 409 / 404 / 幂等 / root fail-closed / identity 投影） |
+| WP9 真实 PG `TenantWp9PostgresIntegrationTest` | **已运行（绿）** | 4/4（opt-in `-Dtenant-wp9.it.enabled=true`）：V83 迁移 + 软删 + 状态机 + 凭据绑定；连接带 `lock_timeout=30s` / `statement_timeout=900000` |
+| WP9 全模块 JVM 回归 `mvn -o -pl spring-ai-rag-core -am clean test` | **已运行（绿）** | 8568 tests / 0 failures / 0 errors / 296 skipped，BUILD SUCCESS |
+| WP9 静态门禁 `verify-multi-tenancy-lifecycle.sh` | **已运行（绿）** | PASS；已接入 `verify-project-docs.sh` 总入口（21 → 22 项） |
+| WP9 文档门禁 `verify-project-docs.sh` | **已运行（绿）** | 22/22（须先 `git add -A`，latest 迁移号按 `git ls-files` + 磁盘 `find` 双口径） |
+| 门控开关对账 `node scripts/verify-integration-test-switches.mjs` | **已运行（绿）** | 41 开关 / 289 测试 / 41 门控类全部可发现且由 `verify-gated-it.sh` 聚合 |
+| WebUI typecheck / build / Vitest / lint | **已运行（绿）** | `npm run typecheck`、`npm run build`、`npm run test:run`（93 文件 / 1143 测试）、`npm run lint`（含设计系统 525 测试、对齐与 i18n 键检查）全 PASS |
 
 ## 2a. WP2 恢复入口与收尾快照（2026-11-14）
 
@@ -342,7 +359,7 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
     `rag_tenant_callback_replay_nonce`），自带 `ENABLE + FORCE RLS` + 规范 policy
     `tenant_isolation` + 终态断言；**纯事务内 DDL、无 CONCURRENTLY**（承接 §5.1 事故收敛）。
   - `TenantTableCatalog` 登记三表，TENANT_PRIVATE 45 → 48；逐张裁决文档
-    `MULTI_TENANCY_TABLE_CATALOG.md` 同步为 V1–V82 / 73 张存活表 / 48+21+4，
+    `MULTI_TENANCY_TABLE_CATALOG.md` 同步为 V1–V83 / 73 张存活表 / 48+21+4，
     并补上此前漏列的 `rag_tenant` 平台主数据行（69 → 73 行）。
   - `verify-multi-tenancy-rls.sh` 改为「V80 清单 ⊆ catalog，catalog − V80 == V82 三表」；
     `TenantRlsVerifier` 只校验 V80 清单（V80 是已执行迁移，不回写），V82 表由
@@ -385,7 +402,7 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
     中英成对补「多租户真实 PostgreSQL 门控套件」命令清单；
     `node scripts/verify-integration-test-switches.mjs` 从红（12 项违规）转绿
     （40 开关 / 285 测试 / 40 类全部可发现且聚合）。
-  - 全仓当前事实文档 `V1–V81`→`V1–V82`（18 个文件，含 `.agents/skills/project-docs/`）；
+  - 全仓当前事实文档 `V1–V81`→`V1–V83`（18 个文件，含 `.agents/skills/project-docs/`）；
     `SSE-PROTOCOL.md` §8.1、`architecture*`、`security-boundary*`、`testing-guide*`
     中英成对同步；`docs/drafts/MULTI_TENANCY_TABLE_CATALOG.md` 补 V82 三表与
     §4 RLS 覆盖口径。`docs/drafts/MULTI_TENANCY_EXTERNAL_LESSONS.md` 与
@@ -405,6 +422,84 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
   4. `TenantEndpointGuard` 仍由装配层注入空声明集合（WP6 遗留），
      WP12 门禁收口时从 `ApiRoutePolicyRegistry.describe()` 驱动全覆盖。
 
+## 2h. WP9 收尾快照（2026-11-14）
+
+- **产物 A：租户生命周期与状态机（core 包 `com.springairag.core.tenant`）**：
+  - `TenantStatus`（`ACTIVE` / `SUSPENDED` / `DISABLED`）、`TenantCreateCommand`、
+    `TenantLifecycleAudit`（`Logging` 实现）、`TenantSqlExecutor` / `JdbcTenantSqlExecutor`、
+    `TenantLifecycleService`、`RagTenant` JPA 实体。
+  - 状态机：`ACTIVE → SUSPENDED/DISABLED`，`SUSPENDED → ACTIVE`，
+    `DISABLED` 终态；`SUSPENDED → DISABLED` 禁止（非法迁移 → 409）。
+  - **幽灵租户教训落实**：租户行 + 初始 principal 写入同一个
+    `TransactionTemplate.execute`；初始 principal 失败即整体 rollback，
+    不留「有租户无凭据」的孤儿行。
+  - **SINGLE 守卫**：创建非 `default` 租户直接拒绝并记 `REJECT` 审计，
+    与 WP3 `TenantModeGuard` 同一契约（启动期校验凭据全 `default`）。
+- **产物 B：V83 迁移（软删）**：
+  `V83__tenant_lifecycle_soft_delete.sql` 为 `rag_tenant` 增 `deleted_at` 软删列 +
+  `idx_rag_tenant_active` 部分索引 + 终态断言；**纯事务内 DDL、无 CONCURRENTLY**
+  （承接 §5.1 事故收敛），不改写 V1–V82 已执行迁移。
+- **产物 C：凭据绑定租户（WP5 遗留收口）**：
+  - `RagApiKey` / `RagApiPrincipal` 增 `tenant_id`（默认 `default`）。
+  - `RagApiKeyRepository.AuthenticationProjection` 增 `getTenantId()` / `getTenantStatus()`；
+    `authenticate` 的 JPQL 加 `p.tenantId` 谓词 + `RagTenant` 状态子查询，
+    软删后查不到状态 → 认证失败。
+  - `ApiKeyManagementService.authenticate(...)` / `findActivePrincipal(...)` 显式传
+    `tenantId` / `tenantStatus`，状态为空降级为 `DISABLED`（fail-closed）。
+  - `credential(...)` 改为 `credential.setTenantId(principal.getTenantId())`，
+    修掉「`rag_api_key.tenant_id` 悄悄回落 `default`」的静默降级缺陷。
+  - `TenantLifecycleService.readStatus(...)` 捕获 `EmptyResultDataAccessException`
+    返回 `null`（无行不是 500）。
+- **产物 D：平台 capability 守卫（管理面）**：
+  - `PlatformCapability.TENANT_LIFECYCLE` 登记；`TenantConfiguration` 注册 handler
+    为 `lifecycleService::describe`（最小身份投影，不返回私有正文）。
+  - `TenantLifecycleController` 暴露 `POST /api/v1/rag/tenants`、
+    `POST .../{tenantId}/suspend|resume|disable`、`DELETE .../{tenantId}`、
+    `GET .../{tenantId}`；双重门槛：**root 凭据已配置且已通过 root 认证**
+    （未配置 root 也拒绝，fail-closed）+ capability actor 白名单；
+    拒绝与放行都记 `PlatformAuditEvent`。
+  - `TenantProperties.lifecycleActors` 默认 `environment-root`；
+    `application.yml` 新增 `rag.tenant.mode` 与 `rag.tenant.lifecycle-actors`。
+  - **装配教训**：`tenantLifecycleService` 最初放在 `RagWebSecurityConfiguration`，
+    要求 `JdbcTemplate` + `PlatformTransactionManager`，导致无 JDBC 的轻量切片上下文
+    启动失败（41 个 `OpenApiContractTest` 上下文错误）。修法：bean 移到
+    `TenantConfiguration` 并加 `@ConditionalOnBean({JdbcTemplate, PlatformTransactionManager})`，
+    controller 再加 `@ConditionalOnBean(TenantLifecycleService.class)`，
+    无 JDBC 上下文直接不装配该平台面。
+- **产物 E：身份响应与 WebUI 只读展示**：
+  - `ApiKeyIdentityResponse` 增 `tenantId` / `tenantMode` / `tenantStatus`；
+    `ApiKeyIdentityController` 改为 3 参构造（root / legacy-static 填
+    `default` + 当前 mode + `ACTIVE`，数据库 principal 用认证投影覆盖）。
+  - WebUI `ApiKeyIdentity` 类型同步三字段；`Layout.tsx` 侧栏新增
+    `data-testid="tenant-info"` 只读条（`text-align: start`）；
+    i18n 中英新增 `tenant.readOnly`；`Layout.test.tsx` 增 WP9 展示用例（17/17 绿）。
+  - **明确不做**：租户切换器、邀请码（规划 §6 WP9 显式排除）。
+- **红→绿证据**：`TenantWp9ContractTest` 5/5、`TenantCredentialBindingProjectionTest` 2/2、
+  `TenantLifecycleControllerTest` + `ApiKeyIdentityControllerTest` 21 用例绿、
+  `TenantWp9PostgresIntegrationTest` **4/4（真实 PG）**、
+  全模块 `clean test` **8568 tests / 0 failures / 0 errors**、
+  `verify-multi-tenancy-lifecycle.sh` PASS、总门禁 **22/22**、
+  WebUI typecheck + build + 1143 Vitest + lint 全绿。
+- **门禁与文档收口**：
+  - 新增 `scripts/verify-multi-tenancy-lifecycle.sh` 并接入 `verify-project-docs.sh`
+    （21 → 22 项）；`verify-gated-it.sh` 登记 `tenant-wp9:TenantWp9PostgresIntegrationTest`；
+    `testing-guide*` 中英成对补 `-Dtenant-wp9.it.enabled=true` 运行路径。
+  - 全仓当前事实文档 `V1–V82`→`V1–V83`（含 `.agents/skills/project-docs/`）；
+    `configuration*` / `rest-api*` / `architecture*` / `security-boundary*` /
+    `verification-baseline*` / `release-checklist*` 中英成对同步；
+    `MULTI_TENANCY_TABLE_CATALOG.md` 补 `rag_tenant.deleted_at` 与部分索引。
+  - 账本 §0 的 worktree 绝对路径改为相对路径 `../spring-ai-rag-multi-tenancy`
+    （跨仓材料一律相对路径，交付纪律）。
+- **如实声明的缺口（不阻断 WP10，阻断发布与「生产多租户已完成」宣称）**：
+  1. **单连接执行问题已规避但未做连接池整体断言**：真实 PG 用例走单连接
+     `ConnectionCallback`，未覆盖「同一池内多连接并发切换租户」的端到端回归。
+  2. **生命周期端点无真实外部凭据体系对接**：root 门槛复用现有
+     `EnvironmentRootCredentialResolver`，没有独立的平台账号体系。
+  3. **`TenantEndpointGuard` 仍注入空声明集合**（WP6 遗留），WP12 门禁收口时
+     从 `ApiRoutePolicyRegistry.describe()` 驱动全覆盖。
+  4. **用量/配额维度尚未落地**（WP10）。
+
+
 ## 3. 环境与隔离边界（WORKTREE.md 硬门禁）
 
 - 本 worktree 目前**未创建任何 `.env` / `.env.*`**，未改主工作区任何环境文件。
@@ -422,8 +517,9 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
 | 实施起点 | 用户明确要求「创建隔离 worktree，开始实施」，按 PLANNING.md §5 已获批准 |
 | 本轮新增决策 | 分支名 `feature/multi-tenancy-phase1`；worktree 目录 `../spring-ai-rag-multi-tenancy`；阶段一先做 WP1–WP4；凭据类别细化为 4 张（含 rotation / provisioning 生命周期表，与规划 §5.2「凭据及其生命周期」一致）；平台全局 20 张逐张裁决理由见裁决文档 |
 | 相对规划的偏离 | 无方案级偏离；规划头部补「进度账本」链接属 PLANNING §6 要求的配套编辑，不改变方案语义。红测中「凭据表应为 2 张」的断言口径偏窄，已按实现契约修正为 4 张并补「凭据表不得启用 RLS」断言 |
-| 已知风险 | `origin/main` 落后本地 main，后期合并需按 §8 顺序；在线 CONCURRENTLY 演练仅限演练库，不进迁移链；WP8 无真实外部 Provider 调用（合同级探针），SSE 只接一个端点（见 §2g 缺口）；凭据绑定租户与 endpoint 声明全覆盖仍留 WP9/WP12 |
+| 已知风险 | `origin/main` 落后本地 main，后期合并需按 §8 顺序；在线 CONCURRENTLY 演练仅限演练库，不进迁移链；WP8 无真实外部 Provider 调用（合同级探针），SSE 只接一个端点（见 §2g 缺口）；`TenantEndpointGuard` 声明全覆盖留 WP12；WP9 单连接 PG 用例未覆盖连接池内多连接并发切换；用量/配额维度未落地（WP10） |
 | WP8 新增决策 | V82 证据表自带 RLS 与终态断言，不回写已执行的 V80；`verify-multi-tenancy-rls.sh` 按「V80 ⊆ catalog，catalog−V80 == V82 三表」覆盖；WP2–WP8 的 7 个租户 IT 全部登记 `verify-gated-it.sh`，`testing-guide*` 中英成对补命令清单（修复门控开关对账 12 项红） |
+| WP9 新增决策 | V83 纯事务 DDL（`deleted_at` + 部分索引 + 终态断言），不改写 V1–V82；凭据表 `tenant_id` 默认 `default` 且认证投影绑租户状态，不静默回落；租户行 + 初始 principal 单事务原子（承接 `../seedance-research/multitenancy-verification/` 幽灵租户教训）；生命周期端点 root + capability 双门槛、`@ConditionalOnBean` 避免无 JDBC 切片上下文失败；`TenantLifecycleController` 不实现切换器/邀请码；账本与参考材料统一相对路径 |
 | 阻塞 | 无 |
 
 ## 5. 工作包复盘（PLANNING §6.1）
@@ -437,6 +533,8 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
 | WP4 | **已收口（带已知缺口，不阻断进入 WP5，但阻断发布与生产多租户声明）**：V81 补齐 `embedding_1024` ANN 索引；双租户 RLS 集成 5/5、HNSW+RLS 基准 1/1（ANN 存在性与延迟 ≤3× 两条硬门槛通过）；quality-defaults 中英成对落门槛并同步可复现性契约；全仓 `V1–V81` 文档同步。**教训**：规划 §3 曾把旧 `embedding` 列的 V1 HNSW 当作当前事实，V68 已 DROP COLUMN 导致 `embedding_1024` 长期无 ANN 索引，基准测试先暴露「Seq Scan」才补 V81——「事实表」必须按迁移净终态核对，不能按早期迁移文本推断。V81 后 `planUsesIndex=false`（小数据集 planner 选 Seq Scan）与「多租户混合 Recall@K 未测」如实记为已知缺口，不静默判通过；门禁 latest 由 `git ls-files` + 磁盘 `find` 双口径判定，新迁移必须先 `git add` 再跑 `verify-project-docs.sh`。 |
 
 | WP8 | **已关闭可计分交付**：V82 三表 + 结果 owner / 回调权威 / SSE 逐次授权 + 内层 worker 租户传播 + `TenantContext.wrap(Supplier)` 修复全部落地；合同测试 10/10、真实 PG 4/4、JVM 8540 全绿、WP8 静态门禁 + RLS 门禁全绿、门禁总入口 20 → 21 项。**教训**：① 参考项目 `../seedance-research/multitenancy-verification/...` 的 callback_receipt / replay_nonce / job_result 三表模板直接决定了 V82 表结构（按本仓自包含对象模型重写，不引外部私有协议）；② 任意 task ID 查询必须走持久化 receipt，body / 进程内 volatile registry 一律不具权威；③ SSE「建连一次授权」是真实越权路径，撤权后旧订阅必须逐次投递重查 ACL，但当前只接 `embedDocumentStream` 一个 request-scoped 短流端点，如实记为边界而非宣称全覆盖；④ `TenantWorkItemAssert` 必须「先判 tenant 列 null 再判无上下文」，否则旧 fixture 误 fail-closed；⑤ `TenantContext.wrap(Supplier)` 的快照必须在提交时捕获，不能放进 lambda 执行时读；⑥ 真实 PG 集成里 JdbcTemplate 分散借连接会让 GUC 与查询不在同一连接，改单连接 `ConnectionCallback` 后 4/4 绿；⑦ 门控 IT 累积 7 个未登记聚合 runner，`verify-integration-test-switches.mjs` 一次报 12 项红——「先跑门禁再补文档」的顺序不能省，且新增 opt-in IT 必须同步 `verify-gated-it.sh` + `testing-guide*`。 |
+
+| WP9 | **已关闭可计分交付**：V83 软删列 + 生命周期服务/状态机 + 凭据绑定租户 + 平台 capability/root/审计 + WebUI 只读展示全部落地；合同 5/5、投影 2/2、HTTP 21 用例、真实 PG 4/4、JVM 8568 全绿、WebUI 1143 测试 + lint 全绿、总门禁 22/22。**教训**：① 参考项目 `../seedance-research/multitenancy-verification/` 的「幽灵租户」反模式直接决定单事务原子创建；② 平台面 bean 不能放进安全配置强依赖 `JdbcTemplate` + `PlatformTransactionManager`，否则无 JDBC 的 41 个 `OpenApiContractTest` 上下文一起红——条件装配必须对称（服务 bean + controller 都加 `@ConditionalOnBean`）；③ `mvn -pl core test` 不带 `-am` 时依赖模块可能用旧编译产物（`NoSuchMethodError: setTenantId`），取证必须 `-am clean test` 或即时 surefire 报告；④ `git add -A` 是文档门禁 latest 迁移号判定的前置条件，新增迁移/脚本未 tracked 会误报；⑤ 跨仓材料一律相对路径，账本 §0 的 worktree 绝对路径本包已清理。 |
 
 ### 5.1 事故严重度判定与解堵复核（2026-11-14，监控方解堵通报）
 

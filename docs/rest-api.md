@@ -165,7 +165,10 @@ confirm that the submitted credential is the environment root:
   "capabilities": ["RAG_READ", "RAG_WRITE", "API_KEY_MANAGE"],
   "principalRole": null,
   "collectionAccessMode": "UNRESTRICTED",
-  "allowedCollectionKeys": null
+  "allowedCollectionKeys": null,
+  "tenantId": "default",
+  "tenantMode": "SINGLE",
+  "tenantStatus": "ACTIVE"
 }
 ```
 
@@ -182,7 +185,10 @@ Example for a restricted database business key:
   "policyVersion": 3,
   "principalRole": "NORMAL",
   "collectionAccessMode": "RESTRICTED",
-  "allowedCollectionKeys": ["customer-42:records:v1"]
+  "allowedCollectionKeys": ["customer-42:records:v1"],
+  "tenantId": "acme",
+  "tenantMode": "STRICT",
+  "tenantStatus": "ACTIVE"
 }
 ```
 
@@ -201,6 +207,43 @@ key cannot inspect another principal, and the WebUI refuses to unlock the
 management console with one. Responses include `Cache-Control: no-store`.
 See the [Business Service Integration Guide](business-client-integration.md)
 for production binding and rotation.
+
+`tenantId` / `tenantMode` / `tenantStatus` are the **read-only** tenant-context
+fields added by WP9: `tenantId` is the tenant bound to the credential (root and
+legacy static report `default`), `tenantMode` is the run mode (`SINGLE` /
+`STRICT`), and `tenantStatus` is the bound tenant's status (`ACTIVE` /
+`SUSPENDED` / `DISABLED`; a missing or soft-deleted tenant reports `DISABLED`,
+fail-closed). The WebUI only displays them; there is no tenant switcher and no
+invite code.
+
+#### Tenant lifecycle endpoints (WP9, platform side)
+
+The endpoints below are platform-side. Only an actor that has a configured
+environment root credential, has passed root authentication, and is listed in
+`rag.tenant.lifecycle-actors` may call them; when the root credential is not
+configured they return 403 as well. Every call is audited as a capability event
+(actor / target tenant / allowed or not).
+
+| Endpoint | Semantics | Success | Conflict | Other |
+|---|---|---|---|---|
+| `POST /api/v1/rag/tenants` | Create a tenant (tenant row + initial principal, **single transaction**) | `201` | `409` (already exists / SINGLE rejects non-default) | `400` invalid `tenant_id`; `403` non-root or actor outside the whitelist |
+| `POST /api/v1/rag/tenants/{tenantId}/suspend` | `ACTIVE → SUSPENDED` | `200` | `409` illegal state transition | `404` tenant missing or soft-deleted |
+| `POST /api/v1/rag/tenants/{tenantId}/resume` | `SUSPENDED → ACTIVE` | `200` | `409` illegal state transition | `404` same as above |
+| `POST /api/v1/rag/tenants/{tenantId}/disable` | `ACTIVE → DISABLED` (terminal) | `200` | `409` illegal state transition | `404` same as above |
+| `DELETE /api/v1/rag/tenants/{tenantId}` | Soft-delete marker (idempotent, never physical) | `200` | — | `403` non-root |
+| `GET /api/v1/rag/tenants/{tenantId}` | Minimal identity projection (`tenantId` + `status`) | `200` | — | `404` same as above |
+
+`tenantId` must match `^[a-z0-9][a-z0-9_-]{0,63}$`. The state machine only
+tightens: `DISABLED` is terminal, and `SUSPENDED` must be resumed before it can
+be disabled. In `SINGLE` mode, creating a non-`default` tenant returns `409`
+and records a `REJECT` audit entry (the same contract as `TenantModeGuard`).
+
+```json
+{
+  "tenantId": "acme",
+  "status": "ACTIVE"
+}
+```
 
 #### `GET /api/v1/rag/integration-capabilities`
 

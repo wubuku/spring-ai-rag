@@ -71,7 +71,10 @@ class ApiKeyIdentityControllerTest {
                 .andExpect(jsonPath("$.principalRole").value(nullValue()))
                 .andExpect(jsonPath("$.collectionAccessMode")
                         .value("UNRESTRICTED"))
-                .andExpect(jsonPath("$.allowedCollectionKeys").value(nullValue()));
+                .andExpect(jsonPath("$.allowedCollectionKeys").value(nullValue()))
+                .andExpect(jsonPath("$.tenantId").value("default"))
+                .andExpect(jsonPath("$.tenantMode").value("SINGLE"))
+                .andExpect(jsonPath("$.tenantStatus").value("ACTIVE"));
     }
 
     @Test
@@ -158,6 +161,33 @@ class ApiKeyIdentityControllerTest {
                 .andExpect(jsonPath("$.allowedCollectionKeys").value(nullValue()));
 
         verify(collectionIdentityResolver, never()).mapKeys(any());
+    }
+
+    @Test
+    void databaseKey_exposesBoundTenantAndStatus() throws Exception {
+        when(rootCredentialResolver.isConfigured()).thenReturn(true);
+        mockMvc.perform(get("/api/v1/rag/auth/me")
+                        .with(request -> {
+                            request.setAttribute(
+                                    ApiKeyAuthFilter.AUTHENTICATED_PRINCIPAL_TYPE,
+                                    ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY);
+                            request.setAttribute(
+                                    ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE,
+                                    "rag_p_business");
+                            request.setAttribute(
+                                    ApiKeyAuthFilter.AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE,
+                                    new AuthenticatedApiPrincipal(
+                                            "rag_p_business", "rag_k_v3", 3,
+                                            ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY,
+                                            ApiKeyRole.NORMAL, null, null, 6L, 120,
+                                            java.util.List.of("RAG_READ"),
+                                            "acme", "ACTIVE"));
+                            return request;
+                        }))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tenantId").value("acme"))
+                .andExpect(jsonPath("$.tenantStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$.tenantMode").value("SINGLE"));
     }
 
     @Test

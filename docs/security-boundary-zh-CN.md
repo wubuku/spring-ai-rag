@@ -448,3 +448,15 @@ python3 scripts/verify-webui-credential-security-e2e.py
 真实后端 + 真实 Chromium：解锁后扫描全部存储面；刷新回到 Unlock；新标签页
 保持锁定；页面内注入脚本扫描存储/全局/表单读不到凭据；登出后存储清空；
 所有请求 URL 与 `Referer` 不含凭据，凭据只出现在 `X-API-Key` 请求头。
+
+## 租户生命周期平台面边界（WP9）
+
+- `/api/v1/rag/tenants` 系列端点属于平台管理面：只允许「已配置环境 root 凭据 +
+  通过 root 认证 + 在 `rag.tenant.lifecycle-actors` 白名单内」的 actor；
+  root 未配置时 fail-closed（403），任何静态/数据库凭据都不能创建租户。
+- 每次生命周期调用都记 capability 审计（actor / 目标租户 / 允许与否），
+  不记录租户私有正文；SINGLE 模式拒绝创建非 `default` 租户时同样记 `REJECT` 审计。
+- 租户状态 `DISABLED` 与软删（`deleted_at`）之后，认证投影里的租户状态子查询返回空，
+  `PrincipalTenantResolver` 一律 fail-closed（视为非 `ACTIVE`），旧凭据立刻失效。
+- 业务数据面没有跨租户入口：凭据表与租户生命周期平台表都不开 RLS，
+  但只在认证与平台管理路径访问，不参与业务查询链路。

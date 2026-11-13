@@ -285,6 +285,14 @@ rag:
   multi-instance:
     # 声明本进程与其他副本共享同一个 PostgreSQL；启动期拒绝会被副本数放大的本地限流配置。
     enabled: ${RAG_MULTI_INSTANCE_ENABLED:false}
+  tenant:
+    # WP5：运行模式。SINGLE = 单租户（default，不启用 RLS 校验）；
+    # STRICT = 多租户（凭据绑定 tenant_id + RLS 全项校验，由启动守卫执行）。
+    mode: ${RAG_TENANT_MODE:SINGLE}
+    # WP9：允许调用租户生命周期 capability 的 actor 白名单。
+    # 默认只有 environment-root；运维可追加平台账号，但绝不接受请求 header 自称的 actor。
+    lifecycle-actors:
+      - environment-root
   data-governance:
     enabled: ${RAG_DATA_GOVERNANCE_ENABLED:true}
     audit-log-retention-days: ${RAG_DATA_GOVERNANCE_AUDIT_LOG_RETENTION_DAYS:400}

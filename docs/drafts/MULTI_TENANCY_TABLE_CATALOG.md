@@ -2,7 +2,7 @@
 
 > 机器可读单一事实源：`spring-ai-rag-core/src/main/java/com/springairag/core/tenant/TenantTableCatalog.java`
 >（本文与其必须保持一致，新增表先改 catalog + 本文再写迁移）。
-> 基线：Flyway V1–V82 共 **73 张存活业务表**（V1–V74 的 69 张存量表 + V75 新增
+> 基线：Flyway V1–V83 共 **73 张存活业务表**（V1–V74 的 69 张存量表 + V75 新增
 > `rag_tenant` + V82 新增 3 张 WP8 结果/回调证据表；V26 已 DROP 的 `rag_vector_store` 不登记）；
 > 表集合不写死，以迁移脚本与 `TenantTableCatalogTest` 动态基线比对为准。
 > 分类：**TENANT_PRIVATE 48 / PLATFORM_GLOBAL 21 / CREDENTIAL 4**。
@@ -93,7 +93,7 @@
 | 67 | `rag_api_principal` | 凭据 | 否 | 是（V80 绑定列） | `V48__managed_api_principals_and_shared_quota.sql` | 1 | 18 | 0 | 0 | 受管 principal，认证入口与配额主体 | "app 角色 digest/ID 精确查找；无平台池" |
 | 68 | `rag_api_key_rotation` | 凭据 | 否 | 是（V80 绑定列） | `V55__bounded_api_credential_rotation.sql` | 1 | 28 | 1 | 3 | 密钥轮换生命周期随凭据，无 RLS | "app 角色：轮换端点读写" |
 | 69 | `rag_api_provisioning_operation` | 凭据 | 否 | 是（V80 绑定列） | `V50__api_key_provisioning_idempotency.sql` | 1 | 24 | 1 | 0 | 凭据供给幂等操作随凭据生命周期，无 RLS | "app 角色：供给端点读写" |
-| 70 | `rag_tenant` | 平台全局 | 否 | 否 | `V75__tenant_base.sql` | 1 | 6 | 1 | 0 | 租户主数据是平台目录（platform pool 管理），本身不带 tenant_id 且无 RLS | "平台池：租户生命周期读写" |
+| 70 | `rag_tenant` | 平台全局 | 否 | 否 | `V75__tenant_base.sql` / `V83__tenant_lifecycle_soft_delete.sql` | 1 | 7 | 2 | 0 | 租户主数据是平台目录（platform pool 管理），本身不带 tenant_id 且无 RLS；V83 新增 `deleted_at` 软删列与 `idx_rag_tenant_active` 部分索引，ACTIVE 枚举排除软删行 | "平台池：租户生命周期读写" |
 | 71 | `rag_tenant_result_receipt` | 租户私有 | 是（V82 自带） | 是 | `V82__tenant_result_callback_evidence.sql` | 1 | 9 | 1 | 0 | WP8 结果 owner 四元组（tenant/collection/owner/receipt）持久化证据，禁止任意 task ID 触发外部 Provider 查询 | POOL_NONE |
 | 72 | `rag_tenant_callback_receipt` | 租户私有 | 是（V82 自带） | 是 | `V82__tenant_result_callback_evidence.sql` | 1 | 11 | 1 | 0 | WP8 回调权威 receipt + response-lost durable intent，按 operation/client_token 幂等绑定 Provider task | POOL_NONE |
 | 73 | `rag_tenant_callback_replay_nonce` | 租户私有 | 是（V82 自带） | 是 | `V82__tenant_result_callback_evidence.sql` | 1 | 6 | 1 | 0 | WP8 回调 replay nonce 持久化，首次 claim 成功、重复即拒绝；callback 与 manual audit principal 分离 | POOL_NONE |

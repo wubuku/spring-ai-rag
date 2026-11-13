@@ -141,7 +141,10 @@ upsert 等竞态；不只读代码。完整契约见[并发与幂等验收](test
   "capabilities": ["RAG_READ", "RAG_WRITE", "API_KEY_MANAGE"],
   "principalRole": null,
   "collectionAccessMode": "UNRESTRICTED",
-  "allowedCollectionKeys": null
+  "allowedCollectionKeys": null,
+  "tenantId": "default",
+  "tenantMode": "SINGLE",
+  "tenantStatus": "ACTIVE"
 }
 ```
 
@@ -158,7 +161,10 @@ restricted 数据库业务 Key 的响应示例：
   "policyVersion": 3,
   "principalRole": "NORMAL",
   "collectionAccessMode": "RESTRICTED",
-  "allowedCollectionKeys": ["customer-42:records:v1"]
+  "allowedCollectionKeys": ["customer-42:records:v1"],
+  "tenantId": "acme",
+  "tenantMode": "STRICT",
+  "tenantStatus": "ACTIVE"
 }
 ```
 
@@ -173,6 +179,38 @@ unrestricted。
 allow-list。数据库业务 Key 不能用该端点查看其他 principal；WebUI 也不允许其解锁管理台。
 响应带 `Cache-Control: no-store`。完整生产 binding 和轮换流程见
 [业务服务接入指南](business-client-integration-zh-CN.md)。
+
+`tenantId` / `tenantMode` / `tenantStatus` 是 WP9 新增的**只读**租户上下文字段：
+`tenantId` 为凭据绑定的租户（root 与 legacy static 固定 `default`），`tenantMode` 为
+运行模式（`SINGLE` / `STRICT`），`tenantStatus` 为绑定租户的状态
+（`ACTIVE` / `SUSPENDED` / `DISABLED`；查不到或已软删一律 `DISABLED`，fail-closed）。
+WebUI 只做只读展示，不提供租户切换器与邀请码。
+
+#### 租户生命周期管理端点（WP9，平台面）
+
+以下端点属于平台管理面，只允许「已配置环境 root 凭据 + 通过 root 认证 + 在
+`rag.tenant.lifecycle-actors` 白名单内」的 actor 调用；root 未配置时同样返回 403。
+每次调用记 capability 审计（actor / 目标租户 / 允许与否）。
+
+| 端点 | 语义 | 成功 | 冲突 | 其它 |
+|---|---|---|---|---|
+| `POST /api/v1/rag/tenants` | 创建租户（租户行 + 初始 principal **单事务原子**） | `201` | `409`（已存在 / SINGLE 拒绝非 default） | `400` 非法 `tenant_id`；`403` 非 root 或白名单外 actor |
+| `POST /api/v1/rag/tenants/{tenantId}/suspend` | `ACTIVE → SUSPENDED` | `200` | `409` 非法状态迁移 | `404` 租户不存在或已软删 |
+| `POST /api/v1/rag/tenants/{tenantId}/resume` | `SUSPENDED → ACTIVE` | `200` | `409` 非法状态迁移 | `404` 同上 |
+| `POST /api/v1/rag/tenants/{tenantId}/disable` | `ACTIVE → DISABLED`（终态） | `200` | `409` 非法状态迁移 | `404` 同上 |
+| `DELETE /api/v1/rag/tenants/{tenantId}` | 软删标记（幂等，不物理删除） | `200` | — | `403` 非 root |
+| `GET /api/v1/rag/tenants/{tenantId}` | 最小身份投影（`tenantId` + `status`） | `200` | — | `404` 同上 |
+
+`tenantId` 必须匹配 `^[a-z0-9][a-z0-9_-]{0,63}$`。状态机单向收紧：`DISABLED` 是终态，
+`SUSPENDED` 必须先 `resume` 才能 `disable`。`SINGLE` 模式下创建非 `default` 租户返回
+`409` 并记 `REJECT` 审计（与 `TenantModeGuard` 同一契约）。
+
+```json
+{
+  "tenantId": "acme",
+  "status": "ACTIVE"
+}
+```
 
 #### `GET /api/v1/rag/integration-capabilities`
 

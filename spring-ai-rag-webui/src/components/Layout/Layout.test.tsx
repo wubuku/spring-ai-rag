@@ -350,3 +350,48 @@ describe('Layout responsive sidebar and logout', () => {
     });
   });
 });
+
+
+const { identityWithTenant } = vi.hoisted(() => ({
+  identityWithTenant: {
+    principalType: 'DATABASE_API_KEY',
+    principalId: 'rag_p_business',
+    rootMode: false,
+    capabilities: ['RAG_READ'],
+    principalRole: 'NORMAL',
+    collectionAccessMode: 'UNRESTRICTED',
+    allowedCollectionKeys: null,
+    tenantId: 'acme',
+    tenantMode: 'STRICT',
+    tenantStatus: 'ACTIVE',
+  },
+}));
+
+describe('WP9 tenant read-only display', () => {
+  it('renders current tenant, mode and status from identity without switcher', async () => {
+
+    // 本文件其余用例把 identity 固定为 null；这里用一个局部 spy 覆盖模块 mock，
+    // 不改变其它用例的行为。
+    const authModule = await import('../../auth/ApiKeyAuthContext');
+    const original = authModule.useApiKeyAuth;
+    vi.spyOn(authModule, 'useApiKeyAuth').mockReturnValue({
+      identity: identityWithTenant,
+      isUnlocked: true,
+      unlock: vi.fn(),
+      logout: vi.fn(),
+    });
+
+    render(
+      <MemoryRouter>
+        <Layout />
+      </MemoryRouter>
+    );
+    const info = screen.getByTestId('tenant-info');
+    expect(info).toHaveTextContent('tenant.readOnly');
+    // 只读：没有下拉/切换按钮；展示文案不渲染凭据字段。
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(info.textContent).not.toContain('password');
+    expect(info.textContent).not.toContain('credential');
+    vi.spyOn(authModule, 'useApiKeyAuth').mockImplementation(original);
+  });
+});

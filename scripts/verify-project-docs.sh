@@ -395,6 +395,7 @@ check_scripts_and_commands() {
       scripts/verify-multi-tenancy-endpoint-guard.sh \
       scripts/verify-multi-tenancy-jobs.sh \
       scripts/verify-multi-tenancy-wp8.sh \
+      scripts/verify-multi-tenancy-lifecycle.sh \
       scripts/run-claude-grok.sh; do
     [[ -x "$script" ]] || {
       echo "Documented script is missing or not executable: $script" >&2
@@ -610,5 +611,16 @@ check_multi_tenant_wp8_gate() {
   "$script"
 }
 run_check "Multi-tenancy WP8 gate" check_multi_tenant_wp8_gate
+
+# WP9：租户生命周期 / 原子创建 / 凭据绑定 / 平台 capability 守卫 / WebUI 只读展示静态门禁。
+check_multi_tenant_lifecycle_gate() {
+  local script="scripts/verify-multi-tenancy-lifecycle.sh"
+  [[ -x "$script" ]] || {
+    echo "Multi-tenancy lifecycle gate is missing or not executable: $script" >&2
+    return 1
+  }
+  "$script"
+}
+run_check "Multi-tenancy lifecycle gate" check_multi_tenant_lifecycle_gate
 
 echo "Project documentation verification: $PASS_COUNT checks passed."

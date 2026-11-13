@@ -1883,3 +1883,26 @@ rag:
 
 相关静态门禁：`scripts/verify-multi-tenancy-rls.sh`（WP3）与
 `scripts/verify-multi-tenancy-guc.sh`（WP5，核对 GUC 三件套与非事务 JDBC 现场清单）。
+
+### 租户生命周期 actor 白名单（WP9）
+
+平台面（创建/暂停/恢复/禁用/软删租户）的调用方白名单由 `rag.tenant.lifecycle-actors`
+配置，默认只有 `environment-root`：
+
+```yaml
+rag:
+  tenant:
+    mode: SINGLE
+    lifecycle-actors:
+      - environment-root
+```
+
+- 白名单之外的 actor 一律 403，并且**每次调用都记 capability 审计**（actor / 目标租户 /
+  允许与否），不记录租户私有正文。
+- actor 只能来自认证后的 principal 身份，**不接受请求头自称的 actor**。
+- 生命周期端点在 root 凭据未配置时同样 fail-closed（403），避免任何一条静态/数据库凭据
+  绕开平台白名单创建租户。
+- 生命周期管理端点是平台面（`/api/v1/rag/tenants`），与凭据表一样不走业务租户 RLS；
+  业务数据面不暴露任何跨租户入口。
+
+相关静态门禁：`scripts/verify-multi-tenancy-lifecycle.sh`（WP9）。

@@ -16,6 +16,9 @@
     "search": "检索",
     "settings": "设置"
   },
+  "tenant": {
+    "readOnly": "当前租户：{{tenantId}} · {{mode}} · {{status}}（只读）"
+  },
   "unlock": {
     "title": "解锁管理控制台",
     "rootApiKey": "Root API Key",

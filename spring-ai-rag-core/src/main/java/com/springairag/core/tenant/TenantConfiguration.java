@@ -80,11 +80,52 @@ public class TenantConfiguration {
         return new TenantDataSourceBeanPostProcessor();
     }
 
-    /** WP6：平台 capability 注册表（跨租户 discovery 最小投影 + 白名单 + 审计）。 */
+    /**
+     * WP9：租户生命周期服务（平台面，仅由 TenantLifecycleController 调用）。
+     *
+     * <p>{@code @ConditionalOnBean} 保证无 JDBC / 无事务管理器的轻量测试上下文
+     * （例如 WebMvcTest 的认证装配切片）不会因为这个平台面 bean 启动失败。</p>
+     */
+    @Bean
+    @ConditionalOnMissingBean(TenantLifecycleService.class)
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnBean(
+            {JdbcTemplate.class,
+             org.springframework.transaction.PlatformTransactionManager.class})
+    public TenantLifecycleService tenantLifecycleService(
+            JdbcTemplate jdbcTemplate,
+            org.springframework.transaction.PlatformTransactionManager transactionManager,
+            RagProperties properties) {
+        org.springframework.transaction.support.TransactionTemplate template =
+                new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        return new TenantLifecycleService(
+                jdbcTemplate, template,
+                properties.getTenant().getMode(),
+                new TenantLifecycleAudit.Logging());
+    }
+
+    /**
+     * WP6/WP9：平台 capability 注册表（最小投影 + 白名单 + 审计）。
+     *
+     * <p>WP9 把 {@link PlatformCapability#TENANT_LIFECYCLE} 真正接线到
+     * {@link TenantLifecycleService#describe(String)}：controller 在每次生命周期调用前
+     * 先经本注册表做 actor 白名单校验并记 {@link PlatformAuditEvent}；handler 只返回
+     * 最小身份投影，不返回私有正文。未登记 capability / 白名单外 actor 一律拒绝。</p>
+     */
     @Bean
     @ConditionalOnMissingBean(PlatformCapabilityRegistry.class)
-    public PlatformCapabilityRegistry platformCapabilityRegistry() {
-        return new PlatformCapabilityRegistry();
+    public PlatformCapabilityRegistry platformCapabilityRegistry(
+            RagProperties properties,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            TenantLifecycleService lifecycleService) {
+        PlatformCapabilityRegistry registry = new PlatformCapabilityRegistry();
+        for (String actor : properties.getTenant().getLifecycleActors()) {
+            registry.allowActor(actor);
+        }
+        if (lifecycleService != null) {
+            registry.register(PlatformCapability.TENANT_LIFECYCLE,
+                    lifecycleService::describe);
+        }
+        return registry;
     }
 
     /** WP6：租户成员/状态守卫。 */

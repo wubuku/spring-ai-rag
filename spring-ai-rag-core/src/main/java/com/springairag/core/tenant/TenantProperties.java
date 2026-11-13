@@ -16,11 +16,31 @@ public class TenantProperties {
 
     private TenantMode mode = TenantMode.SINGLE;
 
+    /**
+     * WP9：允许调用租户生命周期 capability 的 actor 白名单。
+     *
+     * <p>默认只放行 {@code environment-root}（与 {@code TenantLifecycleController}
+     * 的 root 门槛同一身份）；运维可用 {@code rag.tenant.lifecycle-actors} 追加平台账号，
+     * 但绝不接受请求 header 里的自称 actor。</p>
+     */
+    private java.util.List<String> lifecycleActors =
+            new java.util.ArrayList<>(java.util.List.of("environment-root"));
+
     public TenantMode getMode() {
         return mode;
     }
 
     public void setMode(TenantMode mode) {
         this.mode = mode;
+    }
+
+    public java.util.List<String> getLifecycleActors() {
+        return lifecycleActors;
+    }
+
+    public void setLifecycleActors(java.util.List<String> lifecycleActors) {
+        this.lifecycleActors = lifecycleActors == null
+                ? new java.util.ArrayList<>()
+                : new java.util.ArrayList<>(lifecycleActors);
     }
 }
