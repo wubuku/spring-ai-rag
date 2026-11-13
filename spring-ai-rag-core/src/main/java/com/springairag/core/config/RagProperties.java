@@ -1,5 +1,6 @@
 package com.springairag.core.config;
 
+import com.springairag.core.tenant.TenantProperties;
 import com.springairag.core.properties.RagUsageProperties;
 import com.springairag.core.properties.RagTracingProperties;
 import com.springairag.core.properties.RagTimeoutProperties;
@@ -86,6 +87,7 @@ public class RagProperties {
     private final RagChunkProperties chunk = new RagChunkProperties();
     private final RagAsyncProperties async = new RagAsyncProperties();
     private final RagSecurityProperties security = new RagSecurityProperties();
+    private final TenantProperties tenant = new TenantProperties();
     private final RagRateLimitProperties rateLimit = new RagRateLimitProperties();
     private final RagCorsProperties cors = new RagCorsProperties();
     private final RagCacheProperties cache = new RagCacheProperties();
@@ -157,6 +159,10 @@ public class RagProperties {
 
     public RagSecurityProperties getSecurity() {
         return security;
+    }
+
+    public TenantProperties getTenant() {
+        return tenant;
     }
 
     public RagRateLimitProperties getRateLimit() {

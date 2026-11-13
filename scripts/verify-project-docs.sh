@@ -390,6 +390,8 @@ check_scripts_and_commands() {
       scripts/verify-container-image.sh \
       scripts/verify-openapi-breaking-change.mjs \
       scripts/verify-no-pessimistic-locks.sh \
+      scripts/verify-multi-tenancy-rls.sh \
+      scripts/verify-multi-tenancy-guc.sh \
       scripts/run-claude-grok.sh; do
     [[ -x "$script" ]] || {
       echo "Documented script is missing or not executable: $script" >&2
@@ -561,5 +563,16 @@ run_check "Git whitespace" check_git_whitespace
 run_check "Added-line secret scan" check_added_secrets
 run_check "Pessimistic-lock gate self-test" check_pessimistic_lock_self_test
 run_check "Gates can fail closed" check_gates_can_fail
+
+# WP5：租户 GUC 三件套与非事务 JDBC 现场清单静态门禁。
+check_multi_tenant_guc_gate() {
+  local script="scripts/verify-multi-tenancy-guc.sh"
+  [[ -x "$script" ]] || {
+    echo "Multi-tenancy GUC gate is missing or not executable: $script" >&2
+    return 1
+  }
+  "$script"
+}
+run_check "Multi-tenancy GUC gate" check_multi_tenant_guc_gate
 
 echo "Project documentation verification: $PASS_COUNT checks passed."

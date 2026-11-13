@@ -15,14 +15,14 @@
 | 分支 | `feature/multi-tenancy-phase1` |
 | 基线 commit | `04e2e678`（本地 `main`，规划终审核 APPROVE 后的规划 checkpoint） |
 | 主工作区 | `/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`，`main` @ `04e2e678`，创建 worktree 时 clean |
-| 工作区状态 | **WP4 已收口（带已知缺口）**：V81 补齐 `embedding_1024` ANN 索引；双租户 RLS 集成 5/5、HNSW+RLS 基准 1/1 绿；质量门槛与全仓 V1–V81 文档同步。见 §2c |
-| 当前唯一 `in_progress` | **WP5 — principal / resolver / context / datasource**（WP4 已收口；其已知缺口不阻断进入 WP5，但阻断发布与生产多租户声明） |
-| 已完成工作包 | WP1（表清单）、WP2（底座迁移 V75–V79）、WP3（RLS/三角色/verifier，V80）、WP4（双租户集成 + HNSW 基准，V81；证据见 §2b/§2c） |
-| 紧接着要做 | WP5：principal / resolver / context / datasource，先红后绿；退出条件见规划 §6 WP5 |
+| 工作区状态 | **WP5 已收口**：principal 扩展 + resolver SPI + TenantContext + 请求过滤器 + app DataSource session 级 GUC 三件套 + GUC 回读断言 + 静态门禁接入门禁总入口。见 §2d |
+| 当前唯一 `in_progress` | **WP6 — 端点 guard、平台 capability、审计** |
+| 已完成工作包 | WP1、WP2（V75–V79）、WP3（V80）、WP4（V81）、WP5（请求链路）；证据见 §2b/§2c/§2d |
+| 紧接着要做 | WP6：TenantMembershipGuard + PlatformCapabilityRegistry + 端点 guard 覆盖测试，先红后绿；退出条件见规划 §6 WP6 |
 | 规划检查计数 | `3/3`（终审核 APPROVE，规划基线冻结；本阶段未触发归零） |
 | 实现检查计数 | 未开始（按 delivery-workflow §7，编码完成后才计数） |
 
-## 1. 恢复入口（当前：WP5 — principal / resolver / context / datasource；WP3 以下为历史快照）
+## 1. 恢复入口（当前：WP6 — 端点 guard、平台 capability、审计；WP3 以下为历史快照）
 
 **目标产物（规划 §6 WP3）**：`V7x__tenant_rls.sql`（ENABLE + FORCE + policy）、
 `TenantRlsVerifier`、`TenantModeGuard`、`scripts/verify-multi-tenancy-rls.sh`；
@@ -161,6 +161,41 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
   `MULTI_TENANCY_UPGRADE_REHEARSAL.md` §3 补 V81 事实。
 - **门禁**：`verify-project-docs.sh` 17/17（V81 先 `git add` 再跑门禁）；
   `git diff --check` 干净；完整门禁与 JVM 全量回归随 WP5 开工前复跑（见 §2 台账）。
+
+## 2d. WP5 收尾快照（2026-11-14）
+
+- **产物（core 包 `com.springairag.core.tenant`）**：
+  - `TenantContext`：不可变租户作用域（tenantId / actorId / mode / auditId），线程绑定；
+    事务作用域内切换租户直接拒绝（规划 §4.5「事务内禁止切租户」）。
+  - `TenantResolver` SPI + `SingleTenantResolver`（固定 default）+ `PrincipalTenantResolver`
+    （凭据绑定 + 租户状态 ACTIVE 校验，失败一律 fail-closed，不落回 default）。
+  - `TenantContextFilter`：order -8（认证 -10 → MDC -9 → 租户上下文 -8 → capability -5 → 限流 0），
+    借连接/开事务前绑定上下文，请求结束 finally 清理；MDC 写 tenantId/actorId，不写 raw credential。
+  - `TenantGucDataSource` + `TenantGucConnection`：app DataSource 的 session 级 GUC 三件套
+    （checkout RESET → `set_config(..., false)` → 归还 RESET），并做 GUC 回读断言
+    （回显值必须 == TenantContext.tenantId，不一致即关闭连接并抛错 fail-closed）。
+    归还 RESET 由连接代理的 close() 触发。
+  - `TenantDataSourceBeanPostProcessor`：包装 Spring Boot 自动配置的 app DataSource
+    （只包一次；不声明 `@Bean DataSource`，避免与自动配置冲突）。
+  - `TenantProperties`（`rag.tenant.mode`，默认 SINGLE）+ `RagProperties.getTenant()`。
+  - `TenantConfiguration`：resolver / filter / `TenantModeGuard` / 启动 runner / DataSource 包装装配。
+  - `AuthenticatedApiPrincipal` 扩展 `tenantId` + `tenantStatus`；保留 9/10 参兼容构造器
+    （默认落 default/ACTIVE），既有 49 处构造调用与 8463 个测试零改动。
+- **红→绿证据**：`TenantContextTest` 5/5、`TenantResolverTest` 5/5、`TenantContextFilterTest` 3/3、
+  `TenantPropertiesTest` 3/3、`TenantGucDataSourcePostgresIntegrationTest` **4/4（真实 PG）**；
+  JVM 全量 **8483 tests / 0 failures**。
+- **真实 PG 覆盖的六条退出条件**：先设上下文再借连接 ✅、checkout/归还 RESET ✅、
+  非事务自动提交路径 GUC 仍有效 ✅（证明 `set_config(..., false)` 而非 SET LOCAL）、
+  GUC 回读不一致即拒绝 ✅、无上下文不设 GUC 且裸读 0 行 ✅、事务内禁止切租户 ✅（单元层）。
+- **静态门禁**：`scripts/verify-multi-tenancy-guc.sh`（新增）核对 session 级 set_config(false)、
+  checkout/归还 RESET、GUC 回读断言、非事务 JDBC 现场清单（**按 rg 动态计算，不写死数量**；
+  实测 20 个，与规划 §3#14「以现场清单为准」口径一致）、DataSource 包装已装配；
+  已接入 `verify-project-docs.sh` 门禁总入口（**17 → 18 项**），并按仓纪律补 rg 预检（fail-closed）。
+- **文档**：`docs/configuration-zh-CN.md` / `docs/configuration.md` 新增「多租户配置（WP5）」节
+  （模式表、三件套、回读断言、解析顺序、fail-closed 语义）。
+- **待办（不阻断 WP6，但阻断发布）**：凭据加载投影（`ApiKeyManagementService.authenticate`）
+  尚未带出 `tenant_id` 与租户状态——`PrincipalTenantResolver` 的数据来源需在 WP9 租户绑定
+  落地时打通；本版 STRICT 解析依赖 principal 快照中的 tenantId，缺值即 fail-closed。
 
 ## 3. 环境与隔离边界（WORKTREE.md 硬门禁）
 

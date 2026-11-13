@@ -2048,3 +2048,44 @@ the complete disable boundary. The default value of
 infer service readiness from WebUI availability. The 2026-11-04 end-to-end SDK and
 exposure audit decision, plus the controlled enablement gate, are in
 [OpenAI compatibility readiness](openai-compatibility-readiness.md) §11.
+
+## Multi-tenancy Configuration (WP5)
+
+Tenant run mode is controlled by `rag.tenant.mode`, defaulting to `SINGLE`; no
+configuration is required to keep current single-tenant behavior.
+
+```yaml
+rag:
+  tenant:
+    mode: SINGLE   # or STRICT
+```
+
+| Mode | Behavior |
+|---|---|
+| `SINGLE` (default) | Every request resolves to the `default` tenant; `tenant_id` is still written and the same SQL/task path is used; RLS and the verifier are off; startup fails closed if any credential row has `tenant_id != 'default'`. |
+| `STRICT` | Tenants resolve from credential binding; RLS `ENABLE+FORCE`; startup runs the full `TenantRlsVerifier` (three roles / RLS coverage / policy semantics / zero rows without GUC). |
+
+The request-path three-piece contract applies to both modes:
+
+1. **Checkout RESET**: clear any leftover `app.current_tenant_id` from the previous tenant
+   when a connection is handed out.
+2. **Session-scoped set_config**: `SELECT set_config('app.current_tenant_id', ?, false)`;
+   also effective on the autocommit path (non-transactional `JdbcTemplate.update`), not
+   relying on `SET LOCAL`.
+3. **Return RESET**: clear the GUC again before the connection goes back to the pool;
+   physical-connection hygiene is provided by the Hikari `connection-init-sql` /
+   `data-source-properties.options` (a second layer, never a replacement for checkout).
+
+Before the first tenant-scoped read, a GUC read-back assertion compares
+`current_setting('app.current_tenant_id', true)` with the current context; a mismatch
+rejects the connection immediately (fail-closed), turning "zero rows does not mean
+success" into an enforceable guard.
+
+The `X-Tenant-Id` header is never used for tenant resolution (dev debug tooling only and
+never privilege-escalating). Resolution order: trusted host resolver (not provided in
+this release) → credential-bound `tenant_id` → single-tenant `default`. An unbound
+credential or a non-`ACTIVE` tenant fails closed and never falls back to `default`.
+
+Related static gates: `scripts/verify-multi-tenancy-rls.sh` (WP3) and
+`scripts/verify-multi-tenancy-guc.sh` (WP5, GUC three-piece plus the non-transactional
+JDBC inventory).
