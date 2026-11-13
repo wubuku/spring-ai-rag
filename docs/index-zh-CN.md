@@ -96,7 +96,7 @@
 | [WebUI 水平对齐指南](webui-alignment-guidelines-zh-CN.md) / [English](webui-alignment-guidelines.md) | WebUI 普通内容、合理居中例外、`alignment-policy` 门禁和验证命令 |
 | [WebUI 设计语言](webui-design-language-zh-CN.md) / [English](webui-design-language.md) | Token 唯一事实源、图标规则、共享基元契约、设计系统门禁的十类违规，以及门禁为什么必须能失败 |
 | [WebUI 可访问性与响应式基线](webui-accessibility-zh-CN.md) / [English](webui-accessibility.md) | axe WCAG 2.1 AA 基线、键盘可达性、375/768/1440 布局断言、减少动态与屏幕阅读器标签 |
-| [当前活跃规划](drafts/README-zh-CN.md) | 只列仍在准备或实施的方案；多租户预研须同时看[外部参考经验教训](drafts/MULTI_TENANCY_EXTERNAL_LESSONS.md)；实施事实仍以代码与长青文档为准 |
+| [当前活跃规划](drafts/README-zh-CN.md) | 只列仍在准备或实施的方案；多租户预研须同时看[外部参考经验教训](drafts/MULTI_TENANCY_EXTERNAL_LESSONS.md)与[实施规划](drafts/MULTI_TENANCY_IMPLEMENTATION_PLAN.md)；实施事实仍以代码与长青文档为准 |
 | [历史规划与实施记录归档](drafts/archive/README-zh-CN.md) | 仅用于追溯设计与验证证据，不是 Agent 默认阅读入口 |
 
 ### 配置、API、数据
