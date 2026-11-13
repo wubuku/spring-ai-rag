@@ -15,10 +15,10 @@
 | 分支 | `feature/multi-tenancy-phase1` |
 | 基线 commit | `04e2e678`（本地 `main`，规划终审核 APPROVE 后的规划 checkpoint） |
 | 主工作区 | `../spring-ai-rag`，`main` @ `04e2e678`，创建 worktree 时 clean |
-| 工作区状态 | **WP9 已收口**：租户生命周期/状态机 + 凭据绑定租户 + 平台 capability 守卫 + WebUI 只读展示 + V83 软删列 + 门禁 22 项。见 §2h |
-| 当前唯一 `in_progress` | **WP10 — 租户级配额与用量** |
-| 已完成工作包 | WP1–WP9；证据见 §2b/§2c/§2d/§2e/§2f/§2g/§2h |
-| 紧接着要做 | WP10：在既有 per-principal quota 上增加 tenant 维度聚合与硬阈值（非 billing）；平台全局容量表逐张裁决落地；用量 API 增加 tenant 聚合且不暴露跨租户数据；并发 CAS/配额冲突/超限/恢复测试绿；`configuration*`/`rest-api*` 中英成对同步；先红后绿；退出条件见规划 §6 WP10 |
+| 工作区状态 | **WP10 已收口**：V84 三张 PLATFORM_GLOBAL 配额表 + 租户级 DAY/MONTH CAS 硬阈值 + 用量事件显式 tenant_id + `tenantScope=current` 租户聚合 + PG 8/8 + focused 7/7 + 门禁 23 项。见 §2i |
+| 当前唯一 `in_progress` | **WP11 — 红队、升级演练、备份恢复** |
+| 已完成工作包 | WP1–WP10；证据见 §2b/§2c/§2d/§2e/§2f/§2g/§2h/§2i |
+| 紧接着要做 | WP11：红队矩阵（漏写谓词/平台池误用/header 伪造/异步丢上下文/函数体断裂/policy 宽松/superuser/verifier 关闭/SSE 撤权/任意 task ID）；V74 存量升级与 SINGLE→STRICT 演练；备份恢复与回滚说明；退出条件见规划 §6 WP11 |
 | 规划检查计数 | `3/3`（终审核 APPROVE，规划基线冻结；本阶段未触发归零） |
 | 实现检查计数 | 未开始（按 delivery-workflow §7，编码完成后才计数） |
 
@@ -546,3 +546,60 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
   2. 连接级兜底：所有真实 PG 集成测试（`TenantBaseMigration` / `TenantRlsVerifier` / `TenantRlsIsolation` / `TenantHnswRlsBenchmark`）的迁移与断言连接均显式带 `options=-c lock_timeout=30s -c statement_timeout=900000`，同类问题 30s 快速失败而非挂死。
   3. 幂等与 INVALID 防护：迁移链不再产生 INVALID 索引（无 CONCURRENTLY）；V79 / V81 终态断言保留 INVALID 检测与清理指引，覆盖在线 CONCURRENTLY 演练的残留风险。
   4. 监控方通报的三条建议全部落地，无需额外修复动作；本次复核只落档，不改代码。
+
+
+## 2i. WP10 收尾快照（2026-11-14）
+
+- **产物 A：V84 迁移（纯事务 DDL，无 CONCURRENTLY）**：
+  `V84__tenant_quota_windows.sql` 新增 3 张 PLATFORM_GLOBAL 表
+  `rag_tenant_quota_policy` / `rag_tenant_quota_window` /
+  `rag_tenant_quota_reservation`，全部按 `tenant_id` 键控、无 RLS、含终态断言。
+  承接 `../seedance-research/docs/multitenancy/drafts/租户级Credits-分配与回收-实施规划.md`
+  的「租户池 / 成员配额 / 分配审计」分层语义，改写为本仓自包含的聚合硬阈值；
+  **不做充值、邀请码、成员间分配/收回、billing / hard-limit 结算**。
+- **产物 B：租户级硬阈值执行链**：
+  `TenantQuotaPolicy` / `TenantQuotaPolicyRepository` / `TenantQuotaLedger`
+  （条件 UPDATE/CAS 预留，版本列，禁止阻塞式协调）/ `TenantQuotaEnforcer`
+  （DAY/MONTH 两窗口；MONTH 失败补偿回退 DAY；`reservation_id` 映射让异步
+  settle/release/TTL 从 DB 恢复租户窗口，不依赖 ThreadLocal）/
+  `TenantQuotaExceededException`（复用 `LLM_BUDGET_EXCEEDED` → 429）。
+  `BudgetReservationService` 在同一事务里先 per-principal CAS、再 tenant CAS；
+  任一层超限整体回滚；`@Autowired` 明确 4 参构造器装配，保留 3 参向后兼容构造器。
+- **产物 C：用量事件与 API 租户隔离**：
+  `LlmUsageEvent` 增 `tenantId`（旧 21 参构造器从 `TenantContext` 捕获，
+  无上下文落 `default`）；`LlmUsageRepository.INSERT_SQL` 显式写 `tenant_id`。
+  `JdbcLlmUsageRecorder` 的同步/异步线程池改用 `TenantContext.wrap`，
+  修复「异步线程丢上下文 → STRICT 下 RLS WITH CHECK 拒写流式用量事件」缺陷。
+  `GET /api/v1/rag/usage?tenantScope=current|TENANT` 只按当前上下文租户聚合，
+  不接受任意租户 ID；无上下文 fail-closed；省略时保持旧响应形状（无 `tenantTotals`）。
+- **产物 D：门禁与文档**：
+  `scripts/verify-multi-tenancy-quota.sh` + `verify-project-docs.sh` 第 23 项；
+  `verify-gated-it.sh` 登记 `tenant-wp10:TenantWp10PostgresIntegrationTest`；
+  `testing-guide*` 中英成对登记开关；`configuration*` / `rest-api*` /
+  `architecture*` / `security-boundary*` 中英成对；全仓 Flyway 事实 V1–V84 同步。
+
+### WP10 验证台账（本包即时取证）
+
+| 验证 | 结果 |
+|---|---|
+| WP10 focused（合同 4 + 用量 3） | **7/7 绿**（`-am`，避免 api 旧 jar 的 NoSuchMethod/NoClassDefFound） |
+| WP10 真实 PG `TenantWp10PostgresIntegrationTest` | **8/8 绿**（opt-in `-Dtenant-wp10.it.enabled=true`：V84 三表/RLS 裁决、DAY+MONTH 预留、超限、settle/release、两租户隔离、DB 驱动跨线程结算、用量 tenant_id、事务内整体生效） |
+| PG IT 连接兜底 | 迁移连接 `lock_timeout=30s` / `statement_timeout=900000`；迁移链无 CONCURRENTLY |
+| `verify-project-docs.sh` | **23/23** |
+| `verify-no-pessimistic-locks.sh` / dependency versions / integration switches | 全绿；42 switches / 297 tests / 42 classes |
+| 文档中文/英文成对 | 59 对双语标题结构一致、中文无未翻译英文段落 |
+
+### WP10 新增决策与教训
+
+| 项 | 内容 |
+|---|---|
+| 语义边界 | 租户级聚合硬阈值是「租户已确定之后」的第二层容量控制，不替代租户解析；无上下文按 `default` 施加阈值（不让漏上下文绕过），上游 fail-closed 另外拒绝请求 |
+| 跨线程 | 配额映射与用量事件都不得依赖 ThreadLocal；`reservation_id` DB 映射 + `TenantContext.wrap` 是两条独立防线 |
+| 装配 | Spring 组件扫描对多构造器必须显式 `@Autowired`（本包曾因双构造器漏标造成启动装配风险） |
+| 真实 PG 先红 | PG 集成测试先暴露 3 个 mock 测不出的生产缺陷：MONTH 窗口行缺失导致永远「月度超限」、`chat_mode` 约束合法值、测试间账本污染；均按真实库反馈修复后才转绿 |
+| 静态门禁误报 | `verify-no-pessimistic-locks.sh` 会把 Javadoc 里「禁止 SKIP LOCKED」的说明文字当违规，注释改用「不引入阻塞式协调」措辞；门禁脚本自身也只扫 SQL 语句行 |
+| 参考材料 | 只用相对路径引用 `../seedance-research/...`；本包不复制其充值/邀请/成员分配语义 |
+
+### WP10 提交
+
+`484d1174` — `feat(multi-tenancy): WP10 租户级配额与用量硬阈值`。

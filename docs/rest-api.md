@@ -3648,6 +3648,14 @@ hard-limit settlement data.
 | `from` | date | No | Inclusive UTC start date; defaults to 30 days before `to` |
 | `to` | date | No | Inclusive UTC end date; defaults to today in UTC |
 | `principalId` | string | No | Requested principal scope; ADMIN/root only may select another principal |
+| `tenantScope` | string | No | `current` / `TENANT`: also return tenant-scoped aggregates.
+  Aggregation is restricted to the tenant of the request context; arbitrary
+  tenant IDs are not accepted and a missing tenant context fails closed.
+  Omitted for backward compatibility (no tenant totals in the response) |
+
+The response carries `tenantTotals` only when `tenantScope` is present;
+a missing tenant context is rejected (fail closed). Tenant aggregates are
+filtered strictly by the current tenant and never include other tenants' data.
 
 **Response:**
 

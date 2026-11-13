@@ -1244,7 +1244,7 @@ declare capability semantics with `@ApiRoutePolicy`.
 
 ---
 
-## 9. Multi-tenancy Isolation Architecture (WP2–WP9)
+## 9. Multi-tenancy Isolation Architecture (WP2–WP10)
 
 Multi-tenancy is delivered as four layers: column binding + RLS backstop +
 explicit request context + background-task propagation:
@@ -1290,6 +1290,17 @@ explicit request context + background-task propagation:
   `rag_api_key` rows inherit the principal's tenant binding;
   `GET /api/v1/rag/auth/me` and the WebUI sidebar display the current tenant,
   mode and status in read-only form, with no tenant switcher or invite code.
+
+- **Tenant quota layer (WP10)**: `rag_tenant_quota_policy` /
+  `rag_tenant_quota_window` / `rag_tenant_quota_reservation` (V84,
+  PLATFORM_GLOBAL, no RLS) add tenant-level DAY/MONTH aggregate hard thresholds
+  on top of the existing per-principal budget. The tenant reservation shares the
+  principal reservation transaction; settle/release recover the tenant window
+  from the DB by `reservation_id` (no ThreadLocal dependency on async threads).
+  Usage events explicitly carry `tenant_id` (V76 column + WP10 write), and the
+  recorder thread pool propagates context through `TenantContext.wrap`;
+  `GET /api/v1/rag/usage?tenantScope=current` aggregates only the current tenant,
+  fails closed without context, and never accepts arbitrary tenant IDs.
 
 Configuration and runtime semantics are in
 [configuration](configuration.md#多租户配置-wp5); security boundaries and residual

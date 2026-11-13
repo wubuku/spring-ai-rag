@@ -60,7 +60,8 @@ public final class JdbcLlmUsageRecorder implements LlmUsageRecorder {
         CompletableFuture<Boolean> future;
         try {
             future = CompletableFuture.supplyAsync(
-                    () -> repository.insert(event, timeoutMs),
+                    com.springairag.core.tenant.TenantContext.wrap(
+                            () -> repository.insert(event, timeoutMs)),
                     syncExecutor);
         } catch (RejectedExecutionException rejected) {
             lost(event, "executor_rejected");
@@ -80,7 +81,7 @@ public final class JdbcLlmUsageRecorder implements LlmUsageRecorder {
             return;
         }
         try {
-            asyncExecutor.execute(() -> {
+            asyncExecutor.execute(com.springairag.core.tenant.TenantContext.wrap(() -> {
                 try {
                     repository.insert(
                             event,
@@ -92,7 +93,7 @@ public final class JdbcLlmUsageRecorder implements LlmUsageRecorder {
                             event.invocationId(),
                             failure.getClass().getSimpleName());
                 }
-            });
+            }));
         } catch (RejectedExecutionException rejected) {
             lost(event, "executor_rejected");
         }

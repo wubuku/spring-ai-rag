@@ -123,12 +123,12 @@
 | 入口 | 证明的命题 | 实测 | 依赖 | 红了先看 |
 |------|------------|------|------|----------|
 | `verify-gated-it.sh` | 31 套 gated PostgreSQL 集成测试通过（真实迁移、事务、租约） | 未实测 | Docker/Testcontainers、JDK 21 | `.verification/nightly/gated-it.log` |
-| `verify-postgres-version-matrix.sh --versions 15/17/18` | 全量 V1–V83 迁移探针在 pgvector pg15/17/18 上可应用，核心 gated 套件在同版本通过 | 未实测 | Docker、Node、JDK 21 | `postgres-matrix-<pg>.log` 的迁移版本与失败套件 |
+| `verify-postgres-version-matrix.sh --versions 15/17/18` | 全量 V1–V84 迁移探针在 pgvector pg15/17/18 上可应用，核心 gated 套件在同版本通过 | 未实测 | Docker、Node、JDK 21 | `postgres-matrix-<pg>.log` 的迁移版本与失败套件 |
 | `verify-upstream-recovery-e2e.py` | 上游重试、`Retry-After`、恢复后可用 | 83.4s | 隔离 PostgreSQL、mock provider | 三阶段失败点与恢复断言 |
 | `verify-embedding-failure-e2e.py` | embedding 失败后恢复为 `SYNC` 且可检索 | 490.0s | 隔离 PostgreSQL、mock provider | 失败状态与恢复轮询 |
 | `verify-crash-consistency-e2e.py` | 真实 `SIGKILL` 后数据一致、无半写 | 未实测 | 隔离 PostgreSQL、demo jar | 崩溃点与恢复后 SQL 断言 |
 | `verify-endpoint-behavior-e2e.py` | 运行时端点行为矩阵与契约一致（195 端点 + 21 成功探针） | 未实测 | 隔离 PostgreSQL、mock provider | 矩阵差异行 |
-| `verify-release-artifact.py --blackbox` | fat jar 的 zip CRC、manifest、内嵌 WebUI、依赖收敛、checksums；打包 jar 黑盒启动、Flyway V1–V83、静态 content-type、优雅停机 | 未实测 | Docker/隔离 PostgreSQL、mock provider、Demo jar | `release-artifact.log` 的首个契约失败项 |
+| `verify-release-artifact.py --blackbox` | fat jar 的 zip CRC、manifest、内嵌 WebUI、依赖收敛、checksums；打包 jar 黑盒启动、Flyway V1–V84、静态 content-type、优雅停机 | 未实测 | Docker/隔离 PostgreSQL、mock provider、Demo jar | `release-artifact.log` 的首个契约失败项 |
 | `real-llm-e2e-smoke.sh` + `run-retrieval-goldenset.sh` + `run-retrieval-regression.sh` | 真实 MiniMax + BGE-M3 冒烟、48 条 goldenset 与版本化检索回归 | 未实测 | 真实模型密钥、外部网络 | 模型调用日志、goldenset 与回归差异 |
 | `verify-real-llm-failure-e2e.py --run --providers openai` | 真实 LongCat 调用下的 429/5xx/超时/断流/客户端断开、预算诊断与 base-url 拼接 | 未实测 | 真实模型密钥、本地故障代理 | `longcat-failure-e2e.log` 的失败分类断言 |
 | `run-real-embedding-goldenset.py --ack-paid-models` | 真实 SiliconFlow BGE-M3 下 32 文档 / 48 查询的纯向量、混合与权重对照 | 未实测（付费、手工） | 真实 embedding 密钥、隔离库 | 生成 manifest 与分组指标 |
@@ -283,7 +283,7 @@ CI 在 WebUI job 的 `Committed static build matches a fresh build` 步骤执行
 - **关键词通道**：已从纯 AND 改为可排序 OR（OR 词项 + `ts_rank_cd` +
   标题/标识符加权），解决“候选只有 0–2 条”的通道失效；执行计划证据在
   [quality-defaults-zh-CN.md](quality-defaults-zh-CN.md)。
-- **迁移**：当前到 **V1–V83**。V74 把
+- **迁移**：当前到 **V1–V84**。V74 把
   `rag_embeddings.document_id`、`rag_derivation_repair_items.document_id`
   从 `NO ACTION` 改为 `ON DELETE CASCADE`，保证受控永久删除不会因漏删顺序
   失败或留下孤儿；其他引用语义不变。

@@ -1074,7 +1074,7 @@ hash，操作按 owner 隔离、可恢复且有界。审计日志不由普通擦
 
 ---
 
-## 9. 多租户隔离架构（WP2–WP9）
+## 9. 多租户隔离架构（WP2–WP10）
 
 多租户化按「列绑定 + RLS 兜底 + 请求链路显式上下文 + 后台任务传播」四层落地：
 
@@ -1108,6 +1108,14 @@ hash，操作按 owner 隔离、可恢复且有界。审计日志不由普通擦
   凭据认证投影补 `tenantId/tenantStatus`，`rag_api_key` 行继承 principal 绑定租户；
   `GET /api/v1/rag/auth/me` 与 WebUI 侧栏只读展示当前租户 / 模式 / 状态，
   不提供租户切换器与邀请码。
+
+- **租户级配额层（WP10）**：`rag_tenant_quota_policy` / `rag_tenant_quota_window` /
+  `rag_tenant_quota_reservation`（V84，PLATFORM_GLOBAL，无 RLS）在既有
+  per-principal 预算之上加租户 DAY/MONTH 聚合硬阈值；预留与 principal 预留同事务，
+  结算/释放按 `reservation_id` 从 DB 恢复租户窗口（异步线程不依赖 ThreadLocal）。
+  用量事件显式携带 `tenant_id`（V76 列 + WP10 写入），账本线程池经
+  `TenantContext.wrap` 传播上下文；`GET /api/v1/rag/usage?tenantScope=current`
+  只聚合当前租户，无上下文 fail-closed，不接受任意租户 ID。
 
 配置与运行语义见[多租户配置](configuration-zh-CN.md#多租户配置-wp5)；
 安全边界与残余风险见[安全边界](security-boundary-zh-CN.md)。

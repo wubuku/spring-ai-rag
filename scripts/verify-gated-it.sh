@@ -65,7 +65,7 @@ ALL_SUITES=(
   "retrieval-diagnostics:RetrievalDiagnosticsPostgresIntegrationTest"
   "retrieval-correctness:RetrievalCorrectnessPostgresIntegrationTest"
   "starter-consumer:ExternalStarterConsumerContextTest"
-  # 多租户阶段（WP2–WP9）：租户迁移/RLS/GUC/分发/证据/HNSW 基准套件，
+  # 多租户阶段（WP2–WP10）：租户迁移/RLS/GUC/分发/证据/配额/HNSW 基准套件，
   # 未登记会被 verify-integration-test-switches.mjs 判 unaggregated-gated-suite。
   "tenant-base:TenantBaseMigrationPostgresIntegrationTest"
   "tenant-rls:TenantRlsVerifierPostgresIntegrationTest"
@@ -74,6 +74,7 @@ ALL_SUITES=(
   "tenant-jobs:TenantJobDispatcherPostgresIntegrationTest"
   "tenant-wp8:TenantWp8EvidencePostgresIntegrationTest"
   "tenant-wp9:TenantWp9PostgresIntegrationTest"
+  "tenant-wp10:TenantWp10PostgresIntegrationTest"
   "tenant-hnsw-bench:TenantHnswRlsBenchmarkPostgresIntegrationTest"
 )
 

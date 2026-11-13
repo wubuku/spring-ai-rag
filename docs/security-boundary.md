@@ -483,7 +483,25 @@ storage/globals/form values finds no credential; logout clears storage; no reque
 URL or `Referer` contains the credential, which appears only in the `X-API-Key`
 request header.
 
-## Tenant lifecycle platform-side boundary (WP9)
+## 10.5 Tenant quota and usage-aggregation boundary (WP10)
+
+- `rag_tenant_quota_policy/window/reservation` (V84) are PLATFORM_GLOBAL tables:
+  no RLS, keyed by `tenant_id`, read/written only through the registered access
+  points (`TenantQuotaPolicyRepository` / `TenantQuotaLedger`), and every read
+  must carry an explicit `tenant_id` predicate.
+- The tenant aggregate threshold is a second capacity control applied after the
+  tenant is already resolved — it is not a tenant-resolution mechanism. Without
+  context the threshold applies to the `default` tenant (so a dropped context
+  cannot bypass the limit); the upstream fail-closed contract separately
+  rejects context-less requests.
+- `GET /api/v1/rag/usage?tenantScope=current` aggregates only the tenant of the
+  request context and never accepts an arbitrary tenant ID parameter.
+  Cross-tenant enumeration is a platform capability, not exposed through the
+  business usage endpoint. A missing tenant context fails closed (403);
+  omitting `tenantScope` keeps the old shape (no `tenantTotals`), for backward
+  compatibility.
+
+## 11. Tenant lifecycle platform-side boundary (WP9)
 
 - The `/api/v1/rag/tenants` endpoints are platform-side: only an actor with a
   configured environment root credential, root authentication, and a place in the

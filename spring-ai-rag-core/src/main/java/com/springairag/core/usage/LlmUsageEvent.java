@@ -33,9 +33,49 @@ public record LlmUsageEvent(
         String costUnit,
         long durationMs,
         Instant startedAt,
-        Instant completedAt) {
+        Instant completedAt,
+        String tenantId) {
 
     public static final long MAX_DURATION_MS = 86_400_000L;
+
+    /** WP10：事件归属租户（默认从 TenantContext 捕获；无上下文落 default 兜底）。 */
+    public LlmUsageEvent(
+            UUID invocationId,
+            UUID logicalExecutionId,
+            int callOrdinal,
+            String principalId,
+            String sessionId,
+            String requestTraceId,
+            String modelRef,
+            ChatMode chatMode,
+            LlmInvocationPurpose purpose,
+            boolean streaming,
+            LlmInvocationOutcome outcome,
+            LlmUsageSnapshot usage,
+            BigDecimal inputCostPerMillion,
+            BigDecimal outputCostPerMillion,
+            boolean pricingAvailable,
+            BigDecimal configuredCost,
+            boolean costAvailable,
+            String costUnit,
+            long durationMs,
+            Instant startedAt,
+            Instant completedAt) {
+        this(invocationId, logicalExecutionId, callOrdinal, principalId, sessionId,
+                requestTraceId, modelRef, chatMode, purpose, streaming, outcome,
+                usage, inputCostPerMillion, outputCostPerMillion, pricingAvailable,
+                configuredCost, costAvailable, costUnit, durationMs, startedAt,
+                completedAt, currentTenantIdOrFallback());
+    }
+
+    public static String currentTenantIdOrFallback() {
+        com.springairag.core.tenant.TenantContext context =
+                com.springairag.core.tenant.TenantContext.current();
+        return context != null && context.tenantId() != null
+                && !context.tenantId().isBlank()
+                ? context.tenantId()
+                : "default";
+    }
 
     public LlmUsageEvent {
         invocationId = invocationId != null ? invocationId : UUID.randomUUID();
@@ -78,6 +118,8 @@ public record LlmUsageEvent(
         completedAt = completedAt == null || completedAt.isBefore(startedAt)
                 ? startedAt
                 : completedAt;
+        tenantId = tenantId == null || tenantId.isBlank()
+                ? "default" : boundedRequired(tenantId, 64, "tenantId");
     }
 
     public static LlmUsageEvent from(

@@ -204,6 +204,15 @@ database error increments the local lost-event metric and is not retried by
 the provider path. Retention uses bounded batches and a short database
 statement timeout.
 
+Under multi-tenancy (WP10), every recorded model invocation fact carries the
+tenant ID of the request context. A platform administrator can enable
+`daily/monthly_token_limit` aggregate hard thresholds per tenant through
+`rag_tenant_quota_policy` (`V84`, PLATFORM_GLOBAL, no RLS). When enabled, the
+tenant-level DAY/MONTH window ledger (`rag_tenant_quota_window`) applies a
+second aggregation hard threshold on top of the existing per-principal budget
+using conditional UPDATE/CAS; exceeding either layer rolls back the whole
+reservation transaction and returns 429. This is not billing, top-up, or
+member-level allocation semantics.
 `GET /api/v1/rag/usage` exposes principal-scoped aggregate data for an
 inclusive UTC date range. A normal authenticated principal can query only
 itself; an ADMIN or environment root may query all principals or one selected

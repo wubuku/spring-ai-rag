@@ -194,6 +194,12 @@ rag:
 实例本地的丢失事件指标，但不会从 provider 调用路径发起重试。retention
 使用有界批次和较短的数据库 statement timeout。
 
+多租户（WP10）下，每次模型调用记账都会显式携带请求上下文中的租户 ID；
+平台管理员可通过 `rag_tenant_quota_policy`（`V84`，PLATFORM_GLOBAL，无 RLS）
+为指定租户启用 `daily/monthly_token_limit` 聚合硬阈值。阈值生效后，
+租户级 DAY/MONTH 窗口账本（`rag_tenant_quota_window`）用条件 UPDATE/CAS
+在既有 per-principal 预算之上做第二层聚合硬阈值；两层任一超限，
+整个预留事务回滚并返回 429。这不是 billing、充值或成员间分配语义。
 `GET /api/v1/rag/usage` 返回按 principal 隔离、按 UTC 日期范围聚合的用量。
 普通认证 principal 只能查询自身；ADMIN 或 environment root 可以查询全部
 principal 或指定 principal。因为响应可能聚合大量数据库行，token 合计使用

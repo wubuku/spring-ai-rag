@@ -396,6 +396,7 @@ check_scripts_and_commands() {
       scripts/verify-multi-tenancy-jobs.sh \
       scripts/verify-multi-tenancy-wp8.sh \
       scripts/verify-multi-tenancy-lifecycle.sh \
+      scripts/verify-multi-tenancy-quota.sh \
       scripts/run-claude-grok.sh; do
     [[ -x "$script" ]] || {
       echo "Documented script is missing or not executable: $script" >&2
@@ -622,5 +623,16 @@ check_multi_tenant_lifecycle_gate() {
   "$script"
 }
 run_check "Multi-tenancy lifecycle gate" check_multi_tenant_lifecycle_gate
+
+# WP10：租户级配额 / 用量硬阈值静态门禁。
+check_multi_tenant_quota_gate() {
+  local script="scripts/verify-multi-tenancy-quota.sh"
+  [[ -x "$script" ]] || {
+    echo "Multi-tenancy quota gate is missing or not executable: $script" >&2
+    return 1
+  }
+  "$script"
+}
+run_check "Multi-tenancy quota gate" check_multi_tenant_quota_gate
 
 echo "Project documentation verification: $PASS_COUNT checks passed."

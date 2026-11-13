@@ -113,6 +113,11 @@ public final class TenantTableCatalog {
             entry("rag_tenant_callback_receipt", TableOwnership.TENANT_PRIVATE, "回调权威 receipt + response-lost durable intent，按 operation/client_token 幂等绑定 Provider task", POOL_NONE),
             entry("rag_tenant_callback_replay_nonce", TableOwnership.TENANT_PRIVATE, "回调 replay nonce 持久化，首次 claim 成功、重复即拒绝；callback 与 manual audit principal 分离", POOL_NONE),
 
+            // ---- WP10 新增（V84）：租户级配额与用量（PLATFORM_GLOBAL，按 tenant_id 键控，无 RLS）----
+            entry("rag_tenant_quota_policy", TableOwnership.PLATFORM_GLOBAL, "租户级硬阈值策略（platform 管理面配置；不是 billing/充值），按 tenant_id 唯一", "平台池：配置读写；app 只读政策"),
+            entry("rag_tenant_quota_window", TableOwnership.PLATFORM_GLOBAL, "租户级 DAY/MONTH 窗口聚合账本（reserved/settled tokens），CAS 硬阈值", "app 读写：预留/结算 CAS 与用量 API 聚合"),
+            entry("rag_tenant_quota_reservation", TableOwnership.PLATFORM_GLOBAL, "principal 预算预留 → 租户级预留映射；异步 settle/release/TTL 从 DB 恢复租户窗口", "app 读写：预留/结算/释放"),
+
             // ---- 平台全局（20）：单例 / 全局容量 / 全局配置 / 平台运营遥测 ----
             entry("rag_slo_configs", TableOwnership.PLATFORM_GLOBAL, "SLO 目标是平台级配置（slo_name 全局唯一）", "平台池：运营/告警模块读写"),
             entry("rag_audit_log", TableOwnership.PLATFORM_GLOBAL, "平台审计覆盖跨实体/跨租户操作，认证前后都有写入", "平台池：审计写入与查询"),

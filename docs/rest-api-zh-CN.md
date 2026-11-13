@@ -3212,6 +3212,11 @@ principal。
 | `from` | date | 否 | UTC 起始日期（包含）；默认取 `to` 往前 30 天 |
 | `to` | date | 否 | UTC 结束日期（包含）；默认取当前 UTC 日期 |
 | `principalId` | string | 否 | 查询主体；只有 ADMIN/root 可以选择其他主体 |
+| `tenantScope` | string | 否 | `current` / `TENANT`：附带当前租户聚合。只按请求上下文中的租户聚合，
+  不接受任意租户 ID；无租户上下文时 fail-closed 拒绝。省略时不返回租户聚合（向后兼容） |
+
+响应携带 `tenantTotals` 仅当 `tenantScope` 非空；无租户上下文时返回 403。
+租户聚合只按当前租户过滤，永远不会包含其他租户的数据。
 
 **响应：**
 

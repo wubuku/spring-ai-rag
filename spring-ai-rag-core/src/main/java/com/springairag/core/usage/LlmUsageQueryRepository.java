@@ -54,6 +54,25 @@ public class LlmUsageQueryRepository {
                 principalId);
     }
 
+    /**
+     * WP10：当前租户聚合（不暴露跨租户 principal 明细）。
+     *
+     * <p>tenant_id 显式谓词叠加在既有 RLS 之上：RLS 是数据库兜底，
+     * 这里手写谓词只用于把聚合范围钉死在调用方指定的 tenant。</p>
+     */
+    public UsageAggregate tenantTotals(
+            Instant fromInclusive,
+            Instant toExclusive,
+            String tenantId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT " + SELECT_COLUMNS + " FROM rag_llm_usage_event "
+                        + WHERE_PREFIX + " AND tenant_id = ?",
+                this::mapAggregate,
+                Timestamp.from(fromInclusive),
+                Timestamp.from(toExclusive),
+                tenantId);
+    }
+
     public List<DimensionAggregate> byModel(
             Instant fromInclusive,
             Instant toExclusive,

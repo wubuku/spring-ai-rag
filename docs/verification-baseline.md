@@ -127,12 +127,12 @@ The 56 automated gates below (57 are registered; `verify-container-image.sh` nee
 | Entry | Proposition | Measured | Dependencies | First place to look |
 |-------|-------------|----------|--------------|---------------------|
 | `verify-gated-it.sh` | 31 gated PostgreSQL integration suites pass (real migrations, transactions, leases) | not measured | Docker/Testcontainers, JDK 21 | `.verification/nightly/gated-it.log` |
-| `verify-postgres-version-matrix.sh --versions 15/17/18` | the full V1–V83 migration probe applies on pgvector pg15/17/18, and the core gated subset passes on the same version | not measured | Docker, Node, JDK 21 | the migration version and failing suite in `postgres-matrix-<pg>.log` |
+| `verify-postgres-version-matrix.sh --versions 15/17/18` | the full V1–V84 migration probe applies on pgvector pg15/17/18, and the core gated subset passes on the same version | not measured | Docker, Node, JDK 21 | the migration version and failing suite in `postgres-matrix-<pg>.log` |
 | `verify-upstream-recovery-e2e.py` | upstream retries, `Retry-After`, and post-recovery availability | 83.4s | isolated PostgreSQL, mock provider | the three-stage failure point and recovery assertions |
 | `verify-embedding-failure-e2e.py` | embedding failure recovers to `SYNC` and becomes searchable | 490.0s | isolated PostgreSQL, mock provider | the failure state and recovery polling |
 | `verify-crash-consistency-e2e.py` | real `SIGKILL` leaves consistent data with no half-writes | not measured | isolated PostgreSQL, demo jar | the crash point and post-recovery SQL assertions |
 | `verify-endpoint-behavior-e2e.py` | the runtime endpoint behavior matrix matches the contract (195 endpoints + 21 success probes) | not measured | isolated PostgreSQL, mock provider | the differing matrix row |
-| `verify-release-artifact.py --blackbox` | fat-jar zip CRC, manifest, embedded WebUI, dependency convergence, checksums; packaged-jar black-box startup, Flyway V1–V83, static content types, graceful shutdown | not measured | Docker/isolated PostgreSQL, mock provider, demo jar | the first contract failure in `release-artifact.log` |
+| `verify-release-artifact.py --blackbox` | fat-jar zip CRC, manifest, embedded WebUI, dependency convergence, checksums; packaged-jar black-box startup, Flyway V1–V84, static content types, graceful shutdown | not measured | Docker/isolated PostgreSQL, mock provider, demo jar | the first contract failure in `release-artifact.log` |
 | `real-llm-e2e-smoke.sh` + `run-retrieval-goldenset.sh` + `run-retrieval-regression.sh` | real MiniMax + BGE-M3 smoke, the 48-query goldenset, and versioned retrieval regression | not measured | real model secrets, external network | model call logs and goldenset/regression diff |
 | `verify-real-llm-failure-e2e.py --run --providers openai` | real LongCat 429/5xx/timeout/stream-cut/client-disconnect behavior, budget diagnostics, and base-url joining | not measured | real model secrets, local fault proxy | the failure-classification assertion in `longcat-failure-e2e.log` |
 | `run-real-embedding-goldenset.py --ack-paid-models` | vector-only, hybrid, and weight comparisons on real SiliconFlow BGE-M3 with 32 documents / 48 queries | not measured (paid, manual) | real embedding secrets, isolated database | the generated manifest and grouped metrics |
@@ -293,7 +293,7 @@ CI runs the same rebuild and directory comparison in the WebUI job step
   `ts_rank_cd` + title/identifier weighting), fixing the “only 0–2 candidates”
   channel failure; EXPLAIN evidence lives in
   [quality-defaults.md](quality-defaults.md).
-- **Migrations**: now **V1–V83**. V74 changes
+- **Migrations**: now **V1–V84**. V74 changes
   `rag_embeddings.document_id` and `rag_derivation_repair_items.document_id`
   from `NO ACTION` to `ON DELETE CASCADE`, so controlled permanent deletion
   cannot fail on ordering or leave orphans; other references keep their semantics.

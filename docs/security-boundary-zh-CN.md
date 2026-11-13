@@ -449,6 +449,19 @@ python3 scripts/verify-webui-credential-security-e2e.py
 保持锁定；页面内注入脚本扫描存储/全局/表单读不到凭据；登出后存储清空；
 所有请求 URL 与 `Referer` 不含凭据，凭据只出现在 `X-API-Key` 请求头。
 
+## 租户级配额与用量聚合边界（WP10）
+
+- `rag_tenant_quota_policy/window/reservation`（V84）是 PLATFORM_GLOBAL 表：
+  无 RLS、按 `tenant_id` 键控，仅由 `TenantQuotaPolicyRepository` /
+  `TenantQuotaLedger` 登记访问点读写，任何读取都必须显式带 `tenant_id` 谓词。
+- 租户聚合阈值是「在租户已经确定之后」的第二层容量控制，不是租户解析手段；
+  无上下文时按 `default` 租户施加阈值（不让漏上下文绕过阈值），
+  上游无上下文 fail-closed 契约另外负责拒绝请求。
+- `GET /api/v1/rag/usage?tenantScope=current` 只按请求上下文中的租户聚合，
+  不接受任意租户 ID 参数；跨租户枚举属平台能力，不经业务用量端点开放。
+  无租户上下文时 fail-closed（403），默认（不带 `tenantScope`）不返回
+  `tenantTotals`，向后兼容。
+
 ## 租户生命周期平台面边界（WP9）
 
 - `/api/v1/rag/tenants` 系列端点属于平台管理面：只允许「已配置环境 root 凭据 +

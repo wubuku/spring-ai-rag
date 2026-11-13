@@ -2,10 +2,11 @@
 
 > 机器可读单一事实源：`spring-ai-rag-core/src/main/java/com/springairag/core/tenant/TenantTableCatalog.java`
 >（本文与其必须保持一致，新增表先改 catalog + 本文再写迁移）。
-> 基线：Flyway V1–V83 共 **73 张存活业务表**（V1–V74 的 69 张存量表 + V75 新增
-> `rag_tenant` + V82 新增 3 张 WP8 结果/回调证据表；V26 已 DROP 的 `rag_vector_store` 不登记）；
+> 基线：Flyway V1–V84 共 **76 张存活业务表**（V1–V74 的 69 张存量表 + V75 新增
+> `rag_tenant` + V82 新增 3 张 WP8 结果/回调证据表 + V84 新增 3 张 WP10 租户级配额表；
+> V26 已 DROP 的 `rag_vector_store` 不登记）；
 > 表集合不写死，以迁移脚本与 `TenantTableCatalogTest` 动态基线比对为准。
-> 分类：**TENANT_PRIVATE 48 / PLATFORM_GLOBAL 21 / CREDENTIAL 4**。
+> 分类：**TENANT_PRIVATE 48 / PLATFORM_GLOBAL 24 / CREDENTIAL 4**。
 > 裁决规则来自 [多租户化实施规划](MULTI_TENANCY_IMPLEMENTATION_PLAN.md) §5.2（终审核 APPROVE 基线）。
 > 行为契约：租户私有表 → RLS ENABLE+FORCE + 规范 policy + tenant-leading 索引；
 > 平台全局表 → 无 RLS、无 tenant_id，仅按登记访问点读写；凭据表 → 无 RLS、V80 起
@@ -17,7 +18,7 @@
 | 类别 | 张数 | RLS | tenant-leading 索引 | 典型访问面 |
 |---|---|---|---|---|
 | TENANT_PRIVATE | 48 | ENABLE+FORCE | 必须 | 业务请求链路 / TenantJobDispatcher |
-| PLATFORM_GLOBAL | 21 | 否 | 否 | 平台池（仅登记访问点）或 app 读写（见逐张行） |
+| PLATFORM_GLOBAL | 24 | 否 | 否 | 平台池（仅登记访问点）或 app 读写（见逐张行） |
 | CREDENTIAL | 4 | 否 | 单列 tenant 索引（V80） | app 角色 digest 精确查找；V80 起带 tenant_id 绑定列，认证先于租户解析 |
 
 ## 2. 逐张裁决（按迁移引入顺序）
@@ -97,6 +98,9 @@
 | 71 | `rag_tenant_result_receipt` | 租户私有 | 是（V82 自带） | 是 | `V82__tenant_result_callback_evidence.sql` | 1 | 9 | 1 | 0 | WP8 结果 owner 四元组（tenant/collection/owner/receipt）持久化证据，禁止任意 task ID 触发外部 Provider 查询 | POOL_NONE |
 | 72 | `rag_tenant_callback_receipt` | 租户私有 | 是（V82 自带） | 是 | `V82__tenant_result_callback_evidence.sql` | 1 | 11 | 1 | 0 | WP8 回调权威 receipt + response-lost durable intent，按 operation/client_token 幂等绑定 Provider task | POOL_NONE |
 | 73 | `rag_tenant_callback_replay_nonce` | 租户私有 | 是（V82 自带） | 是 | `V82__tenant_result_callback_evidence.sql` | 1 | 6 | 1 | 0 | WP8 回调 replay nonce 持久化，首次 claim 成功、重复即拒绝；callback 与 manual audit principal 分离 | POOL_NONE |
+| 74 | `rag_tenant_quota_policy` | 平台全局 | 否 | 否 | `V84__tenant_quota_windows.sql` | 1 | 5 | 0 | 0 | WP10 租户级硬阈值策略（platform 管理面配置；不是 billing/充值），按 tenant_id 唯一 | "平台池：配置读写；app 只读政策" |
+| 75 | `rag_tenant_quota_window` | 平台全局 | 否 | 否 | `V84__tenant_quota_windows.sql` | 1 | 7 | 0 | 0 | WP10 租户级 DAY/MONTH 窗口聚合账本（reserved/settled tokens），CAS 硬阈值 | "app 读写：预留/结算 CAS 与用量 API 聚合" |
+| 76 | `rag_tenant_quota_reservation` | 平台全局 | 否 | 否 | `V84__tenant_quota_windows.sql` | 1 | 5 | 0 | 0 | WP10 principal 预算预留 → 租户级预留映射；异步 settle/release/TTL 从 DB 恢复租户窗口 | "app 读写：预留/结算/释放" |
 
 ## 3. 已知例外与 WP2 落地要求
 
@@ -121,3 +125,15 @@ V80 是已执行迁移，按仓纪律不回写；V82 的 3 张证据表自带
 `scripts/verify-multi-tenancy-rls.sh` 的覆盖规则相应为「V80 清单 ⊆ catalog，
 catalog − V80 清单 == V82 三表」；`TenantRlsVerifier` 只校验 V80 清单，
 V82 表由 V82 自身断言 + `TenantWp8EvidencePostgresIntegrationTest` 真实 PG 集成校验。
+
+
+## 5. WP10（V84）新增表与 PLATFORM_GLOBAL 口径
+
+`V84__tenant_quota_windows.sql` 新增 3 张 PLATFORM_GLOBAL 表（第 74–76 行）：
+`rag_tenant_quota_policy`（策略）、`rag_tenant_quota_window`（DAY/MONTH
+CAS 账本）、`rag_tenant_quota_reservation`（`reservation_id` → 租户窗口映射）。
+三者都按 `tenant_id` 键控，**无 RLS**：容量治理在「确定租户之后」执行，
+平台表读写由 `TenantQuotaPolicyRepository` / `TenantQuotaLedger` 登记访问点承担，
+任何查询必须显式带 `tenant_id` 谓词。V80 的 RLS 清单不因此扩表；
+`TenantRlsVerifier` 仍只校验 TENANT_PRIVATE 清单。V84 纯事务 DDL、无
+CONCURRENTLY，含三表与 `default` 租户种子的终态断言。

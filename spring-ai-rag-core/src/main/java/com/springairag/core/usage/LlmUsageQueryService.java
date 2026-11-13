@@ -46,11 +46,27 @@ public class LlmUsageQueryService {
         this.clock = clock != null ? clock : Clock.systemUTC();
     }
 
+    /** 向后兼容：不带 tenantScope。 */
     public LlmUsageResponse query(
             ChatPrincipal caller,
             String fromText,
             String toText,
             String requestedPrincipalId) {
+        return query(caller, fromText, toText, requestedPrincipalId, null);
+    }
+
+    /**
+     * WP10：tenantScope 非空时返回当前租户聚合（不暴露其他租户数据）。
+     *
+     * <p>只接受 "current" / "TENANT"；不接受任意 tenantId 参数——跨租户枚举
+     * 属于平台 capability，不通过业务用量端点开放。</p>
+     */
+    public LlmUsageResponse query(
+            ChatPrincipal caller,
+            String fromText,
+            String toText,
+            String requestedPrincipalId,
+            String tenantScope) {
         ChatPrincipal effectiveCaller = caller != null
                 ? caller
                 : ChatPrincipal.local();
@@ -93,7 +109,33 @@ public class LlmUsageQueryService {
                 repository.byDay(from, toExclusive, scope.queryPrincipalId()).stream()
                         .map(item -> new LlmUsageResponse.DayBreakdown(
                                 LocalDate.parse(item.dimension()), totals(item.aggregate())))
-                        .toList());
+                        .toList(),
+                tenantProjection(tenantScope, from, toExclusive));
+    }
+
+    private LlmUsageResponse.TenantTotals tenantProjection(
+            String tenantScope,
+            Instant from,
+            Instant toExclusive) {
+        if (tenantScope == null || tenantScope.isBlank()) {
+            return null;
+        }
+        if (!"current".equalsIgnoreCase(tenantScope)
+                && !"TENANT".equalsIgnoreCase(tenantScope)) {
+            throw new IllegalArgumentException(
+                    "tenantScope must be 'current' or 'TENANT'");
+        }
+        com.springairag.core.tenant.TenantContext context =
+                com.springairag.core.tenant.TenantContext.current();
+        if (context == null || context.tenantId() == null
+                || context.tenantId().isBlank()) {
+            // 无上下文 fail-closed：不返回全租户聚合，也不冒充 default。
+            throw new SecurityException("No tenant context for tenant usage scope");
+        }
+        String tenantId = context.tenantId();
+        return new LlmUsageResponse.TenantTotals(
+                tenantId,
+                totals(repository.tenantTotals(from, toExclusive, tenantId)));
     }
 
     private QueryWindow parseWindow(String fromText, String toText) {
