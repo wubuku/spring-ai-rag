@@ -409,7 +409,7 @@ ls docs/drafts/MULTI_TENANCY*
 | seedance 生产材料 | `MULTITENANCY-CHECKLIST.md`、`RLS-NOBYPASSRLS-GUC.md`、principal-architect-review 系列 |
 | BOS 决策备忘 | 2026-11-10，六轮复核，真实 PG 16.8，函数体断裂 43、policy 基线 102/34 |
 | BOS 交付 | 2026-11-12 合并 `main`，`28359f69`，V126，DB-1..DB-18 逐门裁决 |
-| 本仓规模（原路线统计，已按 2026-11-13 复核） | 69 表、**74** 迁移（V1–V74）、55 `JdbcTemplate` 文件、22 JPA Repository、21 `@Scheduled`、5 `@Async`；「约 56 唯一约束」为 `grep UNIQUE` 行数口径，真实为 23 条 `CREATE UNIQUE INDEX` + 11 条列级 inline `UNIQUE`（见 §4.9） |
+| 本仓规模（原路线统计，已按 2026-11-13 复核） | 69 表、**79** 迁移（V1–V79）、55 `JdbcTemplate` 文件、22 JPA Repository、21 `@Scheduled`、5 `@Async`；「约 56 唯一约束」为 `grep UNIQUE` 行数口径，真实为 23 条 `CREATE UNIQUE INDEX` + 11 条列级 inline `UNIQUE`（见 §4.9） |
 | 补遗：seedance drafts 目录 | `../seedance-research/docs/multitenancy/drafts/` 共 11 份文档，原考古只列 2 份；其余 9 份教训见 §4.6 |
 | 补遗：PoC 可复用资产 | `multitenancy-verification/src/main/resources/db/init/001_schema.sql`（12 表 RLS + 复合 FK 模板）、`002_roles.sql`（6 角色 + 列级 GRANT + superuser 负向对照）、`src/main/java/.../good/`（11 组推荐实现骨架） |
 | 补遗：本仓非事务 JDBC 面 | 20 个文件含 `jdbcTemplate.update/batchUpdate` 且无 `@Transactional`；决定 GUC 主防线取向（§4.9） |

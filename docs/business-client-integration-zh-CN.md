@@ -358,7 +358,7 @@ credential；调用方仍以 `/auth/me` 的当前 principal、credential 和 exp
 - embedding 可用性读取文档 lifecycle 或
   `/api/v1/rag/collections/embedding-readiness`；业务 binding 另用 `/auth/me` 和
   Collection by-key。
-- 空库或升级环境必须按顺序执行 Flyway V1-V74。V49 为 stable principal 增加
+- 空库或升级环境必须按顺序执行 Flyway V1–V79。V49 为 stable principal 增加
   operation capabilities；V50 增加不保存 raw credential 的成功 provisioning 幂等
   ledger；V51 为 Sync Run item receipt 增加未过滤和按状态过滤的 keyset 索引；V52
   增加独立、按 owner 隔离的 Collection 创建幂等账本；V53 增加模型调用用量账本；

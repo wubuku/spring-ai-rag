@@ -23,8 +23,9 @@ import java.util.stream.Collectors;
  *       认证发生在确定租户之前，为无 RLS 的平台全局表，app 角色按 digest 精确查找。</li>
  * </ul>
  *
- * <p>基线：V1–V74 共 69 张存活业务表（V26 已 DROP 的 {@code rag_vector_store} 不登记）。
- * 分类统计：TENANT_PRIVATE 45 / PLATFORM_GLOBAL 20 / CREDENTIAL 4。</p>
+ * <p>基线：V1–V79 共 70 张存活业务表 = V1–V74 的 69 张存量表（V26 已 DROP 的
+ * {@code rag_vector_store} 不登记）+ WP2 的 V75 新增 {@code rag_tenant} 租户主表。
+ * 分类统计：TENANT_PRIVATE 45 / PLATFORM_GLOBAL 21 / CREDENTIAL 4。</p>
  */
 public final class TenantTableCatalog {
 
@@ -133,7 +134,12 @@ public final class TenantTableCatalog {
             entry("rag_api_key", TableOwnership.CREDENTIAL, "API Key 认证入口，按 digest 精确查找；认证前无租户上下文", "app 角色 digest 精确查找；无平台池"),
             entry("rag_api_principal", TableOwnership.CREDENTIAL, "受管 principal，认证入口与配额主体", "app 角色 digest/ID 精确查找；无平台池"),
             entry("rag_api_key_rotation", TableOwnership.CREDENTIAL, "密钥轮换生命周期随凭据，无 RLS", "app 角色：轮换端点读写"),
-            entry("rag_api_provisioning_operation", TableOwnership.CREDENTIAL, "凭据供给幂等操作随凭据生命周期，无 RLS", "app 角色：供给端点读写")
+            entry("rag_api_provisioning_operation", TableOwnership.CREDENTIAL, "凭据供给幂等操作随凭据生命周期，无 RLS", "app 角色：供给端点读写"),
+
+            // ---- WP2 新增（V75）：租户主表，平台全局，认证前即需存在 ----
+            entry("rag_tenant", TableOwnership.PLATFORM_GLOBAL,
+                    "V75 租户主表，跨租户生命周期由平台池管理；认证/租户解析前即需读取",
+                    "平台池：生命周期端点读写；app 只读 tenant 状态")
     );
 
     private static TableEntry entry(String tableName, TableOwnership ownership,

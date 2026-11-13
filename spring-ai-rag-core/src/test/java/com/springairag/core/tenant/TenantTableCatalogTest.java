@@ -40,7 +40,8 @@ class TenantTableCatalogTest {
     void catalogCoversAllLiveTables() {
         List<TenantTableCatalog.TableEntry> entries = TenantTableCatalog.entries();
 
-        assertEquals(69, entries.size(), "存活业务表数量应为 69（V1–V74，排除已 DROP 的 rag_vector_store）");
+        assertEquals(70, entries.size(),
+                "存活业务表数量应为 70 = V1–V74 的 69 张存量表 + V75 新增 rag_tenant（排除已 DROP 的 rag_vector_store）");
 
         Set<String> names = entries.stream()
                 .map(TenantTableCatalog.TableEntry::tableName)
@@ -128,7 +129,14 @@ class TenantTableCatalogTest {
                             p.getFileName().toString().replaceFirst("^V(\\d+)__.*$", "$1"))))
                     .toList();
         }
-        assertEquals(74, files.size(), "V1–V74 共 74 个迁移文件");
+        assertEquals(79, files.size(), "Flyway 迁移文件应连续覆盖 V1–V79（含 WP2 新增 V75–V79）");
+        // 动态基线：从 V1 到最大版本号必须连续、无缺号（不写死总数，避免新增迁移时机械漂移）。
+        int maxVersion = files.stream()
+                .mapToInt(p -> Integer.parseInt(
+                        p.getFileName().toString().replaceFirst("^V(\\d+)__.*$", "$1")))
+                .max().orElseThrow();
+        assertEquals(maxVersion, files.size(),
+                "V1..V" + maxVersion + " 必须连续且无重复版本");
 
         Pattern create = Pattern.compile(
                 "CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?([a-zA-Z0-9_.\"]+)",
@@ -150,7 +158,8 @@ class TenantTableCatalogTest {
             }
         }
         created.removeAll(dropped);
-        assertEquals(69, created.size(), "存活业务表应为 69 张（V26 DROP rag_vector_store 后）");
+        assertEquals(70, created.size(),
+                "存活业务表应为 70 张（V26 DROP rag_vector_store，V75 CREATE rag_tenant）");
 
         Set<String> catalogNames = TenantTableCatalog.entries().stream()
                 .map(TenantTableCatalog.TableEntry::tableName)

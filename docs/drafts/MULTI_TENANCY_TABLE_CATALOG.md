@@ -2,8 +2,9 @@
 
 > 机器可读单一事实源：`spring-ai-rag-core/src/main/java/com/springairag/core/tenant/TenantTableCatalog.java`
 >（本文与其必须保持一致，新增表先改 catalog + 本文再写迁移）。
-> 基线：Flyway V1–V74 共 **69 张存活业务表**（V26 已 DROP 的 `rag_vector_store` 不登记）。
-> 分类：**TENANT_PRIVATE 45 / PLATFORM_GLOBAL 20 / CREDENTIAL 4**。
+> 基线：Flyway V1–V79 共 **70 张存活业务表** = V1–V74 的 69 张存量表（V26 已 DROP 的
+> `rag_vector_store` 不登记）+ V75 新增 `rag_tenant` 租户主表。
+> 分类：**TENANT_PRIVATE 45 / PLATFORM_GLOBAL 21 / CREDENTIAL 4**。
 > 裁决规则来自 [多租户化实施规划](MULTI_TENANCY_IMPLEMENTATION_PLAN.md) §5.2（终审核 APPROVE 基线）。
 > 行为契约：租户私有表 → RLS ENABLE+FORCE + 规范 policy + tenant-leading 索引；
 > 平台全局/凭据表 → 无 RLS，仅按登记访问点读写（WP3 verifier 按 catalog 逐张校验）。
@@ -13,7 +14,7 @@
 | 类别 | 张数 | RLS | tenant-leading 索引 | 典型访问面 |
 |---|---|---|---|---|
 | TENANT_PRIVATE | 45 | ENABLE+FORCE | 必须 | 业务请求链路 / TenantJobDispatcher |
-| PLATFORM_GLOBAL | 20 | 否 | 否 | 平台池（仅登记访问点）或 app 读写（见逐张行） |
+| PLATFORM_GLOBAL | 21 | 否 | 否 | 平台池（仅登记访问点）或 app 读写（见逐张行） |
 | CREDENTIAL | 4 | 否 | 否 | app 角色 digest 精确查找（认证先于租户解析） |
 
 ## 2. 逐张裁决（按迁移引入顺序）
