@@ -116,4 +116,11 @@ public class TenantConfiguration {
     public TenantJobDispatcher tenantJobDispatcher() {
         return new TenantJobDispatcher();
     }
+
+    /** WP7：ACTIVE 租户目录（rag_tenant 平台表，无 RLS；枚举失败 fail-closed）。 */
+    @Bean
+    @ConditionalOnMissingBean(TenantDirectory.class)
+    public TenantDirectory tenantDirectory(JdbcTemplate jdbcTemplate) {
+        return new JdbcTenantDirectory(jdbcTemplate);
+    }
 }

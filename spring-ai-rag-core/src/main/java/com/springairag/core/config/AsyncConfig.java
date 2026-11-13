@@ -2,6 +2,8 @@ package com.springairag.core.config;
 
 import com.springairag.core.properties.RagAsyncProperties;
 import com.springairag.core.logging.MdcContext;
+import com.springairag.core.tenant.TenantDirectory;
+import com.springairag.core.tenant.TenantScheduledTaskDecorator;
 import com.springairag.core.tenant.TenantTaskDecorator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,9 +46,17 @@ public class AsyncConfig implements AsyncConfigurer {
     private static final Logger log = LoggerFactory.getLogger(AsyncConfig.class);
 
     private final RagProperties ragProperties;
+    private final TenantDirectory tenantDirectory;
 
-    public AsyncConfig(RagProperties ragProperties) {
+    public AsyncConfig(RagProperties ragProperties, TenantDirectory tenantDirectory) {
         this.ragProperties = ragProperties;
+        this.tenantDirectory = tenantDirectory;
+    }
+
+    /** 调度线程逐租户驱动：租户私有任务 STRICT 下按 ACTIVE 租户各跑一次。 */
+    private TenantScheduledTaskDecorator tenantScheduledTaskDecorator() {
+        return new TenantScheduledTaskDecorator(
+                ragProperties.getTenant().getMode(), () -> tenantDirectory);
     }
 
     @Override
@@ -94,15 +104,16 @@ public class AsyncConfig implements AsyncConfigurer {
     @Bean
     BeanPostProcessor scheduledTraceMdcPostProcessor() {
         TenantTaskDecorator tenantDecorator = tenantTaskDecorator();
+        TenantScheduledTaskDecorator scheduledDecorator = tenantScheduledTaskDecorator();
         return new BeanPostProcessor() {
             @Override
             public Object postProcessBeforeInitialization(Object bean, String beanName) {
                 if (bean instanceof ThreadPoolTaskScheduler scheduler) {
                     scheduler.setTaskDecorator(runnable -> tenantDecorator.decorate(
-                            MdcContext.wrapScheduled(runnable)));
+                            MdcContext.wrapScheduled(scheduledDecorator.decorate(runnable))));
                 } else if (bean instanceof SimpleAsyncTaskScheduler scheduler) {
                     scheduler.setTaskDecorator(runnable -> tenantDecorator.decorate(
-                            MdcContext.wrapScheduled(runnable)));
+                            MdcContext.wrapScheduled(scheduledDecorator.decorate(runnable))));
                 }
                 return bean;
             }

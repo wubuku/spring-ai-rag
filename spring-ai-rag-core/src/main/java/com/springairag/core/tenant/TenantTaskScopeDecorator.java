@@ -1,5 +1,8 @@
 package com.springairag.core.tenant;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Objects;
 
 /**
@@ -18,6 +21,8 @@ import java.util.Objects;
  * 本装饰器只负责「方法级上下文 bootstrap / 保持」这一最小合同。</p>
  */
 public final class TenantTaskScopeDecorator {
+
+    private static final Logger log = LoggerFactory.getLogger(TenantTaskScopeDecorator.class);
 
     private final TenantMode mode;
 
@@ -38,7 +43,10 @@ public final class TenantTaskScopeDecorator {
             return task;
         }
         if (mode == TenantMode.STRICT) {
-            return () -> { };
+            // 规划 §6 WP7：无上下文不执行**并告警**（不能静默 noop）。
+            return () -> log.warn(
+                    "STRICT 模式拒绝执行无租户上下文的后台任务（fail-closed，不静默读 0 行）：task={}",
+                    task);
         }
         return () -> {
             try {

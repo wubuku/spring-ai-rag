@@ -287,12 +287,19 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
   计划中「21 scheduled + 5 async」是 2026-11-13 的旧口径，实际以 `TenantTaskInventory`
   现场清单为准（`MdcContext` / `AsyncConfig` / 两个 publisher 计入旧口径）。
 - **待办（不阻断 WP8，但阻断发布）**：
-  1. `TenantDirectory` 目前只有 SPI，**没有 JDBC 实现**（读 `rag_tenant` 的平台池实现），
-     STRICT 下逐租户枚举需在 WP8/WP9 补齐；当前 `dispatchForEachActiveTenant` 由调用方注入。
-  2. 18 个 `@TenantScopedJob` 标注只是「声明该任务是租户私有作用域」；
-     **逐租户枚举调用点尚未逐个接入**（例如 `EmbeddingJobWorker` / `EvaluationSuiteWorker`
-     仍按自身 claim 逻辑读任务表，未改成 dispatcher 逐租户驱动）。
-     这两项是 WP8 的实质工作，不得当作已完成。
+  1. `JdbcTenantDirectory`（读 `rag_tenant` 平台表）已落地并装配为默认 bean，
+     `TenantScheduledTaskDecorator` 在调度线程按 ACTIVE 租户**逐租户驱动**租户私有任务
+     （SINGLE 只跑 default；STRICT 枚举后逐租户、单租户失败不阻断、枚举失败 fail-closed 跳过本轮）。
+  2. **逐租户调度的覆盖边界（如实声明）**：`TenantScheduledTaskDecorator` 依赖
+     Spring 把任务包成 `ScheduledMethodRunnable`（反射取目标 bean 类判断 `@TenantScopedJob`）。
+     **经 `@Scheduled` 注解进入调度器的任务已全覆盖**；但 18 个租户私有文件里
+     `@Scheduled` 方法内部自建线程池（`EmbeddingJobWorker` / `EvaluationSuiteWorker` /
+     `AlertNotificationDeliveryWorker` 等 worker 的 `workers.execute(...)`），
+     这些**内层线程池任务**仍由调度线程的租户作用域经 `TenantContext` 延续——
+     worker 线程是在调度线程里 `submit`/`execute` 的 Runnable，不会自动带走 ThreadLocal。
+     **已知风险与 WP8 工作**：内层线程池任务需显式 `TenantContext.wrap` 或由
+     `TenantJobDispatcher.scoped` 包装（载荷 tenant 来自 claim 到的任务行）。
+     不得宣称「内层异步已全部租户化」。
   3. `ApiKeyManagementService.authenticate` 的凭据投影仍未带出 `tenant_id` 与租户状态
      （WP5 遗留，WP9 落地）。
 
@@ -323,7 +330,7 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
 | WP1 | **已关闭可计分交付**：3 个产物齐备（69 张逐张裁决文档 / `TenantTableCatalog.java` / 8 项完整性单测），红→绿证据与 4 项门禁全绿。结论：有效推进，无平台期；下一包 WP2 立即进入迁移落地（需先建任务专属 PG）。 |
 | WP3 | **已关闭可计分交付**：V80 迁移 + 三角色契约 + verifier/guard + 演练脚本齐备；真实 PG 7/7（五种负向全部拒绝）；JVM 8457 全绿；双路径演练 PASS。**教训**：WP1 把凭据表裁决成「不加列」，与规划 §0/§5.2「凭据表带 tenant_id」矛盾，实施时才暴露——逐张裁决文档必须逐条对照规划冻结口径，不能只按类别规则机械推导。verifier 负向用例的 INSERT 要先满足 V48 的 principal FK/NOT NULL 约束；`rag_tenant` 主键即 tenant_id 需在「平台表无 tenant_id」断言中显式排除。 |
 | WP2 | **已关闭可计分交付**（含补充 commit：catalog/测试注释中的写死 69/70/79 数字改为动态基线口径，避免机械漂移）：V75–V79 迁移落地，双路径演练全 PASS、真实 PG 集成 5/5、全模块 8444 tests 全绿。**事故与方案收敛**：V78 原计划 `CREATE INDEX CONCURRENTLY`（Flyway 非事务迁移）被并发事务（pid68 idle in transaction）无限阻塞约 1 小时（外部监控方通报并 cancel）；加 `lock_timeout=30s` 兜底后变 30s 快速失败（SQLState 55P03），但仍暴露「非事务迁移执行期间任何第二条连接持有开放事务都会永久等待」的结构性问题。**收敛结论：迁移链一律纯事务内 DDL，V78 改用普通索引；CONCURRENTLY 仅在演练库在线步骤由脚本承担，不进迁移链**（V78/V79 注释与演练文档均已记录）。教训：Flyway 非事务迁移不能混 `SET`/`DO $$`；`IF NOT EXISTS` 对 INVALID 索引无效（V79 已加 INVALID 检测与清理指引）；PL/pgSQL `RAISE EXCEPTION` 不支持 `||` 拼接；测试侧 Flyway 连接显式加 `lock_timeout=30s` 与 `statement_timeout=900000` 兜底；门禁 latest 迁移号来自 `git ls-files`，未 add 的新文件会导致误报（先 add 再跑门禁）。 |
-| WP7 | **部分收口（核心机制完成，逐调用点接入未完成）**：TenantJobDispatcher + 逐租户分发合同 + 统一 TenantTaskDecorator + 3 处 after-commit 上下文传播 + 现场清单门禁（20 项）全部落地，JVM 8521 全绿、真实 PG 4/4。**教训**：① 参考项目的「单租户下能跑通会掩盖多租户静默读 0 行」直接决定了 SINGLE 必须显式 bootstrap `default`、STRICT 必须拒绝执行，不能留「无租户也能跑」的旁路；② after-commit 必须在**注册时**捕获上下文快照（回调时上下文已清理），不能回调时再读；③ 现场清点与旧计划数字不一致（@Async 3 处而非 5 处、`@Scheduled` 24 处/21 文件），门禁必须按现场动态计算，禁止写死数量；④ 增量构建下 surefire 会跳过测试并报 BUILD SUCCESS，取证必须 `clean test` 或即时读 surefire 报告，否则会把「跳过」写成「通过」。**未完成项见 §2f 待办（TenantDirectory JDBC 实现 + 18 个任务的逐调用点接入），不得对外宣称后台任务多租户化已完成。** |
+| WP7 | **核心机制收口（调度层全覆盖；内层 worker 线程池传播留 WP8）**：TenantJobDispatcher + 逐租户分发合同 + 统一 TenantTaskDecorator + 3 处 after-commit 上下文传播 + 现场清单门禁（20 项）全部落地，JVM 8521 全绿、真实 PG 4/4。**教训**：① 参考项目的「单租户下能跑通会掩盖多租户静默读 0 行」直接决定了 SINGLE 必须显式 bootstrap `default`、STRICT 必须拒绝执行，不能留「无租户也能跑」的旁路；② after-commit 必须在**注册时**捕获上下文快照（回调时上下文已清理），不能回调时再读；③ 现场清点与旧计划数字不一致（@Async 3 处而非 5 处、`@Scheduled` 24 处/21 文件），门禁必须按现场动态计算，禁止写死数量；④ 增量构建下 surefire 会跳过测试并报 BUILD SUCCESS，取证必须 `clean test` 或即时读 surefire 报告，否则会把「跳过」写成「通过」。**未完成项见 §2f 待办（TenantDirectory JDBC 实现 + 18 个任务的逐调用点接入），不得对外宣称后台任务多租户化已完成。** |
 | WP4 | **已收口（带已知缺口，不阻断进入 WP5，但阻断发布与生产多租户声明）**：V81 补齐 `embedding_1024` ANN 索引；双租户 RLS 集成 5/5、HNSW+RLS 基准 1/1（ANN 存在性与延迟 ≤3× 两条硬门槛通过）；quality-defaults 中英成对落门槛并同步可复现性契约；全仓 `V1–V81` 文档同步。**教训**：规划 §3 曾把旧 `embedding` 列的 V1 HNSW 当作当前事实，V68 已 DROP COLUMN 导致 `embedding_1024` 长期无 ANN 索引，基准测试先暴露「Seq Scan」才补 V81——「事实表」必须按迁移净终态核对，不能按早期迁移文本推断。V81 后 `planUsesIndex=false`（小数据集 planner 选 Seq Scan）与「多租户混合 Recall@K 未测」如实记为已知缺口，不静默判通过；门禁 latest 由 `git ls-files` + 磁盘 `find` 双口径判定，新迁移必须先 `git add` 再跑 `verify-project-docs.sh`。 |
 
 ### 5.1 事故严重度判定与解堵复核（2026-11-14，监控方解堵通报）
