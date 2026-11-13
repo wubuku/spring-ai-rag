@@ -153,3 +153,14 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
 | WP1 | **已关闭可计分交付**：3 个产物齐备（69 张逐张裁决文档 / `TenantTableCatalog.java` / 8 项完整性单测），红→绿证据与 4 项门禁全绿。结论：有效推进，无平台期；下一包 WP2 立即进入迁移落地（需先建任务专属 PG）。 |
 | WP3 | **已关闭可计分交付**：V80 迁移 + 三角色契约 + verifier/guard + 演练脚本齐备；真实 PG 7/7（五种负向全部拒绝）；JVM 8457 全绿；双路径演练 PASS。**教训**：WP1 把凭据表裁决成「不加列」，与规划 §0/§5.2「凭据表带 tenant_id」矛盾，实施时才暴露——逐张裁决文档必须逐条对照规划冻结口径，不能只按类别规则机械推导。verifier 负向用例的 INSERT 要先满足 V48 的 principal FK/NOT NULL 约束；`rag_tenant` 主键即 tenant_id 需在「平台表无 tenant_id」断言中显式排除。 |
 | WP2 | **已关闭可计分交付**（含补充 commit：catalog/测试注释中的写死 69/70/79 数字改为动态基线口径，避免机械漂移）：V75–V79 迁移落地，双路径演练全 PASS、真实 PG 集成 5/5、全模块 8444 tests 全绿。**事故与方案收敛**：V78 原计划 `CREATE INDEX CONCURRENTLY`（Flyway 非事务迁移）被并发事务（pid68 idle in transaction）无限阻塞约 1 小时（外部监控方通报并 cancel）；加 `lock_timeout=30s` 兜底后变 30s 快速失败（SQLState 55P03），但仍暴露「非事务迁移执行期间任何第二条连接持有开放事务都会永久等待」的结构性问题。**收敛结论：迁移链一律纯事务内 DDL，V78 改用普通索引；CONCURRENTLY 仅在演练库在线步骤由脚本承担，不进迁移链**（V78/V79 注释与演练文档均已记录）。教训：Flyway 非事务迁移不能混 `SET`/`DO $$`；`IF NOT EXISTS` 对 INVALID 索引无效（V79 已加 INVALID 检测与清理指引）；PL/pgSQL `RAISE EXCEPTION` 不支持 `||` 拼接；测试侧 Flyway 连接显式加 `lock_timeout=30s` 与 `statement_timeout=900000` 兜底；门禁 latest 迁移号来自 `git ls-files`，未 add 的新文件会导致误报（先 add 再跑门禁）。 |
+
+### 5.1 事故严重度判定与解堵复核（2026-11-14，监控方解堵通报）
+
+**严重度判定（按 delivery-workflow §10 / PLANNING §6.2 口径）**：
+- **严重度：S2（高）** — 非事务 CONCURRENTLY 迁移在测试设施下可无限挂死，曾在 WP2 期间实际挂死约 1 小时、需外部干预才能解堵；属「实施级事故」而非「方案级失效」。
+- **根因分类：测试设施 / 迁移健壮性缺陷（非方案级）** — 不改变核心方案、范围、迁移语义或验收标准，不触发规划检查计数归零。
+- **补救与加固现状（2026-11-14 复核）**：
+  1. 结构性修复：CONCURRENTLY 整体退出迁移链（V78/V79 注释 + 演练文档 §1/§2/§4 + 账本 §5 WP2 行；后续 WP4 新增 V81 亦沿用纯事务内 DDL）；迁移链一律纯事务内 DDL，不再依赖「无并发开放事务」的隐含前置条件。
+  2. 连接级兜底：所有真实 PG 集成测试（`TenantBaseMigration` / `TenantRlsVerifier` / `TenantRlsIsolation` / `TenantHnswRlsBenchmark`）的迁移与断言连接均显式带 `options=-c lock_timeout=30s -c statement_timeout=900000`，同类问题 30s 快速失败而非挂死。
+  3. 幂等与 INVALID 防护：迁移链不再产生 INVALID 索引（无 CONCURRENTLY）；V79 / V81 终态断言保留 INVALID 检测与清理指引，覆盖在线 CONCURRENTLY 演练的残留风险。
+  4. 监控方通报的三条建议全部落地，无需额外修复动作；本次复核只落档，不改代码。
