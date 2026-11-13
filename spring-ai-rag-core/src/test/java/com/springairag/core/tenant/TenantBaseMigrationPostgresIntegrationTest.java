@@ -91,7 +91,8 @@ class TenantBaseMigrationPostgresIntegrationTest {
         List<TenantTableCatalog.TableEntry> tables = TenantTableCatalog.entries().stream()
                 .filter(e -> e.ownership() == TenantTableCatalog.TableOwnership.TENANT_PRIVATE)
                 .toList();
-        assertEquals(45, tables.size());
+        // 张数不写死：与 catalog 一致性由 TenantTableCatalogTest 动态基线校验。
+        assertFalse(tables.isEmpty());
 
         for (TenantTableCatalog.TableEntry entry : tables) {
             Integer colCount = jdbc.queryForObject(
@@ -106,20 +107,40 @@ class TenantBaseMigrationPostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("平台全局表与凭据表不添加 tenant_id（认证先于租户解析）")
-    void platformGlobalAndCredentialTablesDoNotCarryTenantId() {
-        List<TenantTableCatalog.TableEntry> tables = TenantTableCatalog.entries().stream()
-                .filter(e -> e.ownership() != TenantTableCatalog.TableOwnership.TENANT_PRIVATE)
+    @DisplayName("平台全局表无 tenant_id；凭据表有 tenant_id（V80 起凭据租户化绑定）")
+    void platformGlobalTablesDoNotCarryTenantIdButCredentialsDo() {
+        List<TenantTableCatalog.TableEntry> platformGlobals = TenantTableCatalog.entries().stream()
+                .filter(e -> e.ownership() == TenantTableCatalog.TableOwnership.PLATFORM_GLOBAL)
+                // rag_tenant 的主键本身叫 tenant_id（租户主表，不是隔离绑定列），
+                // 对「平台全局表无 tenant_id 绑定列」的断言不适用。
+                .filter(e -> !"rag_tenant".equals(e.tableName()))
                 .toList();
-        assertEquals(24, tables.size());
+        assertFalse(platformGlobals.isEmpty());
 
-        for (TenantTableCatalog.TableEntry entry : tables) {
+        for (TenantTableCatalog.TableEntry entry : platformGlobals) {
             Integer colCount = jdbc.queryForObject(
                     "SELECT count(*) FROM information_schema.columns "
                             + "WHERE table_schema = 'public' AND lower(table_name) = lower(?) "
                             + "AND column_name = 'tenant_id'",
                     Integer.class, entry.tableName());
             assertEquals(0, colCount, entry.tableName() + " 不应有 tenant_id 列");
+        }
+
+        // V80：凭据表带 tenant_id（认证先于租户解析，列仅作绑定与 SINGLE 守卫数据），无 RLS。
+        for (String table : List.of("rag_api_key", "rag_api_principal",
+                "rag_api_key_rotation", "rag_api_provisioning_operation")) {
+            Integer colCount = jdbc.queryForObject(
+                    "SELECT count(*) FROM information_schema.columns "
+                            + "WHERE table_schema = 'public' AND lower(table_name) = lower(?) "
+                            + "AND column_name = 'tenant_id'",
+                    Integer.class, table);
+            assertEquals(1, colCount, table + " 缺少 tenant_id 列（V80 凭据租户化）");
+            Integer rlsCount = jdbc.queryForObject(
+                    "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+                            + "WHERE n.nspname = 'public' AND lower(c.relname) = lower(?) "
+                            + "AND c.relrowsecurity",
+                    Integer.class, table);
+            assertEquals(0, rlsCount, table + " 是凭据表，不得启用 RLS");
         }
     }
 

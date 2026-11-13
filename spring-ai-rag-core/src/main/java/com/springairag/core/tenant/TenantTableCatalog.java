@@ -20,10 +20,11 @@ import java.util.stream.Collectors;
  *   <li>PLATFORM_GLOBAL：单例/全局容量/全局配置/平台运营遥测，不启用 RLS，仅平台池或
  *       明确列出的访问点可写；</li>
  *   <li>CREDENTIAL：认证凭据及其生命周期表（key / principal / rotation / provisioning），
- *       认证发生在确定租户之前，为无 RLS 的平台全局表，app 角色按 digest 精确查找。</li>
+ *       认证发生在确定租户之前，为无 RLS 的平台全局表；V80 起带 {@code tenant_id} 绑定列并
+ *       回填 {@code default}（SINGLE 守卫与凭据绑定租户的数据载体），app 角色按 digest 精确查找。</li>
  * </ul>
  *
- * <p>基线：WP2 后（V75–V79）的存活业务表全量登记；具体张数以迁移脚本实际
+ * <p>基线：WP3 后（V75–V80）的存活业务表全量登记；具体张数以迁移脚本实际
  * CREATE/DROP 结果为准（{@code rag_vector_store} 已 DROP 不登记，V75 新增 {@code rag_tenant}）。
  * 数量不写死，与迁移脚本的一致性由 TenantTableCatalogTest 动态基线校验。</p>
  */

@@ -15,10 +15,10 @@
 | 分支 | `feature/multi-tenancy-phase1` |
 | 基线 commit | `04e2e678`（本地 `main`，规划终审核 APPROVE 后的规划 checkpoint） |
 | 主工作区 | `/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`，`main` @ `04e2e678`，创建 worktree 时 clean |
-| 工作区状态 | **WP2 已完成**（V75–V79 迁移 + 集成测试 + 双路径演练，见 §2），即将形成 commit |
-| 当前唯一 `in_progress` | **WP3 — RLS、三角色与启动 verifier** |
-| 已完成工作包 | WP1（表归属清单）、**WP2 — 租户底座迁移 V75–V79**（证据见 §2） |
-| 紧接着要做 | WP3 红测（负向启动用例）→ RLS 迁移 / `TenantRlsVerifier` / `TenantModeGuard` / 演练脚本 → 绿测 → 账本 → 提交 |
+| 工作区状态 | **WP3 已完成**（V80 RLS + 三角色契约 + verifier/guard + 负向启动集成绿，见 §2b），即将形成 commit |
+| 当前唯一 `in_progress` | **WP4 — 双租户 RLS 集成测试与 HNSW 基准** |
+| 已完成工作包 | WP1（表清单）、WP2（底座迁移 V75–V79）、**WP3 — RLS/三角色/verifier（V80）**（证据见 §2b） |
+| 紧接着要做 | WP4：双租户 A/B 集成测试（RLS 隔离/无 GUC 0 行/跨租户写拒绝/GUC 串台/连接池复用）+ HNSW 基准 |
 | 规划检查计数 | `3/3`（终审核 APPROVE，规划基线冻结；本阶段未触发归零） |
 | 实现检查计数 | 未开始（按 delivery-workflow §7，编码完成后才计数） |
 
@@ -69,6 +69,11 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
 | `TenantTableCatalogTest`（动态基线版） | **已运行（绿）** | 8/8，不再写死数字 |
 | 全模块回归 `mvn -o -pl spring-ai-rag-core -am test`（WP2 收尾） | **已运行（绿）** | 8444 tests / 0 failures / 0 errors，BUILD SUCCESS（动态基线修正后重跑仍 8444 全绿） |
 | WebUI typecheck / build / Mock Playwright | **未运行 / 未适用** | WP1/WP2 均不触碰 WebUI |
+| WP3 红测 `mvn test-compile` | **已运行（预期红）** | TenantModeGuard/TenantRlsVerifier 不存在，编译失败 |
+| WP3 静态 RLS 门禁 `./scripts/verify-multi-tenancy-rls.sh` | **已运行（绿）** | guard 契约 / V80↔catalog 双向一致（45=45）/ policy GUC 绑定 / 凭据契约 / 负向用例存在性 |
+| WP3 真实 PG 负向集成 | **已运行（绿）** | `TenantRlsVerifierPostgresIntegrationTest` 7/7：正向基线 + 宽松 policy/BYPASSRLS/漏表/宽松 platform 角色/SINGLE 非 default 凭据全部被拒绝 |
+| WP3 全模块 JVM 回归 | **已运行（绿）** | 8457 tests / 0 failures / 0 errors |
+| WP3 双路径演练重验 | **已运行（绿）** | `--early 74` 全 PASS，迁移历史 80 |
 | WebUI typecheck / build / Mock Playwright | **未运行 / 未适用** | WP1 不触碰 WebUI |
 
 
@@ -87,10 +92,39 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
   `TenantTableCatalogTest` 已改为**动态基线**（连续无缺号 + 与迁移存活表集合一致 + isEmpty 守卫），
   不再写死 74/69/70/45/25 等数字（吸取 BOS V126 写死数字会过时的教训）。
 - 文档同步：AGENTS.md / developer-reference / verification-baseline / testing-guide / README /
-  index / project-context / business-client-integration / release-checklist 等全部 `V1–V74`→`V1–V79`；
+  index / project-context / business-client-integration / release-checklist 等全部 `V1–V74`→`V1–V80`；
   `.agents/skills/project-docs/` 两文件同步。
 - 全模块回归：`mvn -o -pl spring-ai-rag-core -am test` **8444 tests / 0 failures / 0 errors**，BUILD SUCCESS。
 - 工作区状态：以上全部改动（迁移、测试、文档、catalog、plan）已 staged，随本条账本更新一并提交为 WP2 commit。
+
+
+## 2b. WP3 收尾快照（2026-11-14）
+
+- **产物**：
+  - `V80__tenant_rls.sql`：45 张 TENANT_PRIVATE 表 `ENABLE + FORCE ROW LEVEL SECURITY` +
+    规范 policy `tenant_isolation`（USING/WITH CHECK 绑定 `app.current_tenant_id`）；
+    4 张凭据表补 `tenant_id NOT NULL DEFAULT 'default'` 绑定列（规划 §0/§5.2 要求，WP1 落地遗漏，
+    本迁移补齐；无 RLS，认证先于租户解析）；终态断言含凭据表无 RLS、清单逐表 policy 存在、
+    恒真表达式拒绝、非清单表误开 RLS 差集检测。
+  - `TenantMode`（SINGLE/STRICT）、`TenantModeGuard`（SINGLE 校验凭据全 default 否则拒绝启动；
+    STRICT 委托 verifier）、`TenantRlsVerifier`（接口 + JDBC 默认实现：角色非 superuser/BYPASSRLS、
+    禁止继承/使用 BYPASSRLS 平台角色、catalog↔pg_class 双向一致、policy 语义校验、
+    无 GUC 裸连接读 0 行 fail-closed 采样）。
+  - `scripts/verify-multi-tenancy-rls.sh`：静态门禁（guard 契约 / V80↔catalog 双向一致 /
+    policy 命名与 GUC 绑定 / 凭据契约 / 负向用例存在性）+ `--pg` 可选真实演练。
+- **红→绿**：先写 `TenantModeGuardTest`/`TenantRlsVerifierContractTest`（编译失败红测确认），
+  再实现；真实 PG 集成 `TenantRlsVerifierPostgresIntegrationTest` **7/7 绿**
+  （正向基线 + 宽松 policy/BYPASSRLS/漏 RLS 表/宽松 platform 角色/SINGLE 非 default 凭据五种负向，
+  Testcontainers `pgvector/pgvector:pg16`，opt-in `-Dtenant-rls.it.enabled=true`）。
+- **对齐参考项目**（`../seedance-research` `StartupRlsVerifier` 教训）：验语义不只验数量；
+  差集自检防未登记表误开；无 GUC 0 行作为启动断言；policy 命名 tenant_isolation 对齐其 V175 惯例。
+- **规划一致性修正**（WP1 遗漏补齐，非方案变更）：catalog 的 CREDENTIAL 4 张由「不加列」修正为
+  「V80 起带 tenant_id 绑定列、无 RLS、单列 tenant 索引」；`MULTI_TENANCY_TABLE_CATALOG.md`
+  与 `TenantTableCatalog`/`TenantTableCatalogTest` 同步；rag_tenant 主键即 tenant_id 的例外在
+  WP2 集成测试中显式排除并注释。未触发规划归零（§6.2）：规划冻结口径本就要求凭据表带 tenant_id。
+- **回归**：JVM 全量 `mvn -o -pl spring-ai-rag-core -am test` **8457 tests / 0 failures**；
+  WP2 集成 5/5（V80 加入后重验）；双路径演练 `--early 74` 全 PASS（迁移历史 80）；
+  `verify-multi-tenancy-rls.sh` 静态门禁全 PASS；文档全量 `V1–V79`→`V1–V80` 同步。
 
 ## 3. 环境与隔离边界（WORKTREE.md 硬门禁）
 
@@ -117,4 +151,5 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
 | 工作包 | 收尾时填写：是否关闭可计分交付、验证证据、推进节奏结论 |
 |---|---|
 | WP1 | **已关闭可计分交付**：3 个产物齐备（69 张逐张裁决文档 / `TenantTableCatalog.java` / 8 项完整性单测），红→绿证据与 4 项门禁全绿。结论：有效推进，无平台期；下一包 WP2 立即进入迁移落地（需先建任务专属 PG）。 |
+| WP3 | **已关闭可计分交付**：V80 迁移 + 三角色契约 + verifier/guard + 演练脚本齐备；真实 PG 7/7（五种负向全部拒绝）；JVM 8457 全绿；双路径演练 PASS。**教训**：WP1 把凭据表裁决成「不加列」，与规划 §0/§5.2「凭据表带 tenant_id」矛盾，实施时才暴露——逐张裁决文档必须逐条对照规划冻结口径，不能只按类别规则机械推导。verifier 负向用例的 INSERT 要先满足 V48 的 principal FK/NOT NULL 约束；`rag_tenant` 主键即 tenant_id 需在「平台表无 tenant_id」断言中显式排除。 |
 | WP2 | **已关闭可计分交付**（含补充 commit：catalog/测试注释中的写死 69/70/79 数字改为动态基线口径，避免机械漂移）：V75–V79 迁移落地，双路径演练全 PASS、真实 PG 集成 5/5、全模块 8444 tests 全绿。**事故与方案收敛**：V78 原计划 `CREATE INDEX CONCURRENTLY`（Flyway 非事务迁移）被并发事务（pid68 idle in transaction）无限阻塞约 1 小时（外部监控方通报并 cancel）；加 `lock_timeout=30s` 兜底后变 30s 快速失败（SQLState 55P03），但仍暴露「非事务迁移执行期间任何第二条连接持有开放事务都会永久等待」的结构性问题。**收敛结论：迁移链一律纯事务内 DDL，V78 改用普通索引；CONCURRENTLY 仅在演练库在线步骤由脚本承担，不进迁移链**（V78/V79 注释与演练文档均已记录）。教训：Flyway 非事务迁移不能混 `SET`/`DO $$`；`IF NOT EXISTS` 对 INVALID 索引无效（V79 已加 INVALID 检测与清理指引）；PL/pgSQL `RAISE EXCEPTION` 不支持 `||` 拼接；测试侧 Flyway 连接显式加 `lock_timeout=30s` 与 `statement_timeout=900000` 兜底；门禁 latest 迁移号来自 `git ls-files`，未 add 的新文件会导致误报（先 add 再跑门禁）。 |

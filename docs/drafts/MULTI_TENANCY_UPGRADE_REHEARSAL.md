@@ -47,7 +47,7 @@ V78 的 `CREATE UNIQUE INDEX CONCURRENTLY` 返回 `SQL State 57014 canceling sta
 
 ## 3. 锁窗口与分批回填
 
-- 本次演练库为**空库**（V1–V79 全新库路径），`rag_embeddings` 行数 0，
+- 本次演练库为**空库**（V1–V80 全新库路径），`rag_embeddings` 行数 0，
   事务内普通索引创建为亚秒级，无回填批次、无在线锁窗口。
 - 生产级 V74 存量库的回填策略：按 `document_id` 分批（每批 10k 行）更新 `tenant_id`，
   每批独立提交；在线 `CONCURRENTLY` 索引重建由演练脚本在独占连接下执行，持续观察

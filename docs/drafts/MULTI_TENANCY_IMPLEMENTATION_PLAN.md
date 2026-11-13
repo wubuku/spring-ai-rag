@@ -117,7 +117,7 @@
 
 | # | 事实 | 近距离证据 |
 |---|---|---|
-| 1 | Flyway 当前 `V1–V79`，70 张表（69 存量 + V75 `rag_tenant`）；**唯一约束与索引不写汇总数**（`CREATE UNIQUE INDEX`、列级 inline `UNIQUE`、表级 `UNIQUE(...)` / `CONSTRAINT ... UNIQUE` / `ADD CONSTRAINT ... UNIQUE` 多种形式，`grep` 口径易漂移），**以 WP1 逐张表清单为权威**；55 个 `JdbcTemplate` 文件、22 个 JPA Repository | `spring-ai-rag-core/src/main/resources/db/migration/`；[AGENTS.md](../../AGENTS.md) §2；[外部经验](MULTI_TENANCY_EXTERNAL_LESSONS.md) §4.9 / §7.3 |
+| 1 | Flyway 当前 `V1–V80`，70 张表（69 存量 + V75 `rag_tenant`）；**唯一约束与索引不写汇总数**（`CREATE UNIQUE INDEX`、列级 inline `UNIQUE`、表级 `UNIQUE(...)` / `CONSTRAINT ... UNIQUE` / `ADD CONSTRAINT ... UNIQUE` 多种形式，`grep` 口径易漂移），**以 WP1 逐张表清单为权威**；55 个 `JdbcTemplate` 文件、22 个 JPA Repository | `spring-ai-rag-core/src/main/resources/db/migration/`；[AGENTS.md](../../AGENTS.md) §2；[外部经验](MULTI_TENANCY_EXTERNAL_LESSONS.md) §4.9 / §7.3 |
 | 2 | 认证过滤器只做 key 校验，无租户字段；`AuthenticatedApiPrincipal` 无 `tenantId` | [`ApiKeyAuthFilter.java`](../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/ApiKeyAuthFilter.java)、[`AuthenticatedApiPrincipal.java`](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/AuthenticatedApiPrincipal.java) |
 | 3 | `RagSecurityProperties.enabled=false` 默认无认证；STRICT 模式必须显式拒绝此组合 | [`RagSecurityProperties.java`](../../spring-ai-rag-core/src/main/java/com/springairag/core/properties/RagSecurityProperties.java)、[安全边界](../security-boundary-zh-CN.md) |
 | 4 | ACL 在凭证白名单上，范围求交与越权拒绝在 `ApiKeyCollectionAccess` | [`ApiKeyCollectionAccess.java`](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)、`V24__api_key_allowed_collections.sql` |

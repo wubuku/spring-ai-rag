@@ -104,6 +104,9 @@ class TenantTableCatalogTest {
         for (TenantTableCatalog.TableEntry entry : credentials) {
             assertFalse(entry.rlsEnabled(), entry.tableName()
                     + " 认证发生在确定租户之前，凭据表不得启用 RLS");
+            // V80 起凭据表带 tenant_id 绑定列；reason 必须写明，防止后续回退成「无列」。
+            assertTrue(entry.reason().contains("凭据") || entry.reason().contains("认证"),
+                    entry.tableName() + " 的裁决理由应说明凭据/认证语义");
         }
     }
 

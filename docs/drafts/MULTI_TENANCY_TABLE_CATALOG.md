@@ -2,12 +2,15 @@
 
 > 机器可读单一事实源：`spring-ai-rag-core/src/main/java/com/springairag/core/tenant/TenantTableCatalog.java`
 >（本文与其必须保持一致，新增表先改 catalog + 本文再写迁移）。
-> 基线：Flyway V1–V79 共 **70 张存活业务表** = V1–V74 的 69 张存量表（V26 已 DROP 的
-> `rag_vector_store` 不登记）+ V75 新增 `rag_tenant` 租户主表。
+> 基线：Flyway V1–V80 共 **70 张存活业务表**（V1–V74 的 69 张存量表 + V75 新增
+> `rag_tenant`；V26 已 DROP 的 `rag_vector_store` 不登记）；表集合不写死，以迁移脚本与
+> `TenantTableCatalogTest` 动态基线比对为准。
 > 分类：**TENANT_PRIVATE 45 / PLATFORM_GLOBAL 21 / CREDENTIAL 4**。
 > 裁决规则来自 [多租户化实施规划](MULTI_TENANCY_IMPLEMENTATION_PLAN.md) §5.2（终审核 APPROVE 基线）。
 > 行为契约：租户私有表 → RLS ENABLE+FORCE + 规范 policy + tenant-leading 索引；
-> 平台全局/凭据表 → 无 RLS，仅按登记访问点读写（WP3 verifier 按 catalog 逐张校验）。
+> 平台全局表 → 无 RLS、无 tenant_id，仅按登记访问点读写；凭据表 → 无 RLS、V80 起
+> **带 tenant_id 绑定列并回填 default**（认证先于租户解析，列仅作绑定与 SINGLE 守卫数据），
+> WP3 verifier 按 catalog 逐张校验。
 
 ## 1. 汇总
 
@@ -15,7 +18,7 @@
 |---|---|---|---|---|
 | TENANT_PRIVATE | 45 | ENABLE+FORCE | 必须 | 业务请求链路 / TenantJobDispatcher |
 | PLATFORM_GLOBAL | 21 | 否 | 否 | 平台池（仅登记访问点）或 app 读写（见逐张行） |
-| CREDENTIAL | 4 | 否 | 否 | app 角色 digest 精确查找（认证先于租户解析） |
+| CREDENTIAL | 4 | 否 | 单列 tenant 索引（V80） | app 角色 digest 精确查找；V80 起带 tenant_id 绑定列，认证先于租户解析 |
 
 ## 2. 逐张裁决（按迁移引入顺序）
 
@@ -86,10 +89,10 @@
 | 63 | `rag_embedding_backfill_control` | 平台全局 | 否 | 否 | `V67__durable_operations_and_embedding_profiles.sql` | 1 | 17 | 0 | 0 | 回填控制单飞（migration_key 主键），迁移控制面 | "平台池：迁移 worker 读写" |
 | 64 | `rag_collection_purge_worker_slots` | 平台全局 | 否 | 否 | `V69__collection_purge_worker_slots.sql` | 1 | 11 | 1 | 1 | 全局 worker 槽位 1–8；FK 指向租户表属已知例外，WP2 处理跨类外键 | "app 读写：purge worker 租约" |
 | 65 | `rag_data_erasure_operation` | 平台全局 | 否 | 否 | `V64__llm_budget_and_data_governance.sql` | 1 | 31 | 0 | 0 | 擦除操作跨多表编排并平台审计，v1 无租户契约；引入租户级擦除时重新评估 | "平台池：擦除编排读写" |
-| 66 | `rag_api_key` | 凭据 | 否 | 否 | `V18__add_api_key_table.sql` | 1 | 8 | 1 | 0 | API Key 认证入口，按 digest 精确查找；认证前无租户上下文 | "app 角色 digest 精确查找；无平台池" |
-| 67 | `rag_api_principal` | 凭据 | 否 | 否 | `V48__managed_api_principals_and_shared_quota.sql` | 1 | 18 | 0 | 0 | 受管 principal，认证入口与配额主体 | "app 角色 digest/ID 精确查找；无平台池" |
-| 68 | `rag_api_key_rotation` | 凭据 | 否 | 否 | `V55__bounded_api_credential_rotation.sql` | 1 | 28 | 1 | 3 | 密钥轮换生命周期随凭据，无 RLS | "app 角色：轮换端点读写" |
-| 69 | `rag_api_provisioning_operation` | 凭据 | 否 | 否 | `V50__api_key_provisioning_idempotency.sql` | 1 | 24 | 1 | 0 | 凭据供给幂等操作随凭据生命周期，无 RLS | "app 角色：供给端点读写" |
+| 66 | `rag_api_key` | 凭据 | 否 | 是（V80 绑定列） | `V18__add_api_key_table.sql` | 1 | 8 | 1 | 0 | API Key 认证入口，按 digest 精确查找；认证前无租户上下文 | "app 角色 digest 精确查找；无平台池" |
+| 67 | `rag_api_principal` | 凭据 | 否 | 是（V80 绑定列） | `V48__managed_api_principals_and_shared_quota.sql` | 1 | 18 | 0 | 0 | 受管 principal，认证入口与配额主体 | "app 角色 digest/ID 精确查找；无平台池" |
+| 68 | `rag_api_key_rotation` | 凭据 | 否 | 是（V80 绑定列） | `V55__bounded_api_credential_rotation.sql` | 1 | 28 | 1 | 3 | 密钥轮换生命周期随凭据，无 RLS | "app 角色：轮换端点读写" |
+| 69 | `rag_api_provisioning_operation` | 凭据 | 否 | 是（V80 绑定列） | `V50__api_key_provisioning_idempotency.sql` | 1 | 24 | 1 | 0 | 凭据供给幂等操作随凭据生命周期，无 RLS | "app 角色：供给端点读写" |
 
 ## 3. 已知例外与 WP2 落地要求
 
