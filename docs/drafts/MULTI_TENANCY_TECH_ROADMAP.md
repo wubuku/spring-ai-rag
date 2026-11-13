@@ -13,7 +13,8 @@
 > `docs/project-context-zh-CN.md`、`docs/architecture-zh-CN.md`、
 > `docs/multi-instance-semantics-zh-CN.md`，以及 Flyway V24 / V48 / V71。
 > 外部考古对象：`../Blueforce-Tech-Inc/BlueCortexEE/` 与 `../Blueforce-Tech-Inc/BlueCortexCE/`
-> （相对路径基准见[补充考古](MULTI_TENANCY_EXTERNAL_LESSONS.md)第 2 节；原文成稿时为绝对路径，此处按团队目录布局换算）。
+> （相对路径基准与本机落点换算表见[补充考古](MULTI_TENANCY_EXTERNAL_LESSONS.md)第 2 节；
+> 本文所有外部路径均为**行内代码相对路径文本**，不含个人主目录绝对路径）。
 >
 > 外部仓只读：只使用 `git log` / `git remote -v`、文件读取与文本检索，未构建、未启动、
 > 未写文件。EE/CE 的隔离行为来自代码、迁移与文档，**没有实际运行它们的测试**。
@@ -123,15 +124,15 @@ V71 是**租户内的二级边界**，不是租户隔离：它解决"受限 prin
 
 - EE **55 个迁移**，CE **23 个迁移**；CE 的 `V21__observation_embedding_state.sql` 与
   EE 的 `V21__create_tenant_model.sql` **同号不同义**。
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/scripts/ce-sync.sh:L27-L29`
+  `../Blueforce-Tech-Inc/BlueCortexEE/backend/scripts/ce-sync.sh:L27-L29`
   明确写了 "Every CE migration is hard-blocked"，迁移必须人工改号。
 - EE 的两份血缘记录都不完全一致：
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/PROVENANCE.md:L8-L12`
+  `../Blueforce-Tech-Inc/BlueCortexEE/backend/PROVENANCE.md:L8-L12`
   记来源提交 `af9bf942`；
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/scripts/ce-sync.sh:L2-L4`
+  `../Blueforce-Tech-Inc/BlueCortexEE/backend/scripts/ce-sync.sh:L2-L4`
   记 `eee7785`、`be99f23`。这本身就是"手工移植、持续同步"会产生漂移的实证。
 - EE 的 `ce-sync.sh` 只搬 backend；CE 的 webui/admin-panel/docs 明确不在范围内：
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/scripts/ce-sync.sh:L23-L30`。
+  `../Blueforce-Tech-Inc/BlueCortexEE/backend/scripts/ce-sync.sh:L23-L30`。
 
 ## 4. EE / CE 考古事实
 
@@ -143,16 +144,16 @@ V71 是**租户内的二级边界**，不是租户隔离：它解决"受限 prin
 
 - EE 后端血缘明确写着"代码基线直接取自 BlueCortexCE 的 `backend/`"，并且"租户化改造从
   Flyway V21 起顺延，不修改 CE 已有的 V1–V20"：
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/PROVENANCE.md:L3-L13`、
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/PROVENANCE.md:L21-L28`。
+  `../Blueforce-Tech-Inc/BlueCortexEE/backend/PROVENANCE.md:L3-L13`、
+  `../Blueforce-Tech-Inc/BlueCortexEE/backend/PROVENANCE.md:L21-L28`。
 - CE 没有 `tenant` 代码目录；CE 的 `MemoryScopeKey` 明确写 "scope is not a tenant boundary"：
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexCE/backend/src/main/java/com/ablueforce/cortexce/identity/MemoryScopeKey.java:L8-L13`。
+  `../Blueforce-Tech-Inc/BlueCortexCE/backend/src/main/java/com/ablueforce/cortexce/identity/MemoryScopeKey.java:L8-L13`。
 - CE README 仍把 "Multi-tenant support" 放在 "Enterprise Features (Coming Soon)"：
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexCE/README.md:L374-L378`。
+  `../Blueforce-Tech-Inc/BlueCortexCE/README.md:L374-L378`。
 - EE 内部有单租户兼容模式，但这是 **EE 代码内部的运行时开关**，不是 CE 代码：
   `compatDefaultTenant=true`、`defaultTenantId=default`、`headerTrustEnabled=true`、
   `requireRls=false`：
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/TenantProperties.java:L18-L31`。
+  `../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/TenantProperties.java:L18-L31`。
 
 ### 4.2 `tenant_id` 的落点
 
@@ -162,21 +163,21 @@ EE 采用 **共享 `public` schema + 行级 `tenant_id` + RLS**，没有 schema-
 - `tenant` 主表，`id` 就是绑定到 GUC 的 slug：`VARCHAR(64)`，正则
   `^[a-z0-9][a-z0-9_-]{0,63}$`；同时建 `team`、`team_member`、`tenant_api_key`、
   `audit_event`、`usage_meter`，并插入 `default` 租户：
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V21__create_tenant_model.sql:L19-L118`。
+  `../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V21__create_tenant_model.sql:L19-L118`。
 - `tenant_api_key` 是**平台表，无 RLS**，因为必须先查 key 才能知道租户；只存 SHA-256：
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V21__create_tenant_model.sql:L62-L80`。
+  `../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V21__create_tenant_model.sql:L62-L80`。
 - `V22` 给 7 张 `mem_*` 表加 `tenant_id`，回填 `default`，回填不完整直接 `RAISE EXCEPTION`；
   随后 `SET DEFAULT current_setting('app.current_tenant_id', true)` 并 `SET NOT NULL`：
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V22__tenant_columns_and_backfill.sql:L19-L80`。
+  `../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V22__tenant_columns_and_backfill.sql:L19-L80`。
 - 所有全局唯一都改成租户复合唯一：会话外部 ID 改为 `(tenant_id, platform_source, content_session_id)`，
   scope 改为 `(tenant_id, scope_type, scope_key_sha256)`：
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V22__tenant_columns_and_backfill.sql:L104-L116`。
+  `../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V22__tenant_columns_and_backfill.sql:L104-L116`。
 - 父子关系改成**带 `tenant_id` 的复合外键**，保证子行不能指向别的租户的父行：
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V22__tenant_columns_and_backfill.sql:L140-L180`。
+  `../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V22__tenant_columns_and_backfill.sql:L140-L180`。
 - 增加 tenant-leading 索引，避免 RLS 谓词导致全表扫描：
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V22__tenant_columns_and_backfill.sql:L185-L199`。
+  `../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V22__tenant_columns_and_backfill.sql:L185-L199`。
 - RLS catalog 当前有 **28 张租户表**、8 张平台表、1 张 `tenant` 主表：
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/RlsTenantTableCatalog.java:L20-L68`。
+  `../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/RlsTenantTableCatalog.java:L20-L68`。
 
 ### 4.3 隔离执行：RLS + GUC + 双连接池
 
@@ -197,19 +198,19 @@ CREATE POLICY tenant_isolation USING (
 ```
 
 证据：
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V23__enable_tenant_rls.sql:L9-L56`、
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/docs/multi-tenancy.md:L20-L41`。
+`../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V23__enable_tenant_rls.sql:L9-L56`、
+`../Blueforce-Tech-Inc/BlueCortexEE/docs/multi-tenancy.md:L20-L41`。
 
 关键点：
 
 - GUC 未设置时，`current_setting(..., true)` 返回 `NULL`，比较为 `NULL`，因此**未绑定租户的连接读到 0 行**，是 fail-closed。
 - 应用角色必须 `NOBYPASSRLS`；superuser / `BYPASSRLS` 会绕过 RLS。
 - 迁移用 migrator 角色跑；应用池和平台池是两个凭据：
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/application-rls.yml:L1-L36`。
+  `../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/application-rls.yml:L1-L36`。
 - 平台池故意 `BYPASSRLS`，只允许两个用途：定时任务枚举租户、`/api/platform/**` 控制面；
   普通请求过滤器会跳过平台路径，平台控制器也不调用租户服务：
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/platform/PlatformPool.java:L22-L42`、
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/docs/multi-tenancy.md:L5-L18`。
+  `../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/platform/PlatformPool.java:L22-L42`、
+  `../Blueforce-Tech-Inc/BlueCortexEE/docs/multi-tenancy.md:L5-L18`。
 
 ### 4.4 数据库连接绑定方式
 
@@ -225,9 +226,9 @@ EE 的做法：
 - Hikari `connection-init-sql: RESET app.current_tenant_id` 兜底。
 
 证据：
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/TenantAwareDataSource.java:L17-L41`、
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/TenantAwareDataSource.java:L47-L50`、
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/TenantAwareDataSource.java:L79-L164`。
+`../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/TenantAwareDataSource.java:L17-L41`、
+`../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/TenantAwareDataSource.java:L47-L50`、
+`../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/TenantAwareDataSource.java:L79-L164`。
 
 这对本仓是**直接适用的教训**：本仓有 55 个文件用 `JdbcTemplate`，也有非事务写入，
 不能照搬 `SET LOCAL`。
@@ -244,9 +245,9 @@ EE 的顺序：
 6. 调用结束后记 usage，清理 `TenantContext`。
 
 证据：
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/TenantContextFilter.java:L31-L45`、
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/TenantContextFilter.java:L123-L190`、
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/docs/multi-tenancy.md:L55-L72`。
+`../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/TenantContextFilter.java:L31-L45`、
+`../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/TenantContextFilter.java:L123-L190`、
+`../Blueforce-Tech-Inc/BlueCortexEE/docs/multi-tenancy.md:L55-L72`。
 
 启动校验检查五件事：
 
@@ -257,13 +258,13 @@ EE 的顺序：
 5. 无 GUC 的裸连接读 `mem_observations` 必须 0 行。
 
 证据：
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/StartupRlsVerifier.java:L18-L35`、
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/StartupRlsVerifier.java:L58-L83`。
+`../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/StartupRlsVerifier.java:L18-L35`、
+`../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/StartupRlsVerifier.java:L58-L83`。
 
 **陷阱：EE 默认配置里 verifier 是关闭的**，只有 `rls` profile 才打开 `require-rls`：
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/TenantProperties.java:L30-L31`、
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/TenantProperties.java:L71-L83`、
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/application-rls.yml:L13-L19`。
+`../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/TenantProperties.java:L30-L31`、
+`../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/tenant/TenantProperties.java:L71-L83`、
+`../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/application-rls.yml:L13-L19`。
 本仓不能复制这个默认值。
 
 跨租户查询：
@@ -274,7 +275,7 @@ EE 的顺序：
 - **误配置：可能**。superuser 启动、verifier 关闭、`rls` profile 未激活，都会让 RLS 变成摆设。
 - **测试证据**：`TenantIsolationDatabaseIT` 在真实 PostgreSQL 上建 A/B 两个租户，断言 A 读不到 B、
   无 GUC 读 0 行、跨租户写被 `WITH CHECK` 拒绝：
-  `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/test/java/com/ablueforce/cortexce/tenant/TenantIsolationDatabaseIT.java:L22-L31`。
+  `../Blueforce-Tech-Inc/BlueCortexEE/backend/src/test/java/com/ablueforce/cortexce/tenant/TenantIsolationDatabaseIT.java:L22-L31`。
   测试代码存在，但本次没有运行。
 
 ### 4.6 层级、配额、计费、管理面
@@ -288,10 +289,10 @@ EE 的顺序：
   `tenant_usage_counter`，以及 V56 的账单、发票、支付表。
 
 证据：
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V21__create_tenant_model.sql:L30-L80`、
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V25__tenant_lifecycle_license_quota.sql:L94-L127`、
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V56__billing_invoices_and_payments.sql:L13-L64`、
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/docs/multi-tenancy.md:L90-L96`。
+`../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V21__create_tenant_model.sql:L30-L80`、
+`../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V25__tenant_lifecycle_license_quota.sql:L94-L127`、
+`../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/resources/db/migration/V56__billing_invoices_and_payments.sql:L13-L64`、
+`../Blueforce-Tech-Inc/BlueCortexEE/docs/multi-tenancy.md:L90-L96`。
 
 管理面与生命周期：
 
@@ -302,9 +303,9 @@ EE 的顺序：
 - 默认租户受 `protect-default-tenant` 保护，不能软删/硬删。
 
 证据：
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/docs/multi-tenancy.md:L106-L121`、
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/platform/TenantLifecycleService.java:L20-L60`、
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/platform/TenantDataExporter.java:L19-L45`。
+`../Blueforce-Tech-Inc/BlueCortexEE/docs/multi-tenancy.md:L106-L121`、
+`../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/platform/TenantLifecycleService.java:L20-L60`、
+`../Blueforce-Tech-Inc/BlueCortexEE/backend/src/main/java/com/ablueforce/cortexce/platform/TenantDataExporter.java:L19-L45`。
 
 ### 4.7 有没有插件 / SPI
 
@@ -327,7 +328,7 @@ EE 的租户生命周期、邀请、队列租约使用了：
 - PostgreSQL advisory lock；
 - `SECURITY DEFINER` 函数。
 
-证据：`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE/docs/multi-tenancy.md:L98-L121`。
+证据：`../Blueforce-Tech-Inc/BlueCortexEE/docs/multi-tenancy.md:L98-L121`。
 
 但本仓 [AGENTS.md](../../AGENTS.md) 第 15 条硬性规则**禁止显式悲观锁、`SKIP LOCKED`、
 advisory lock**，要求条件写入/CAS、版本号、唯一约束、lease 与有界重试。
@@ -341,7 +342,7 @@ advisory lock**，要求条件写入/CAS、版本号、唯一约束、lease 与�
 
 ### 4.9 第三个相关仓库
 
-`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/claude-mem` 存在，但它是 **TypeScript 上游基线**，
+`../Blueforce-Tech-Inc/claude-mem` 存在，但它是 **TypeScript 上游基线**，
 不是租户实现；在 `src` 里搜 `tenant_id` 为 0 命中。EE 的 PROVENANCE 也写明"不是从
 claude-mem 重写"。因此它不进入本报告的租户结论。
 
