@@ -203,17 +203,18 @@ fake embeddings and a fixed corpus, independent of real model quality:
 
 Reproducibility boundaries:
 
-- The active 1024-dimensional profile's vector column `embedding_1024` has **no**
-  approximate index, so retrieval performs an exact scan. Repeated searches over the
-  same corpus and parameters return the same document set, order, and scores.
+- Since Flyway V81 the active 1024-dimensional vector column `embedding_1024` carries an
+  HNSW index (`idx_rag_embeddings_embedding_1024_hnsw`, cosine); retrieval may use an
+  approximate scan. Repeated searches over the same corpus and parameters are only
+  guaranteed to agree on the document set within a score tolerance; top-k boundaries and
+  tie order are no longer guaranteed (the former exact-equality contract is replaced by
+  tolerance-based agreement since V81).
 - The vector channel, the `pg_trgm`/English full-text channels, and fusion all use
   `documentId`, then `chunkIndex` as the equal-score tie-break, so both in-channel and
   fused order are deterministic.
-- Jitter only becomes possible if an operator explicitly adds an HNSW/IVFFlat index on
-  the active vector column. In that case only the document set within a score tolerance
-  is guaranteed; top-k boundaries and tie order are not. Adding such an index requires
-  updating the gated assertions and this tolerance note instead of keeping the current
-  exact-equality contract.
+- The gated `RetrievalCorrectnessPostgresIntegrationTest` uses deterministic fake
+  embeddings and a fixed corpus; after V81, if the gated assertions show top-k jitter,
+  revise the assertions to this tolerance-based contract instead of dropping the index.
 - Goldenset runs in nightly against a fresh isolated database and a real embedding
   provider; it reproduces reliably within the same provider/model/revision. Absolute
   scores are not comparable across providers or model versions, and the regression gate
@@ -591,3 +592,45 @@ rag:
     model: BAAI/bge-reranker-v2-m3
     base-url: https://api.siliconflow.cn
 ```
+
+## Multi-tenant HNSW + RLS benchmark (WP4)
+
+Proven by the real-PostgreSQL integration test
+`TenantHnswRlsBenchmarkPostgresIntegrationTest`, explicitly opt-in:
+
+```bash
+mvn -o -pl spring-ai-rag-core test \
+  -Dtest=TenantHnswRlsBenchmarkPostgresIntegrationTest \
+  -Dtenant-hnsw-bench.it.enabled=true
+```
+
+The report is written to `spring-ai-rag-core/target/tenant-hnsw-rls-benchmark.json`.
+The benchmark uses 2000 deterministic synthetic 1024-dimensional vectors in a
+task-scoped `pgvector/pgvector:pg16` Testcontainers database, never a shared database.
+
+### Hard gates (any failure blocks release)
+
+1. The active vector column `embedding_1024` must carry a valid HNSW/IVFFlat index
+   (`annIndexOnEmbedding1024 >= 1`, non-INVALID). The legacy `embedding` column from V1
+   was dropped in V68 together with its index; V81 adds
+   `idx_rag_embeddings_embedding_1024_hnsw`.
+2. Query latency with RLS enabled must not exceed 3x the latency with RLS disabled:
+   `rlsQueryMs <= 3 * noRlsQueryMs` (coarse single-host Testcontainers gate on synthetic
+   data; production scale must be re-measured).
+
+### Recorded facts and known gaps (not silently passed)
+
+- `planUsesIndex`: the planner choice for the RLS query over 2000 synthetic rows.
+  Currently measured `false` (`Seq Scan + top-N heapsort`) because a full scan is cheaper
+  on a small dataset with a global HNSW plus an RLS Filter. This is **not** a missing ANN index.
+- `annIndexUsable` / `pureAnnUsesHnsw`: must be `true`, proving the HNSW index itself is
+  usable (the former with `enable_seqscan=off`, the latter without RLS).
+- Plan §9 lists "global HNSW top-k crowded out by other tenants under RLS" as a
+  phase-one performance gate. This benchmark covers **latency** and **index presence** only;
+  it does **not** cover Recall@K on a mixed multi-tenant corpus. Do not claim production
+  multi-tenant retrieval quality from this benchmark until either:
+  1. a production-scale, mixed-tenant Recall@K benchmark passes; or
+  2. pgvector iterative scan / over-fetch-then-filter / tenant partitioning is enabled
+     and proven by a dedicated benchmark.
+- `planUsesIndex=false` and "mixed-tenant recall unmeasured" remain known WP4 gaps /
+  downstream blockers, recorded in the progress ledger; entering WP5+ does not clear them.

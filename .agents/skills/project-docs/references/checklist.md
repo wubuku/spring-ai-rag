@@ -19,7 +19,7 @@
 
 ## Evergreen Content
 
-- [ ] `project-context*` matches current modules, API boundaries, Flyway V1–V80, and release state
+- [ ] `project-context*` matches current modules, API boundaries, Flyway V1–V81, and release state
 - [ ] `delivery-workflow*` remains the single evergreen source for planning, progress, acceptance, convergence-review, and Agent Git-delivery standards
 - [ ] `docs/drafts/` contains only active plans plus its README pair
 - [ ] completed/cancelled/superseded plans live under `docs/drafts/archive/`
@@ -45,7 +45,7 @@
 - [ ] Real LLM E2E defaults to `18081`
 - [ ] Local profile is `postgresql`
 - [ ] Vector dimension is `1024`
-- [ ] Flyway range is V1–V80
+- [ ] Flyway range is V1–V81
 - [ ] OpenAI / Embedding `base-url` examples do not append `/v1`
 - [ ] Secrets appear only as placeholders
 

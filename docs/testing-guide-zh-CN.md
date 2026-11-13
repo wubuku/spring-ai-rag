@@ -1448,7 +1448,7 @@ rollup 和数据库 tombstone 事实。持久化证据只包含状态、模型�
 范围实现具备 DTO、Resolver、ACL、SQL fragment、Vector/Full-text provider、
 Chat/Search/JSON、MockMvc、OpenAPI、WebUI 和 PostgreSQL 覆盖。真实
 PostgreSQL/Testcontainers 测试会启动 `pgvector/pgvector:pg16`，从空 schema 执行
-Flyway V1–V80，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
+Flyway V1–V81，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
 
 ```bash
 TESTCONTAINERS_RYUK_DISABLED=true \
@@ -1489,7 +1489,7 @@ WebUI 验收覆盖三种模式、多选、服务端 Collection 搜索和分页�
 ### JSONB 结构化记录验收门禁
 
 JSONB 实现同时具备 Mock HTTP/Service 覆盖和真实 PostgreSQL/Testcontainers 测试。后者会
-启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1–V80，并验证 JSONB round-trip、
+启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1–V81，并验证 JSONB round-trip、
 嵌套 `payloadContains`、V34 GIN planner、仅更新 payload 的版本记录、相同描述下不同
 记录共存以及级联清理：
 
@@ -1542,7 +1542,7 @@ TESTCONTAINERS_RYUK_DISABLED=true mvn -pl spring-ai-rag-starter -am test \
 脚本默认启动隔离 PostgreSQL、Mock 上游、Core standalone 和不主动扫描
 `com.springairag` 的 Starter Consumer，并用官方 Python SDK `2.14.0` 与 Node SDK
 `7.34.0` 在两种拓扑下验证 models、JSON、SSE、幂等重放、错误信封和认证。它还确认
-外部 Starter Consumer 执行 Flyway V1–V80 后可提供同一 `/v1` 客户端契约；隔离服务还会
+外部 Starter Consumer 执行 Flyway V1–V81 后可提供同一 `/v1` 客户端契约；隔离服务还会
 实际运行 Native/OpenAI consumer HTTP contract 和基于临时 PostgreSQL 的异步 Collection
 Purge 生命周期。结果位于 `.verification/openai-sdk-e2e/<run-id>/summary.md`，默认不产生真实模型费用。
 

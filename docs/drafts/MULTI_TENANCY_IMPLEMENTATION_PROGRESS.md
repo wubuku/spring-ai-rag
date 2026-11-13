@@ -15,14 +15,14 @@
 | 分支 | `feature/multi-tenancy-phase1` |
 | 基线 commit | `04e2e678`（本地 `main`，规划终审核 APPROVE 后的规划 checkpoint） |
 | 主工作区 | `/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`，`main` @ `04e2e678`，创建 worktree 时 clean |
-| 工作区状态 | **WP3 已完成**（V80 RLS + 三角色契约 + verifier/guard + 负向启动集成绿，见 §2b），即将形成 commit |
-| 当前唯一 `in_progress` | **WP4 — 双租户 RLS 集成测试与 HNSW 基准** |
-| 已完成工作包 | WP1（表清单）、WP2（底座迁移 V75–V79）、**WP3 — RLS/三角色/verifier（V80）**（证据见 §2b） |
-| 紧接着要做 | WP4：双租户 A/B 集成测试（RLS 隔离/无 GUC 0 行/跨租户写拒绝/GUC 串台/连接池复用）+ HNSW 基准 |
+| 工作区状态 | **WP4 已收口（带已知缺口）**：V81 补齐 `embedding_1024` ANN 索引；双租户 RLS 集成 5/5、HNSW+RLS 基准 1/1 绿；质量门槛与全仓 V1–V81 文档同步。见 §2c |
+| 当前唯一 `in_progress` | **WP5 — principal / resolver / context / datasource**（WP4 已收口；其已知缺口不阻断进入 WP5，但阻断发布与生产多租户声明） |
+| 已完成工作包 | WP1（表清单）、WP2（底座迁移 V75–V79）、WP3（RLS/三角色/verifier，V80）、WP4（双租户集成 + HNSW 基准，V81；证据见 §2b/§2c） |
+| 紧接着要做 | WP5：principal / resolver / context / datasource，先红后绿；退出条件见规划 §6 WP5 |
 | 规划检查计数 | `3/3`（终审核 APPROVE，规划基线冻结；本阶段未触发归零） |
 | 实现检查计数 | 未开始（按 delivery-workflow §7，编码完成后才计数） |
 
-## 1. 恢复入口（当前：WP3 — RLS、三角色与启动 verifier）
+## 1. 恢复入口（当前：WP5 — principal / resolver / context / datasource；WP3 以下为历史快照）
 
 **目标产物（规划 §6 WP3）**：`V7x__tenant_rls.sql`（ENABLE + FORCE + policy）、
 `TenantRlsVerifier`、`TenantModeGuard`、`scripts/verify-multi-tenancy-rls.sh`；
@@ -126,6 +126,42 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
   WP2 集成 5/5（V80 加入后重验）；双路径演练 `--early 74` 全 PASS（迁移历史 80）；
   `verify-multi-tenancy-rls.sh` 静态门禁全 PASS；文档全量 `V1–V79`→`V1–V80` 同步。
 
+## 2c. WP4 收尾快照（2026-11-14）
+
+- **产物**：
+  - `V81__tenant_embedding_hnsw.sql`：为活动向量列 `embedding_1024` 建 HNSW
+    （`idx_rag_embeddings_embedding_1024_hnsw`，`vector_cosine_ops`，m=16/ef_construction=64），
+    终态断言索引存在且非 INVALID；纯事务内 DDL，CONCURRENTLY 不进迁移链（WP2 教训沿用）。
+    背景：V1 的旧 `embedding` 列在 V68 DROP COLUMN 时索引一并消失，V1–V80 从未给
+    `embedding_1024` 建 ANN 索引。
+  - `TenantRlsIsolationPostgresIntegrationTest`：双租户真实 PG 集成五类断言
+    （A 读不到 B / 无 GUC 0 行 / 跨租户写拒绝 / 错误 GUC 0 行不串台 / 连接复用无残留 GUC），
+    单连接显式 set/reset GUC，只证明数据库层 RLS 隔离合同（请求链路接线属 WP5），
+    opt-in `-Dtenant-isolation.it.enabled=true`。
+  - `TenantHnswRlsBenchmarkPostgresIntegrationTest`：HNSW+RLS 基准（2000 行 1024 维确定性合成向量，
+    Testcontainers 任务专属库），写 `spring-ai-rag-core/target/tenant-hnsw-rls-benchmark.json`，
+    opt-in `-Dtenant-hnsw-bench.it.enabled=true`。
+- **红→绿 / 复现证据**：隔离测试 5/5、基准 1/1（两次独立运行均绿）；Flyway 全新库 81 步成功。
+- **基准结论（2026-11-14 第二次运行）**：`annIndexOnEmbedding1024=1`（V81 修复后达标）、
+  `annIndexUsable=true`、`pureAnnUsesHnsw=true`、`rlsQueryMs=8 / noRlsQueryMs=5`、
+  `rlsOverheadRatio=1.600`、`latencyGatePassed=true`（≤3×）。
+- **硬门槛落档**：`docs/quality-defaults-zh-CN.md` / `docs/quality-defaults.md` 新增
+  「多租户 HNSW + RLS 检索基准（WP4）」节：ANN 索引存在 + 非INVALID、RLS 延迟 ≤3× 两条硬门槛，
+  并同步改写「检索结果可复现性」节（V81 起由「精确扫描完全一致」改为「分数容差内一致」）。
+- **已知缺口 / 后续阶段阻断项（如实落档，不静默判通过）**：
+  1. `planUsesIndex=false`：合成 2000 行下 planner 选 Seq Scan，属数据集小、全表更便宜，
+     不是 ANN 缺失；`annIndexUsable/pureAnnUsesHnsw` 证明 HNSW 本身有效。
+  2. 多租户混合语料的 Recall@K 未测：规划 §9 已将「全局 HNSW top-k 被其他租户占满」列为
+     第一阶段性能门；本基准只覆盖延迟与索引存在性。生产规模重测或 iterative scan /
+     over-fetch / 分区评估任一通过前，不得宣称生产多租户检索质量达标。
+  这两条已写入 quality-defaults「记录项与已知缺口」，进入 WP5+ 不表示消除。
+- **文档同步**：全仓当前事实文档 `V1–V80`→`V1–V81`（AGENTS/README/developer-reference/
+  testing-guide/verification-baseline/index/project-context/business-client-integration/
+  release-checklist 中英成对 + `.agents/skills/project-docs/` 两文件）；
+  `MULTI_TENANCY_UPGRADE_REHEARSAL.md` §3 补 V81 事实。
+- **门禁**：`verify-project-docs.sh` 17/17（V81 先 `git add` 再跑门禁）；
+  `git diff --check` 干净；完整门禁与 JVM 全量回归随 WP5 开工前复跑（见 §2 台账）。
+
 ## 3. 环境与隔离边界（WORKTREE.md 硬门禁）
 
 - 本 worktree 目前**未创建任何 `.env` / `.env.*`**，未改主工作区任何环境文件。
@@ -153,6 +189,7 @@ WP3 起才进入运行时隔离，WP2 只完成了 schema 底座（见 §2a）�
 | WP1 | **已关闭可计分交付**：3 个产物齐备（69 张逐张裁决文档 / `TenantTableCatalog.java` / 8 项完整性单测），红→绿证据与 4 项门禁全绿。结论：有效推进，无平台期；下一包 WP2 立即进入迁移落地（需先建任务专属 PG）。 |
 | WP3 | **已关闭可计分交付**：V80 迁移 + 三角色契约 + verifier/guard + 演练脚本齐备；真实 PG 7/7（五种负向全部拒绝）；JVM 8457 全绿；双路径演练 PASS。**教训**：WP1 把凭据表裁决成「不加列」，与规划 §0/§5.2「凭据表带 tenant_id」矛盾，实施时才暴露——逐张裁决文档必须逐条对照规划冻结口径，不能只按类别规则机械推导。verifier 负向用例的 INSERT 要先满足 V48 的 principal FK/NOT NULL 约束；`rag_tenant` 主键即 tenant_id 需在「平台表无 tenant_id」断言中显式排除。 |
 | WP2 | **已关闭可计分交付**（含补充 commit：catalog/测试注释中的写死 69/70/79 数字改为动态基线口径，避免机械漂移）：V75–V79 迁移落地，双路径演练全 PASS、真实 PG 集成 5/5、全模块 8444 tests 全绿。**事故与方案收敛**：V78 原计划 `CREATE INDEX CONCURRENTLY`（Flyway 非事务迁移）被并发事务（pid68 idle in transaction）无限阻塞约 1 小时（外部监控方通报并 cancel）；加 `lock_timeout=30s` 兜底后变 30s 快速失败（SQLState 55P03），但仍暴露「非事务迁移执行期间任何第二条连接持有开放事务都会永久等待」的结构性问题。**收敛结论：迁移链一律纯事务内 DDL，V78 改用普通索引；CONCURRENTLY 仅在演练库在线步骤由脚本承担，不进迁移链**（V78/V79 注释与演练文档均已记录）。教训：Flyway 非事务迁移不能混 `SET`/`DO $$`；`IF NOT EXISTS` 对 INVALID 索引无效（V79 已加 INVALID 检测与清理指引）；PL/pgSQL `RAISE EXCEPTION` 不支持 `||` 拼接；测试侧 Flyway 连接显式加 `lock_timeout=30s` 与 `statement_timeout=900000` 兜底；门禁 latest 迁移号来自 `git ls-files`，未 add 的新文件会导致误报（先 add 再跑门禁）。 |
+| WP4 | **已收口（带已知缺口，不阻断进入 WP5，但阻断发布与生产多租户声明）**：V81 补齐 `embedding_1024` ANN 索引；双租户 RLS 集成 5/5、HNSW+RLS 基准 1/1（ANN 存在性与延迟 ≤3× 两条硬门槛通过）；quality-defaults 中英成对落门槛并同步可复现性契约；全仓 `V1–V81` 文档同步。**教训**：规划 §3 曾把旧 `embedding` 列的 V1 HNSW 当作当前事实，V68 已 DROP COLUMN 导致 `embedding_1024` 长期无 ANN 索引，基准测试先暴露「Seq Scan」才补 V81——「事实表」必须按迁移净终态核对，不能按早期迁移文本推断。V81 后 `planUsesIndex=false`（小数据集 planner 选 Seq Scan）与「多租户混合 Recall@K 未测」如实记为已知缺口，不静默判通过；门禁 latest 由 `git ls-files` + 磁盘 `find` 双口径判定，新迁移必须先 `git add` 再跑 `verify-project-docs.sh`。 |
 
 ### 5.1 事故严重度判定与解堵复核（2026-11-14，监控方解堵通报）
 

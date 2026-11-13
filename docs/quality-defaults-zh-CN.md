@@ -173,13 +173,14 @@ PDF 版式判据（`PdfTextExtractor.PageLayout` 逐页记录，并在
 
 可复现边界：
 
-- 当前活动 1024 维 Profile 的向量列 `embedding_1024` **没有**近似索引，检索走精确扫描；
-  同一语料、同一参数重复检索得到相同的文档集合、顺序与分数。
+- 自 Flyway V81 起，活动 1024 维向量列 `embedding_1024` 已建 HNSW 索引
+  （`idx_rag_embeddings_embedding_1024_hnsw`，cosine）；检索可走近似扫描，同一语料、
+  同一参数重复检索只能在分数容差内保证文档集合一致，top-k 边界与同分顺序不保证完全相同
+  （原「精确扫描完全一致」契约自 V81 起由「分数容差内一致」替代）。
 - 向量通道、`pg_trgm`/英文全文通道以及最终融合都使用 `documentId`、`chunkIndex` 作为
   同分 tie-break，因此通道内与融合后的顺序都是确定的。
-- 只有在运维显式给活动向量列新增 HNSW/IVFFlat 索引后，才可能出现近似检索抖动：
-  此时只能保证同参数下的文档集合落在分数容差内，top-k 边界和同分顺序不保证一致。
-  新增近似索引必须同步更新 gated 断言与本节容忍说明，不能沿用当前“完全一致”契约。
+- gated `RetrievalCorrectnessPostgresIntegrationTest` 使用确定性假 embedding 与固定语料；
+  V81 后若 gated 断言出现 top-k 抖动，按本节「分数容差内一致」口径修订断言，不得回退索引。
 - goldenset 在 nightly 使用全新隔离数据库与真实 embedding 提供方，同一
   provider/model/revision 下可稳定复现；跨 provider 或换模型版本时绝对分数不可比，
   回归比较同一次运行内 `useRerank=false/true` 的相对差值（重排未启用时两者相同）。
@@ -481,3 +482,40 @@ rag:
     model: BAAI/bge-reranker-v2-m3
     base-url: https://api.siliconflow.cn
 ```
+
+## 多租户 HNSW + RLS 检索基准（WP4）
+
+本门槛由真实 PG 集成 `TenantHnswRlsBenchmarkPostgresIntegrationTest` 证明，需显式 opt-in：
+
+```bash
+mvn -o -pl spring-ai-rag-core test \
+  -Dtest=TenantHnswRlsBenchmarkPostgresIntegrationTest \
+  -Dtenant-hnsw-bench.it.enabled=true
+```
+
+报告写入 `spring-ai-rag-core/target/tenant-hnsw-rls-benchmark.json`；基准使用 2000 行
+1024 维确定性合成向量，任务专属 `pgvector/pgvector:pg16` Testcontainers 库，不连共享库。
+
+### 硬门槛（任一失败阻断发布）
+
+1. 活动向量列 `embedding_1024` 必须存在有效 HNSW/IVFFlat 索引
+   （`annIndexOnEmbedding1024 >= 1` 且索引非 INVALID）。V1 的旧 `embedding` 列在 V68 已删除，
+   其索引随列消失；V81 补齐 `idx_rag_embeddings_embedding_1024_hnsw`。
+2. RLS 开启时查询延迟不得超过关闭时的 3 倍：`rlsQueryMs <= 3 * noRlsQueryMs`
+   （单机 Testcontainers + 合成数据的粗粒度门槛，生产规模需重测）。
+
+### 记录项与已知缺口（不静默判通过）
+
+- `planUsesIndex`：合成 2000 行下 RLS 查询的 planner 选择。当前实测为 `false`
+  （`Seq Scan + top-N heapsort`），原因是数据集小且 RLS Filter 与全局 HNSW 排序共存时全表更便宜；
+  这**不是** ANN 索引缺失。
+- `annIndexUsable` / `pureAnnUsesHnsw`：必须为 `true`，证明 HNSW 本身有效
+  （前者在 `enable_seqscan=off` 下命中，后者为无 RLS 对照命中）。
+- 规划 §9 已把「RLS 下全局 HNSW top-k 被其他租户占满」列为第一阶段性能门。
+  当前基准仅覆盖**延迟**与**索引存在性**，**未覆盖多租户混合语料的召回率**。
+  在以下任一条件满足前，不得据本基准宣称生产多租户检索质量达标：
+  1. 生产规模、多租户混合语料的 Recall@K 基准通过；
+  2. 或启用 pgvector iterative scan / over-fetch 后过滤 / 按租户分区等方案，
+     并由专项基准证明召回与吞吐达标。
+- `planUsesIndex=false` 与「多租户混合召回未测」保留为 WP4 已知缺口 / 后续阶段阻断项，
+  写入进度账本；进入 WP5+ 不表示该项已消除。

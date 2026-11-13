@@ -49,6 +49,9 @@ V78 的 `CREATE UNIQUE INDEX CONCURRENTLY` 返回 `SQL State 57014 canceling sta
 
 - 本次演练库为**空库**（V1–V80 全新库路径），`rag_embeddings` 行数 0，
   事务内普通索引创建为亚秒级，无回填批次、无在线锁窗口。
+- WP4 新增 V81（事务内普通 `CREATE INDEX`）为 `embedding_1024` 建 HNSW；沿用本节的
+  「CONCURRENTLY 不进迁移链」决策：V81 无 `executeInTransaction=false`、无 INVALID 索引风险，
+  终态断言检查索引存在且非 INVALID。双路径 `--early 74` 演练应随之看到迁移历史 81。
 - 生产级 V74 存量库的回填策略：按 `document_id` 分批（每批 10k 行）更新 `tenant_id`，
   每批独立提交；在线 `CONCURRENTLY` 索引重建由演练脚本在独占连接下执行，持续观察
   `pg_stat_activity` 与 `pg_locks`，记录实际锁窗口；失败后 `DROP INDEX` 清理并重建。
