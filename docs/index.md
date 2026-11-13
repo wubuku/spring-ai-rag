@@ -96,7 +96,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | [WebUI horizontal-alignment guidelines](webui-alignment-guidelines.md) / [中文](webui-alignment-guidelines-zh-CN.md) | WebUI defaults, justified centering exceptions, the `alignment-policy` gate, and verification commands |
 | [WebUI design language](webui-design-language.md) / [中文](webui-design-language-zh-CN.md) | Token single source, icon rules, shared primitive contracts, the ten design-system gate violations, and why the gate must be able to fail |
 | [WebUI accessibility and responsive baseline](webui-accessibility.md) / [中文](webui-accessibility-zh-CN.md) | axe WCAG 2.1 AA baseline, keyboard access, 375/768/1440 layout assertions, reduced motion, and screen-reader labels |
-| [Current active plans](drafts/README.md) | Lists only work still being prepared or implemented; code and evergreen docs remain authoritative |
+| [Current active plans](drafts/README.md) | Lists only work still being prepared or implemented; multi-tenancy research also includes [external reference lessons](drafts/MULTI_TENANCY_EXTERNAL_LESSONS.md) (Chinese); code and evergreen docs remain authoritative |
 | [Historical plan and implementation archive](drafts/archive/README.md) | Design and verification provenance only; not a default reading path for Agents |
 
 ### Config, API, data

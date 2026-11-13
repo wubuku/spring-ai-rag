@@ -44,6 +44,10 @@
 - [多租户平台技术路线与可插拔方案](MULTI_TENANCY_TECH_ROADMAP.md)：记录 2026-11-04 的路线
   决策（单仓单 schema、表永远租户化、单租户为固定 `default` 的 N=1、多租户强制 RLS）、
   EE/CE 考古、四阶段落地、六条决策与三大风险；**方向已定、代码未实施**，仅中文。
+- [多租户外部参考经验教训（补充考古）](MULTI_TENANCY_EXTERNAL_LESSONS.md)：只读考古，
+  补充考察 `../seedance-research/`（含可运行多租户 PoC 与生产 checklist）与
+  `../AI-Native-Business-Operating-System/`（真实 PG 迁移演练）；含路径基准约定、
+  已覆盖/需补强/新增盲点三张影响清单与复现命令；**方向裁决不变、代码未实施**，仅中文。
 - [知识图谱模块评审](KNOWLEDGE_GRAPH_MODULE_REVIEW.md)：对一份外部知识图谱方案的批评性评审、
   与本仓真实实现的逐条对齐及分阶段落地路径；仅中文，待 D1–D3 决策收敛后再决定是否转为正式文档。
 

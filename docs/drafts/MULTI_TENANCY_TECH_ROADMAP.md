@@ -3,12 +3,17 @@
 > 状态：**技术方向已定，代码尚未实施**。本文是设计输入与决策记录，不是"已实现"声明。
 > 当前真实能力仍以 [MULTI_TENANCY_STATUS.md](MULTI_TENANCY_STATUS.md) 为准。
 >
+> **补充考古（2026-11-13）**：[多租户外部参考经验教训](MULTI_TENANCY_EXTERNAL_LESSONS.md)
+> 补充考察 `../seedance-research/`（可运行多租户 PoC）与
+> `../AI-Native-Business-Operating-System/`（真实 PG 迁移演练）；本路线方向不变，
+> 但第 8 / 11 节实施与验收前应吸收该文第 6 节「需补强 / 新增盲点」清单。
+>
 > 调研日期：2026-11-04。调研对象：
 > `docs/drafts/MULTI_TENANCY_STATUS.md`、`docs/security-boundary-zh-CN.md`、
 > `docs/project-context-zh-CN.md`、`docs/architecture-zh-CN.md`、
 > `docs/multi-instance-semantics-zh-CN.md`，以及 Flyway V24 / V48 / V71。
-> 外部考古对象：`/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexEE` 与
-> `/Users/yangjiefeng/Documents/Blueforce-Tech-Inc/BlueCortexCE`。
+> 外部考古对象：`../Blueforce-Tech-Inc/BlueCortexEE/` 与 `../Blueforce-Tech-Inc/BlueCortexCE/`
+> （相对路径基准见[补充考古](MULTI_TENANCY_EXTERNAL_LESSONS.md)第 2 节；原文成稿时为绝对路径，此处按团队目录布局换算）。
 >
 > 外部仓只读：只使用 `git log` / `git remote -v`、文件读取与文本检索，未构建、未启动、
 > 未写文件。EE/CE 的隔离行为来自代码、迁移与文档，**没有实际运行它们的测试**。

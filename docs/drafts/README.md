@@ -55,6 +55,13 @@ Active plans are listed here and in `docs/index*`.
   tables from day one, single-tenant as fixed-`default` N=1, mandatory RLS for multi-tenant),
   EE/CE archaeology, four implementation phases, six decisions, and three risks. The direction
   is decided; the code is not implemented.
+- [Multi-tenancy external reference lessons (supplementary archaeology)](MULTI_TENANCY_EXTERNAL_LESSONS.md)
+  (Chinese only): a read-only archaeology supplement covering `../seedance-research/`
+  (a runnable multi-tenancy PoC plus production checklists) and
+  `../AI-Native-Business-Operating-System/` (real-PostgreSQL migration rehearsal); it fixes the
+  relative-path convention, lists what the roadmap already covers, what needs strengthening, and
+  the new blind spots, and gives reproduction commands. The direction decision is unchanged and the
+  code is not implemented.
 - [Knowledge-graph module review](KNOWLEDGE_GRAPH_MODULE_REVIEW.md) (Chinese only): critical
   review of an external knowledge-graph proposal, item-by-item alignment with this
   repository's real implementation, and a phased landing path; it becomes a formal document

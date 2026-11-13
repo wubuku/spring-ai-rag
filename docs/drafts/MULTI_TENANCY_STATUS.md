@@ -8,6 +8,10 @@
 >
 > **配套方案**：[多租户平台技术路线与可插拔方案](MULTI_TENANCY_TECH_ROADMAP.md)
 > —— 方向已定、代码未实施。
+>
+> **补充考古（2026-11-13）**：[多租户外部参考经验教训](MULTI_TENANCY_EXTERNAL_LESSONS.md)
+> 记录后续发现的 `../seedance-research/` 与 `../AI-Native-Business-Operating-System/` 经验；
+> 本文第 3–7 节的现状结论不变，实施前须一并阅读补充考古第 6 节影响清单。
 
 ## 1. 结论
 
