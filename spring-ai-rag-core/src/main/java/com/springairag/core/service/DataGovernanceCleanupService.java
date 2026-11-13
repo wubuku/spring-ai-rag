@@ -17,6 +17,7 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.function.IntSupplier;
 import java.util.function.LongSupplier;
+import com.springairag.core.tenant.TenantScopedJob;
 
 /**
  * 默认开启的有界数据治理清理任务。
@@ -25,6 +26,7 @@ import java.util.function.LongSupplier;
  * 不阻塞在线 API。删除始终通过主键和固定批量上限完成，不使用悲观锁或 advisory lock。
  */
 @Service
+@TenantScopedJob
 public class DataGovernanceCleanupService {
 
     private static final Logger log = LoggerFactory.getLogger(DataGovernanceCleanupService.class);

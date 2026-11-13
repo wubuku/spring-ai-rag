@@ -21,6 +21,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import com.springairag.core.tenant.TenantScopedJob;
 
 /**
  * 事件唤醒、低频扫描兜底、租约化的有界 embedding job worker。
@@ -33,6 +34,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
         // 新能力默认启用：外部应用常以自己的 application.yml 遮蔽 core jar
         // 内的同名配置，属性缺失时若按 false 处理，异步摄入会静默停在 QUEUED。
         matchIfMissing = true)
+@TenantScopedJob
 public class EmbeddingJobWorker {
 
     private static final Logger log =

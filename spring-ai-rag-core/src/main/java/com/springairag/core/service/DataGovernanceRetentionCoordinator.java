@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import com.springairag.core.tenant.TenantScopedJob;
 
 /**
  * 默认唯一的业务数据保留协调器。
@@ -28,6 +29,7 @@ import org.springframework.stereotype.Service;
  * {@code ScheduledWorkerRegistrationTest}。</p>
  */
 @Service
+@TenantScopedJob
 public final class DataGovernanceRetentionCoordinator {
 
     private static final Logger log =

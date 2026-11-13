@@ -1,5 +1,6 @@
 package com.springairag.core.apikeyalert;
 
+import com.springairag.core.tenant.TenantContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -36,18 +37,36 @@ public class ApiPrincipalLifecycleEventPublisher {
                     .map(PrincipalSynchronization.class::cast)
                     .anyMatch(sync -> sync.principalId.equals(principalId));
             if (!alreadyRegistered) {
+                // WP7：凭据表无 RLS，但生命周期回调可能触发租户私有逻辑，
+                // 仍必须在注册时捕获上下文并在 afterCommit 显式传播。
                 TransactionSynchronizationManager.registerSynchronization(
-                        new PrincipalSynchronization(principalId));
+                        new PrincipalSynchronization(
+                                principalId, TenantContext.current()));
             }
             return;
         }
-        publishNow(principalId);
+        publishNow(principalId, TenantContext.current());
     }
 
-    private void publishNow(String principalId) {
+    private void publishNow(String principalId, TenantContext tenantSnapshot) {
         try {
-            eventPublisher.publishEvent(
-                    new ApiPrincipalLifecycleChangedEvent(principalId));
+            if (tenantSnapshot == null) {
+                eventPublisher.publishEvent(
+                        new ApiPrincipalLifecycleChangedEvent(principalId));
+                return;
+            }
+            TenantContext previous = TenantContext.current();
+            try {
+                TenantContext.set(tenantSnapshot);
+                eventPublisher.publishEvent(
+                        new ApiPrincipalLifecycleChangedEvent(principalId));
+            } finally {
+                if (previous == null) {
+                    TenantContext.clear();
+                } else {
+                    TenantContext.set(previous);
+                }
+            }
         } catch (RuntimeException error) {
             log.warn(
                     "Failed to publish API principal lifecycle event: principalId={}",
@@ -60,14 +79,17 @@ public class ApiPrincipalLifecycleEventPublisher {
             implements TransactionSynchronization {
 
         private final String principalId;
+        private final TenantContext tenantSnapshot;
 
-        private PrincipalSynchronization(String principalId) {
+        private PrincipalSynchronization(
+                String principalId, TenantContext tenantSnapshot) {
             this.principalId = principalId;
+            this.tenantSnapshot = tenantSnapshot;
         }
 
         @Override
         public void afterCommit() {
-            publishNow(principalId);
+            publishNow(principalId, tenantSnapshot);
         }
     }
 }

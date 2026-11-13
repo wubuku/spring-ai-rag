@@ -8,11 +8,13 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.CompletableFuture;
+import com.springairag.core.tenant.TenantScopedJob;
 
 /**
  * Spring Event 提供低延迟提示，低频 Scheduled 扫描负责时间阈值与漏事件恢复。
  */
 @Component
+@TenantScopedJob
 public class ApiPrincipalExpiryAlertWorker {
 
     private static final Logger log = LoggerFactory.getLogger(

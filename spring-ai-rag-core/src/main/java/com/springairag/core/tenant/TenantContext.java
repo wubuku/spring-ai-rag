@@ -1,6 +1,7 @@
 package com.springairag.core.tenant;
 
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * WP5：一次请求 / 任务 / 事务的租户作用域快照（实施规划 §5.3 / §4.5）。
@@ -12,6 +13,10 @@ import java.util.Objects;
  *
  * <p>无上下文时 {@link #current()} 返回 {@code null}；调用方必须按规划 §4.4
  * 「无上下文 fail-closed」处理，不能视为 default。</p>
+ *
+ * <p>WP7 新增 {@link #wrap(Runnable)}：显式携带当前租户上下文跨线程执行，
+ * 结束时还原目标线程原有上下文。这是「跨线程传播租户」的合同入口，
+ * 不依赖 ThreadLocal 隐式透传（参考项目教训：异步丢上下文是生产事故高发点）。</p>
  */
 public final class TenantContext {
 
@@ -80,5 +85,62 @@ public final class TenantContext {
     public static void clear() {
         CURRENT.remove();
         IN_TRANSACTION_SCOPE.remove();
+    }
+
+    /**
+     * WP7：显式携带当前租户上下文跨线程执行（bootstrap—assert—restore—clear）。
+     *
+     * <p>提交时捕获当前上下文；目标线程先恢复线程原值，进入任务前按捕获快照
+     * 显式 set（bootstrap），任务内可断言 tenant；finally 还原目标线程原有
+     * 上下文（restore），绝不隐式清空线程池复用线程的原值。</p>
+     *
+     * @param task 待包装任务体
+     * @return 包装后的 Runnable；提交时无上下文则原样返回（语义由调用方负责：
+     *         STRICT 下未 bootstrap 会读 0 行，包装不背锅）
+     */
+    public static Runnable wrap(Runnable task) {
+        Objects.requireNonNull(task, "task must not be null");
+        TenantContext snapshot = CURRENT.get();
+        return () -> {
+            TenantContext previous = CURRENT.get();
+            if (snapshot == null) {
+                task.run();
+                return;
+            }
+            CURRENT.set(snapshot);
+            try {
+                task.run();
+            } finally {
+                if (previous == null) {
+                    clear();
+                } else {
+                    CURRENT.set(previous);
+                    IN_TRANSACTION_SCOPE.remove();
+                }
+            }
+        };
+    }
+
+    /** {@link #wrap(Runnable)} 的 Supplier 版本。 */
+    public static <T> Supplier<T> wrap(Supplier<T> task) {
+        Objects.requireNonNull(task, "task must not be null");
+        return () -> {
+            TenantContext previous = CURRENT.get();
+            TenantContext snapshot = CURRENT.get();
+            if (snapshot == null) {
+                return task.get();
+            }
+            CURRENT.set(snapshot);
+            try {
+                return task.get();
+            } finally {
+                if (previous == null) {
+                    clear();
+                } else {
+                    CURRENT.set(previous);
+                    IN_TRANSACTION_SCOPE.remove();
+                }
+            }
+        };
     }
 }

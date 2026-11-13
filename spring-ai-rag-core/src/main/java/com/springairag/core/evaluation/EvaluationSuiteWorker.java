@@ -17,6 +17,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import com.springairag.core.tenant.TenantScopedJob;
 
 @Component
 @ConditionalOnProperty(
@@ -24,6 +25,7 @@ import java.util.concurrent.TimeUnit;
         name = "managed-suites-enabled",
         havingValue = "true",
         matchIfMissing = true)
+@TenantScopedJob
 public class EvaluationSuiteWorker {
 
     private static final Logger log = LoggerFactory.getLogger(EvaluationSuiteWorker.class);

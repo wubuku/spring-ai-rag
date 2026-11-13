@@ -16,11 +16,13 @@ import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
+import com.springairag.core.tenant.TenantScopedJob;
 
 /**
  * 有界、异步、fail-open 的 HTTP 观测记录器。
  */
 @Component
+@TenantScopedJob
 public final class IntegrationObservationRecorder {
 
     private static final Logger log =

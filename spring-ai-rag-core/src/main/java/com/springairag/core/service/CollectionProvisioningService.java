@@ -25,11 +25,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.Optional;
+import com.springairag.core.tenant.TenantScopedJob;
 
 /**
  * Collection 创建的持久化幂等协调器。
  */
 @Service
+@TenantScopedJob
 public class CollectionProvisioningService {
 
     private static final Logger log =

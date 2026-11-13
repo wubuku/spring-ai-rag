@@ -23,10 +23,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
+import com.springairag.core.tenant.TenantScopedJob;
 
 /** 以小页调度 Profile 切换；逐文档状态继续由 Processing Run 维护。 */
 @Component
 @Profile("postgresql")
+@TenantScopedJob
 public class EmbeddingProfileOperationWorker {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddingProfileOperationWorker.class);

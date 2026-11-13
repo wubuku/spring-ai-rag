@@ -8,11 +8,13 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import com.springairag.core.tenant.TenantScopedJob;
 
 /**
  * Bounded hourly retention maintenance for the invocation ledger.
  */
 @Component
+@TenantScopedJob
 public final class LlmUsageRetentionJob {
 
     private static final Logger log =

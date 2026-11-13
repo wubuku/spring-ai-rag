@@ -23,6 +23,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import com.springairag.core.tenant.TenantScopedJob;
 
 /** Event-driven、lease 化且有界的 durable notification worker。 */
 @Component
@@ -30,6 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
         prefix = "rag.notifications.delivery",
         name = "enabled",
         havingValue = "true")
+@TenantScopedJob
 public class AlertNotificationDeliveryWorker {
 
     private static final Logger log =

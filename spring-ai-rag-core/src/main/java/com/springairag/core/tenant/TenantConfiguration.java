@@ -109,4 +109,11 @@ public class TenantConfiguration {
      */
     static final String PRINCIPAL_ATTRIBUTE =
             ApiKeyAuthFilter.AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE;
+
+    /** WP7：按 ACTIVE 租户枚举逐租户派发后台任务的统一 dispatcher。 */
+    @Bean
+    @ConditionalOnMissingBean(TenantJobDispatcher.class)
+    public TenantJobDispatcher tenantJobDispatcher() {
+        return new TenantJobDispatcher();
+    }
 }
