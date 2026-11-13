@@ -23,9 +23,9 @@ import java.util.stream.Collectors;
  *       认证发生在确定租户之前，为无 RLS 的平台全局表，app 角色按 digest 精确查找。</li>
  * </ul>
  *
- * <p>基线：V1–V79 共 70 张存活业务表 = V1–V74 的 69 张存量表（V26 已 DROP 的
- * {@code rag_vector_store} 不登记）+ WP2 的 V75 新增 {@code rag_tenant} 租户主表。
- * 分类统计：TENANT_PRIVATE 45 / PLATFORM_GLOBAL 21 / CREDENTIAL 4。</p>
+ * <p>基线：WP2 后（V75–V79）的存活业务表全量登记；具体张数以迁移脚本实际
+ * CREATE/DROP 结果为准（{@code rag_vector_store} 已 DROP 不登记，V75 新增 {@code rag_tenant}）。
+ * 数量不写死，与迁移脚本的一致性由 TenantTableCatalogTest 动态基线校验。</p>
  */
 public final class TenantTableCatalog {
 
@@ -155,7 +155,7 @@ public final class TenantTableCatalog {
     private TenantTableCatalog() {
     }
 
-    /** 全量登记表清单（69 张，V1–V74 存活业务表）。 */
+    /** 全量登记表清单（不写死张数，以迁移脚本实际存活业务表为准）。 */
     public static List<TableEntry> entries() {
         return ENTRIES;
     }

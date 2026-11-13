@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * 契约（实施者必须满足）：
  * <ul>
- *   <li>catalog 覆盖本仓迁移中全部存活的业务表（当前 69 张）；</li>
+ *   <li>catalog 覆盖本仓迁移中全部存活的业务表（数量不写死，以迁移脚本实际存活集合为准）；</li>
  *   <li>每张表都必须有类别、理由、RLS 决策、平台池访问点；</li>
  *   <li>类别只能取 {@link TenantTableCatalog.TableOwnership} 中的枚举值；</li>
  *   <li>租户私有表必须启用 RLS 且声明 tenant-leading 索引；</li>
@@ -36,12 +36,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TenantTableCatalogTest {
 
     @Test
-    @DisplayName("catalog 覆盖全部 69 张存活业务表，且无重复登记")
+    @DisplayName("catalog 覆盖全部存活业务表，且无重复登记")
     void catalogCoversAllLiveTables() {
         List<TenantTableCatalog.TableEntry> entries = TenantTableCatalog.entries();
 
-        assertEquals(70, entries.size(),
-                "存活业务表数量应为 70 = V1–V74 的 69 张存量表 + V75 新增 rag_tenant（排除已 DROP 的 rag_vector_store）");
+        // 数量不写死：与迁移脚本存活表集合的一致性由 catalogMatchesMigrationCreateTableInventory 证明。
+        assertFalse(entries.isEmpty(), "catalog 不得为空");
 
         Set<String> names = entries.stream()
                 .map(TenantTableCatalog.TableEntry::tableName)
@@ -129,7 +129,6 @@ class TenantTableCatalogTest {
                             p.getFileName().toString().replaceFirst("^V(\\d+)__.*$", "$1"))))
                     .toList();
         }
-        assertEquals(79, files.size(), "Flyway 迁移文件应连续覆盖 V1–V79（含 WP2 新增 V75–V79）");
         // 动态基线：从 V1 到最大版本号必须连续、无缺号（不写死总数，避免新增迁移时机械漂移）。
         int maxVersion = files.stream()
                 .mapToInt(p -> Integer.parseInt(
@@ -158,8 +157,8 @@ class TenantTableCatalogTest {
             }
         }
         created.removeAll(dropped);
-        assertEquals(70, created.size(),
-                "存活业务表应为 70 张（V26 DROP rag_vector_store，V75 CREATE rag_tenant）");
+        // 存活表数量不写死：以迁移脚本实际 CREATE/DROP 结果为准，与 catalog 集合比对。
+        assertFalse(created.isEmpty(), "迁移脚本中应至少存在一张存活业务表");
 
         Set<String> catalogNames = TenantTableCatalog.entries().stream()
                 .map(TenantTableCatalog.TableEntry::tableName)
