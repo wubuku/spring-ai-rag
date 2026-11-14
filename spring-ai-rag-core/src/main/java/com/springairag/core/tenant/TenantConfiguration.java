@@ -58,14 +58,27 @@ public class TenantConfiguration {
     }
 
     /**
-     * 启动校验：按当前模式执行守卫。用 ApplicationRunner 形式让失败发生在启动阶段；
-     * 由装配层显式调用，测试可用 guard.verify(mode) 直接覆盖。
+     * 启动校验：按当前模式执行守卫 + 端点声明全覆盖（WP12 收口）。
+     *
+     * <p>用 ApplicationRunner 形式让失败发生在启动阶段。端点声明来自
+     * {@code ApiRoutePolicyRegistry.describe()} 的启动期真实快照：
+     * 每个受保护路径（{@code /api/**}、{@code /v1/**}）都必须被
+     * {@link TenantEndpointGuard} 的 tenant + ACL 声明接住，新端点漏声明即启动失败。
+     * registry 可能不在非 Web 上下文装配，此时跳过端点校验（RLS/GUC 层与 Web 无关）。</p>
      */
     @Bean
     @ConditionalOnMissingBean(name = "tenantStartupGuardRunner")
     public org.springframework.boot.ApplicationRunner tenantStartupGuardRunner(
-            RagProperties properties, TenantModeGuard guard) {
-        return args -> guard.verify(properties.getTenant().getMode());
+            RagProperties properties,
+            TenantModeGuard guard,
+            org.springframework.beans.factory.ObjectProvider<com.springairag.core.security.ApiRoutePolicyRegistry> routePolicies) {
+        return args -> {
+            guard.verify(properties.getTenant().getMode());
+            com.springairag.core.security.ApiRoutePolicyRegistry registry = routePolicies.getIfAvailable();
+            if (registry != null) {
+                TenantEndpointDeclarationCatalog.fromDescriptions(registry.describe()).validate();
+            }
+        };
     }
 
     /**
@@ -135,11 +148,23 @@ public class TenantConfiguration {
         return new TenantMembershipGuard();
     }
 
-    /** WP6：端点 tenant + ACL 声明覆盖校验（实际端点清单由调用方提供）。 */
+    /**
+     * WP12：端点 tenant + ACL 声明覆盖校验。
+     *
+     * <p>声明集合不再由装配层注入空集合（WP6 待办），而是由
+     * {@code tenantStartupGuardRunner} 从 {@code ApiRoutePolicyRegistry.describe()}
+     * 生成并在启动期 validate；保留 {@code @ConditionalOnMissingBean} 让宿主/测试
+     * 可覆盖为显式声明集合。</p>
+     */
     @Bean
     @ConditionalOnMissingBean(TenantEndpointGuard.class)
-    public TenantEndpointGuard tenantEndpointGuard() {
-        return new TenantEndpointGuard(java.util.Set.of());
+    public TenantEndpointGuard tenantEndpointGuard(
+            org.springframework.beans.factory.ObjectProvider<com.springairag.core.security.ApiRoutePolicyRegistry> routePolicies) {
+        com.springairag.core.security.ApiRoutePolicyRegistry registry = routePolicies.getIfAvailable();
+        if (registry == null) {
+            return new TenantEndpointGuard(java.util.Set.of());
+        }
+        return TenantEndpointDeclarationCatalog.fromDescriptions(registry.describe()).guard();
     }
 
     /**

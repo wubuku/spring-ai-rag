@@ -31,8 +31,18 @@ CREATE DATABASE spring_ai_rag
 ### 2.3 迁移
 
 项目使用 Flyway 自动迁移。首次启动时按顺序执行
-`db/migration/V1__*.sql` 至当前最新迁移（目前为
-`V55__bounded_api_credential_rotation.sql`）。
+`db/migration/V1__*.sql` 至当前最新迁移（V1–V84）。
+V74 存量库到 V84 的双路径升级演练由
+`scripts/verify-flyway-schema-paths.sh --early 74` 覆盖；迁移链全部为事务内 DDL，
+不把 `CREATE INDEX CONCURRENTLY` 放进版本链。
+
+多租户运行模式与 `SINGLE`（默认）/ `STRICT` 的启动守卫见
+[多租户配置](configuration.md#multi-tenancy-configuration-wp5) 与
+[安全边界](security-boundary.md)。**`SINGLE` 关闭 RLS 只是单租户兼容底座，
+不等于多租户隔离**；`STRICT` 上线前必须确认应用数据库角色 `NOSUPERUSER NOBYPASSRLS`、
+`TenantRlsVerifier` 启动校验通过，并按[备份与恢复](backup-restore.md)留升级前备份点。
+`STRICT → SINGLE` 回退会因非 `default` 凭据被 `TenantModeGuard` 拒绝启动（fail-closed），
+回退前置条件见 `docs/drafts/MULTI_TENANCY_UPGRADE_REHEARSAL.md` §5.2。
 
 如需手动迁移：
 

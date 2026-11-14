@@ -1869,7 +1869,13 @@ rag:
 | 模式 | 行为 |
 |---|---|
 | `SINGLE`（默认） | 所有请求固定解析到 `default` 租户；仍写 `tenant_id`、仍走同一 SQL/任务路径；不启用 RLS 与 verifier；启动时校验凭据表 `tenant_id` 全为 `default`，存在非 default 凭据即拒绝启动（fail-closed）。 |
-| `STRICT` | 按凭据绑定租户解析；RLS `ENABLE+FORCE`；启动时执行 `TenantRlsVerifier` 全项校验（三角色 / RLS 覆盖 / policy 语义 / 无 GUC 0 行）。 |
+| `STRICT` | 按凭据绑定租户解析；RLS `ENABLE+FORCE`；启动时执行 `TenantRlsVerifier` 全项校验（三角色 / RLS 覆盖 / policy 语义 / 函数体依赖 / 无 GUC 0 行）。 |
+
+**`SINGLE` 关闭 RLS 不等于「已经多租户」。** `SINGLE` 只保证所有请求落在同一个 `default`
+租户上（兼容性底座），数据面没有任何行级隔离：`tenant_id` 是普通列而不是安全边界，
+绕过应用路径的直接 SQL 写入不会被拦截。因此只有在 `STRICT` 下、通过
+`TenantRlsVerifier` 启动校验、且运维确认应用角色为 `NOSUPERUSER NOBYPASSRLS` 时，
+本仓才提供多租户隔离保证。对外声明多租户能力前必须满足上述条件。
 
 请求链路的三件套对两种模式都生效：
 

@@ -15,12 +15,12 @@
 | 分支 | `feature/multi-tenancy-phase1` |
 | 基线 commit | `04e2e678`（本地 `main`，规划终审核 APPROVE 后的规划 checkpoint） |
 | 主工作区 | `../spring-ai-rag`，`main` @ `04e2e678`，创建 worktree 时 clean |
-| 工作区状态 | **WP11 已收口**：红队矩阵门禁 10/10 维、函数体/trigger 断裂 PG 负向 +9 例、V74→V84 双路径升级演练 PASS、SINGLE→STRICT/回退/备份恢复说明落档；总门禁 24/24。见 §2j |
-| 当前唯一 `in_progress` | **WP12 — 文档、门禁、发布** |
-| 已完成工作包 | WP1–WP11；证据见 §2b/…/§2i/§2j |
-| 紧接着要做 | WP12：中英正式文档成对收口、WebUI 验证、`scripts/verify-release.sh`、§7 验收矩阵全绿、实现检查 `3/3`、Git 交付；退出条件见规划 §6 WP12 |
+| 工作区状态 | **WP12 已收口**：中英正式文档成对收口、「单租户关 RLS ≠ 多租户」写入配置/架构文档、陈旧迁移版本标签清理、端点 guard 启动期全覆盖（describe() 真实快照 + 人工平台白名单裁决）、总门禁 24/24、全量 `clean test` 8595/0/0、发布脚本 19/0/16。见 §2k |
+| 当前唯一 `in_progress` | 无（WP1–WP12 全部完成；等待实施审核与用户批准后合并回 `main`） |
+| 已完成工作包 | WP1–WP12；证据见 §2b/…/§2i/§2j/§2k |
+| 紧接着要做 | 用户批准后按 delivery-workflow §8 合并回 `main` 并推送；两处**已知未验项**如实留档（大表在线 CONCURRENTLY 演练属上线前运维项、`--with-local-runtime` HTTP E2E 需真实 LLM `.env`） |
 | 规划检查计数 | `3/3`（终审核 APPROVE，规划基线冻结；本阶段未触发归零） |
-| 实现检查计数 | 未开始（按 delivery-workflow §7，编码完成后才计数） |
+| 实现检查计数 | `3/3`（WP12 实现检查中发现 2 个自纠缺陷 A/B，已修复并重跑取证；按 delivery-workflow §7 归零后重新计数，结论记于 §2k） |
 
 ## 1. 恢复入口（当前：WP12 — 文档、门禁、发布；WP11 及以下为历史快照）
 
@@ -568,6 +568,101 @@ hash 以 `git log -1 --oneline` 为准；本账本不内嵌自身提交 hash，�
 - V84 双路径演练覆盖了 WP2/WP3 历史演练结论（79/80 迁移历史），但**不覆盖**大表在线
   `CONCURRENTLY` 锁窗口；两者都是上线前演练矩阵的一部分，文档不得互相替代。
 - 升级演练日志保留 `/tmp`（任务级取证），仓库只落结论与命令复现路径，避免二进制产物入 git。
+
+
+## 2k. WP12 收口快照（2026-11-14，发布候选）
+
+**WP12 目标产物（规划 §6 WP12）**：中英正式文档成对收口；多租户门禁全部进总入口；
+明确「单租户关 RLS ≠ 多租户」；端点 guard 升级为启动期全覆盖；退出条件全部取证。
+
+### WP12 交付内容
+
+1. **「单租户关 RLS ≠ 多租户」明确写入正式文档**（成对）：
+   - `docs/configuration-zh-CN.md` / `docs/configuration.md`：多租户配置章节新增
+     显式说明——`SINGLE` 只是兼容性底座，`tenant_id` 是普通列而非安全边界，
+     绕过应用路径的直接 SQL 写入不会被拦截；只有 `STRICT` + `TenantRlsVerifier`
+     启动校验通过 + 应用角色 `NOSUPERUSER NOBYPASSRLS` 才成立行级隔离保证。
+   - `docs/architecture-zh-CN.md` / `docs/architecture.md`：§9 多租户隔离架构的
+     「模式与守卫」条目同步上述语义。
+2. **端点 guard 启动期全覆盖（WP6 待办清零）**：
+   新增 `TenantEndpointDeclarationCatalog`（core/tenant 包）：输入契约是
+   `ApiRoutePolicyRegistry.describe()` 的启动期真实 MVC 快照
+   （`METHOD /pattern -> DECISION`）。平台 capability 端点由
+   `PLATFORM_CAPABILITY_OVERRIDES` 人工语义白名单显式裁决
+   `PLATFORM_ONLY` + `PLATFORM_CAPABILITY`（当前唯一平台端点
+   `/api/v1/rag/tenants`；**不按 `/api/v1/platform/` 前缀猜**）；其余路径
+   `TENANT_REQUIRED` + `COLLECTION_ACL`（含约 28 个租户内 MANAGEMENT 端点：
+   api-keys / alerts / audit-logs / auth 等）；白名单端点若出现在快照中其
+   decision 必须为 MANAGEMENT（防注解变更让平台裁决静默失效）；格式畸形 fail-closed。
+   `TenantConfiguration.tenantStartupGuardRunner` 在模式守卫之后调用
+   `validate()`——**装配层不再注入空声明集合**（WP6 遗留项已消除）；
+   `tenantEndpointGuard` bean 保留 `ObjectProvider` 空安全装配。
+   红绿测试 `TenantEndpointDeclarationCatalogTest` 7/7；`TenantEndpointGuardTest` 5/5；
+   `OpenApiContractTest` 新增「真实路由快照被声明基线完整覆盖」契约测试，
+   42/42（共享契约上下文显式调用 validate，补上 `@SpringBootTest` 不执行
+   ApplicationRunner 的取证缺口）。
+3. **陈旧口径清理**：`docs/release-checklist-zh-CN.md` / `docs/release-checklist.md`
+   与 `scripts/verify-release-artifact.py` 的 `V1..V73` 改为「V1..最新版本」
+   （断言本身动态取实际迁移清单，只清理写死标签）；
+   `docs/postgres-support-matrix*.md` 的 `V1–V73` → `V1–V84`；
+   `docs/DEPLOYMENT.md` 补多租户运维入口（迁移范围 V1–V84、`SINGLE`/`STRICT`
+   启动守卫、`STRICT→SINGLE` 回退前置条件、备份点要求）。
+4. **门禁收口**：`verify-multi-tenancy-endpoint-guard.sh` 增补 WP12 段
+   （catalog 存在性、`fromDescriptions(registry.describe())` 接线、启动期 `validate()`、
+   测试存在性）；总门禁仍为 **24/24**（红队门禁已在 WP11 登记，本包不重复计数）。
+
+### WP12 验证台账（本包即时取证）
+
+| 验证 | 状态 | 结果 |
+|---|---|---|
+| `mvn -o -pl spring-ai-rag-core -am test-compile` | **已运行（绿）** | 编译通过 |
+| `TenantEndpointDeclarationCatalogTest` + `TenantEndpointGuardTest` | **已运行（绿）** | 12/12（catalog 7 + guard 5；红测含「漏声明差集」「平台白名单误标」「平台端点条件装配缺席不误报」「格式畸形 fail-closed」） |
+| `OpenApiContractTest`（Spring 上下文装配回归 + 真实路由快照契约） | **已运行（绿）** | 42/42；新增「真实 describe() 快照被声明基线完整覆盖」断言（共享契约上下文显式调用 validate） |
+| `./scripts/verify-multi-tenancy-endpoint-guard.sh` | **已运行（绿）** | WP6/WP12 段通过 |
+| `git add -A && ./scripts/verify-project-docs.sh` | **已运行（绿）** | 24/24 |
+| `./scripts/verify-no-pessimistic-locks.sh` | **已运行（绿）** | 无显式悲观锁 / advisory lock |
+| `node scripts/verify-dependency-versions.mjs` | **已运行（绿）** | 55 依赖 / 1658 管理版本 |
+| `node scripts/verify-integration-test-switches.mjs` | **已运行（绿）** | 42 开关 / 299 测试 / 42 类 |
+| `mvn -o -pl spring-ai-rag-core -am clean test` | **已运行（绿）** | 见下方「WP12 收口总账」（端点声明重构后重跑） |
+| WebUI `npm run typecheck` / `test:run` / `build` / `test:e2e:mock` | **已运行（绿）** | 见下方「WP12 收口总账」 |
+| `scripts/verify-release.sh`（按发布清单） | **已运行（绿）** | 见下方「WP12 收口总账」 |
+
+### WP12 收口总账（2026-11-14 实测回填）
+
+| 项 | 结果 |
+|---|---|
+| `mvn -o -pl spring-ai-rag-core -am clean test`（端点声明重构后重跑） | **8595 tests, 0 failures, 0 errors, 306 skipped**（surefire 汇总 core 8595；较重构前 8582 增 13 = catalog 测试 7 + OpenAPI 快照契约等） |
+| WebUI `npm run typecheck` | PASS（exit 0） |
+| WebUI `npm run test:run`（Vitest） | **1143/1143 passed（93 files）** |
+| WebUI `npm run build`（生产构建） | PASS（`built in 410ms`，产物齐） |
+| WebUI `npm run test:e2e:mock`（Mock Playwright） | 首跑 **1 failed / 319 passed**（`responsive.spec.ts` 1440px chat 页 unlock 重定向 5s 超时，与并发 Maven 构建抢占资源相关）；**单跑重试 117/117 全绿**（含 chat 1440px，4 引擎），判定为环境性 flake，非产品缺陷；不改代码 |
+| `./scripts/verify-release.sh --skip-npm-ci --skip-playwright --skip-docker --skip-helm`（串行重跑） | **19 passed, 0 failed, 16 skipped**；跳过项均为本机不具备/显式 opt-in 门禁（Docker 镜像、Helm、全量 Playwright、真实 LLM、runtime E2E、goldenset 等），无一假绿 |
+| §7「联合运行时」 | `verify-release.sh` 的文档/Maven/发布产物契约全绿；带真实 LLM 的 `--with-local-runtime` HTTP E2E 属显式 opt-in（需 `.env` 凭据与独占 18081 端口），本任务未运行，**如实标注不冒充已验** |
+| 教训（并发构建互踩） | 同一 worktree 内**禁止并发两个 Maven 构建**：`clean` 与对方正在编译的模块产物互删（`spring-ai-rag-starter` 报 `程序包com.springairag.api.service不存在` 的假红）。重跑后确认无真实缺陷；后续长任务必须串行或分目录 |
+
+### WP12 决策与教训
+
+- 「装配层注入空声明集合 + 只有测试夹具证明」是典型的**门禁假绿**：组件存在、
+  红测存在，但生产启动路径从未调用。WP6 把它记为待办而没有当作已交付，是正确的。
+- 从 `describe()` 这类既有稳定契约派生声明，避免复制 Controller 路径字符串
+  （真实受保护路由含 200+ 具体 pattern 且随版本漂移，手写清单必腐烂）。
+- **实现检查自纠缺陷 A**：首版用 `describe()` 同时生成声明与 actualPaths，
+  两者永远相等，「漏声明红测」退化为不可失败的门禁；已改为 describe() 只出
+  actualPaths、声明由本类解析裁决并留差集红测（`Projection` 手工注入额外
+  actualPath 即红）。
+- **实现检查自纠缺陷 B**：首版按 `/api/v1/platform/` 前缀猜平台端点，把真实
+  平台端点 `/api/v1/rag/tenants` 误标 `TENANT_REQUIRED`；已改为人工语义白名单
+  显式裁决，并把「租户内 MANAGEMENT（api-keys/alerts 等）」与「平台
+  MANAGEMENT（租户生命周期）」分开。
+- 平台端点由 `@ConditionalOnBean` 条件装配：无 `TenantLifecycleService` 的
+  上下文（契约测试切片）里快照不含 `/api/v1/rag/tenants`，「白名单端点缺失」
+  不判错；只有「白名单端点出现但 decision 非 MANAGEMENT」才 fail-closed。
+  平台端点已装配的断言由平台面专项测试负责，不与端点声明基线耦合。
+- 启动期接线必须避免 Bean 循环：`ApiRoutePolicyRegistry` 是
+  `SmartInitializingSingleton`，`describe()` 在单例初始化后可用；
+  `TenantEndpointGuard` bean 用 `ObjectProvider` 取 registry，非 Web 上下文为 null 时跳过。
+- 正式文档的「V1..Vn」标签会随迁移链漂移；断言是动态的、标签却写死，
+  两者都会误导读者。改为「V1..最新版本」+ 权威处写死当前值。
 
 ## 3. 环境与隔离边界（WORKTREE.md 硬门禁）
 

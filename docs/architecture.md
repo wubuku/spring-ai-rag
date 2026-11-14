@@ -1279,6 +1279,11 @@ explicit request context + background-task propagation:
   or `STRICT` (principal bound to a tenant); under SINGLE, startup verifies all
   credential rows are `default` and creating a non-`default` tenant is refused,
   backed by the fail-closed `TenantModeGuard`.
+  **Single-tenant mode with RLS off is not multi-tenancy**: SINGLE is only the
+  compatibility base, `tenant_id` is an ordinary column rather than a security
+  boundary, and row-level isolation holds only under `STRICT` with a passing
+  `TenantRlsVerifier` startup check and a `NOSUPERUSER NOBYPASSRLS` application
+  role.
 - **Lifecycle layer (WP9)**: V83 adds the `rag_tenant.deleted_at` soft-delete
   marker as pure transactional DDL; `TenantLifecycleService` puts the tenant row
   and its initial principal inside one `TransactionTemplate.execute` so a failed

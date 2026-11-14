@@ -2072,7 +2072,16 @@ rag:
 | Mode | Behavior |
 |---|---|
 | `SINGLE` (default) | Every request resolves to the `default` tenant; `tenant_id` is still written and the same SQL/task path is used; RLS and the verifier are off; startup fails closed if any credential row has `tenant_id != 'default'`. |
-| `STRICT` | Tenants resolve from credential binding; RLS `ENABLE+FORCE`; startup runs the full `TenantRlsVerifier` (three roles / RLS coverage / policy semantics / zero rows without GUC). |
+| `STRICT` | Tenants resolve from credential binding; RLS `ENABLE+FORCE`; startup runs the full `TenantRlsVerifier` (three roles / RLS coverage / policy semantics / trigger function bodies / zero rows without GUC). |
+
+**Turning RLS off under `SINGLE` does not mean the deployment is multi-tenant.**
+`SINGLE` only pins every request to the same `default` tenant (the compatibility
+base): there is no row-level isolation on the data plane, `tenant_id` is an
+ordinary column rather than a security boundary, and a direct SQL write that
+bypasses the application path is not blocked. This repository provides
+multi-tenant isolation guarantees only under `STRICT`, after the
+`TenantRlsVerifier` startup check passes and the application role is confirmed
+`NOSUPERUSER NOBYPASSRLS`. Do not claim multi-tenancy before all of that holds.
 
 The request-path three-piece contract applies to both modes:
 

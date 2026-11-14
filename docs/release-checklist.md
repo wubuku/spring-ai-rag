@@ -80,7 +80,7 @@ The release artifact itself is a gate, not just “it compiles”:
   bytes, unique runtime coordinates, and byte equality across WebUI `dist/`, the
   committed embedded bundle, and the jar; stale hashed assets left in the jar fail.
 - `--with-jar-blackbox` starts the packaged fat jar (not an IDE or
-  `spring-boot:run`) against real PostgreSQL + a mock provider: Flyway V1..V73 applied
+  `spring-boot:run`) against real PostgreSQL + a mock provider: Flyway V1..latest applied
   in order with no failures, `/actuator/health` UP, Collection/Document/embedding/search
   usable, `/webui` serving the entry page, `theme-init.js`/favicon with correct
   content types and bodies (static scripts never degrade to HTML), and graceful

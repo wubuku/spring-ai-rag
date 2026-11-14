@@ -36,4 +36,20 @@ if rg -n "import com.springairag.core.tenant.(PlatformCapabilityRegistry|Platfor
   fail "business package imports platform implementation"
 fi
 
-echo "PASS: WP6 端点 guard / 平台 capability / 业务包边界静态门禁通过"
+# 5) WP12 收口：TenantEndpointGuard 必须由 ApiRoutePolicyRegistry.describe() 启动期全量驱动
+#    （WP6 待办「装配层注入空声明集合」已消除，不再只靠测试夹具）。
+catalog="$root/tenant/TenantEndpointDeclarationCatalog.java"
+config="$root/tenant/TenantConfiguration.java"
+[[ -f "$catalog" ]] || fail "missing WP12 catalog: $catalog"
+rg -q 'fromDescriptions\(registry\.describe\(\)\)' "$config" \
+  || fail "TenantConfiguration 未从 registry.describe() 驱动端点声明"
+rg -q 'validate\(\)' "$config" \
+  || fail "启动 runner 未执行端点声明 validate()"
+rg -q 'registry\.describe\(\)' "$catalog" \
+  || fail "catalog 未以 describe() 为输入契约"
+rg -q 'PLATFORM_PREFIX|PLATFORM_ONLY' "$catalog" \
+  || fail "catalog 缺平台路径显式裁决"
+[[ -f spring-ai-rag-core/src/test/java/com/springairag/core/tenant/TenantEndpointDeclarationCatalogTest.java ]] \
+  || fail "缺 TenantEndpointDeclarationCatalogTest.java（describe() 驱动红绿测试）"
+
+echo "PASS: WP6/WP12 端点 guard / 平台 capability / 业务包边界 / describe() 启动期全覆盖静态门禁通过"

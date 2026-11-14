@@ -1100,6 +1100,9 @@ hash，操作按 owner 隔离、可恢复且有界。审计日志不由普通擦
 - **模式与守卫**：`rag.tenant.mode=SINGLE`（默认，固定 default）或
   `STRICT`（principal 绑定租户）；SINGLE 下启动校验凭据租户全为 default，
   拒绝创建非 default 租户，配 `TenantModeGuard` fail-closed。
+  **单租户关 RLS ≠ 多租户**：SINGLE 只是兼容性底座，`tenant_id` 是普通列而非安全边界；
+  只有 `STRICT` + `TenantRlsVerifier` 启动校验通过 + 应用角色 `NOSUPERUSER NOBYPASSRLS`
+  时才成立行级隔离保证。
 - **生命周期层（WP9）**：`rag_tenant.deleted_at` 软删标记（V83，纯事务 DDL）；
   `TenantLifecycleService` 把「租户行 + 初始 principal」放进同一个
   `TransactionTemplate.execute`，避免「幽灵租户」；`TenantLifecycleController`

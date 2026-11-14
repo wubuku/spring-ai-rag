@@ -288,6 +288,27 @@ class OpenApiContractTest {
     @MockBean
     private FsImportBatchRepository fsImportBatchRepository;
 
+    @Autowired
+    private com.springairag.core.security.ApiRoutePolicyRegistry routePolicyRegistry;
+
+    /**
+     * WP12：端点 tenant + ACL 声明基线必须被启动期真实路由快照完整覆盖。
+     *
+     * <p>{@code @SpringBootTest} 默认不执行 ApplicationRunner；用共享契约上下文显式调用
+     * {@code TenantEndpointDeclarationCatalog.fromDescriptions(...).validate()}，
+     * 让「显式声明清单 == 真实受保护路由表」成为可复验的门禁事实。</p>
+     */
+    @Test
+    @DisplayName("TenantEndpointDeclarationCatalog covers the real protected route snapshot")
+    void tenantEndpointDeclarationsCoverRealRouteSnapshot() {
+        var descriptions = routePolicyRegistry.describe();
+        assertThat(descriptions).isNotEmpty();
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() ->
+                com.springairag.core.tenant.TenantEndpointDeclarationCatalog
+                        .fromDescriptions(descriptions)
+                        .validate());
+    }
+
     @Nested
     @DisplayName("Application Wiring")
     class ApplicationWiring {

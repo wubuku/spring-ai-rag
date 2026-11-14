@@ -71,7 +71,7 @@ OpenAI 兼容服务发布还应显式运行 `scripts/verify-release.sh --with-op
   内嵌模块 jar 与本地 `target` 字节一致、运行时依赖坐标唯一，以及 WebUI `dist/`、
   已提交内嵌产物和 jar 内文件三者逐字节一致；jar 内残留旧 hash 资源会直接失败。
 - `--with-jar-blackbox` 用打包产出的 fat jar（不是 IDE 或 `spring-boot:run`）启动真实
-  PostgreSQL + mock provider：断言 Flyway V1..V73 按序全部成功且无失败记录、
+  PostgreSQL + mock provider：断言 Flyway V1..最新版本按序全部成功且无失败记录、
   `/actuator/health` UP、Collection/Document/embedding/search 可用、`/webui` 返回入口页、
   `theme-init.js`/favicon 的 content-type 与内容正确（静态脚本不会退化成 HTML），
   SIGTERM 后进入 graceful shutdown。需要本机 PostgreSQL（`psql`）。
