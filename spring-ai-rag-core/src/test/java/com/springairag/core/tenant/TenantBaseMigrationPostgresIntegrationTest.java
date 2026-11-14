@@ -107,7 +107,7 @@ class TenantBaseMigrationPostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("平台全局表无 tenant_id；凭据表有 tenant_id（V80 起凭据租户化绑定）")
+    @DisplayName("平台全局表无 RLS；WP10 配额表按 tenant_id 键控是设计例外；凭据表有 tenant_id")
     void platformGlobalTablesDoNotCarryTenantIdButCredentialsDo() {
         List<TenantTableCatalog.TableEntry> platformGlobals = TenantTableCatalog.entries().stream()
                 .filter(e -> e.ownership() == TenantTableCatalog.TableOwnership.PLATFORM_GLOBAL)
@@ -117,13 +117,29 @@ class TenantBaseMigrationPostgresIntegrationTest {
                 .toList();
         assertFalse(platformGlobals.isEmpty());
 
+        // 纠正口径（监控方 2026-11-14 缺陷 1）：PLATFORM_GLOBAL 的正确不变量是
+        // 「不启用 RLS」，不是「无 tenant_id 列」。V84 的 3 张租户级配额表按
+        // tenant_id 键控、无 RLS，是容量治理「确定租户之后执行」的设计本意，
+        // TenantTableCatalog / MULTI_TENANCY_TABLE_CATALOG.md 已明确裁决。
         for (TenantTableCatalog.TableEntry entry : platformGlobals) {
+            Integer rlsCount = jdbc.queryForObject(
+                    "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+                            + "WHERE n.nspname = 'public' AND lower(c.relname) = lower(?) "
+                            + "AND c.relrowsecurity",
+                    Integer.class, entry.tableName());
+            assertEquals(0, rlsCount, entry.tableName() + " 是 PLATFORM_GLOBAL，不得启用 RLS");
+        }
+
+        // 按 tenant_id 键控的 PLATFORM_GLOBAL 表（WP10 配额链）必须保持键控列，
+        // 且查询由 TenantQuotaPolicyRepository / TenantQuotaLedger 显式带谓词。
+        for (String table : List.of("rag_tenant_quota_policy",
+                "rag_tenant_quota_window", "rag_tenant_quota_reservation")) {
             Integer colCount = jdbc.queryForObject(
                     "SELECT count(*) FROM information_schema.columns "
                             + "WHERE table_schema = 'public' AND lower(table_name) = lower(?) "
                             + "AND column_name = 'tenant_id'",
-                    Integer.class, entry.tableName());
-            assertEquals(0, colCount, entry.tableName() + " 不应有 tenant_id 列");
+                    Integer.class, table);
+            assertEquals(1, colCount, table + " 应保持按 tenant_id 键控");
         }
 
         // V80：凭据表带 tenant_id（认证先于租户解析，列仅作绑定与 SINGLE 守卫数据），无 RLS。

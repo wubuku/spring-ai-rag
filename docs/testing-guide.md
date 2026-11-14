@@ -1670,7 +1670,7 @@ between arithmetic commands and `set -e`.
 The scope implementation has DTO, resolver, ACL, SQL-fragment, vector/full-text
 provider, Chat/Search/JSON, MockMvc, OpenAPI, WebUI, and PostgreSQL coverage.
 The real PostgreSQL/Testcontainers test starts `pgvector/pgvector:pg16`, runs
-Flyway V1–V84 from an empty schema, and exercises the vector query with actual
+Flyway V1..latest from an empty schema, and exercises the vector query with actual
 PostgreSQL `bigint[]` bindings:
 
 ```bash
@@ -1720,7 +1720,7 @@ caught it.
 
 The JSONB implementation has both mocked HTTP/service coverage and a real
 PostgreSQL/Testcontainers test. The latter starts `pgvector/pgvector:pg16`,
-executes Flyway V1–V84 from an empty database, and verifies JSONB round-trip,
+executes Flyway V1..latest from an empty database, and verifies JSONB round-trip,
 nested `payloadContains`, V34 GIN planner use, payload-only versioning,
 identical descriptions with distinct records, and cascade cleanup:
 
@@ -1776,7 +1776,7 @@ The script starts isolated PostgreSQL, the mock upstream, a Core standalone serv
 and a Starter consumer that does not scan `com.springairag`. Official Python SDK
 `2.14.0` and Node SDK `7.34.0` verify models, JSON, SSE, idempotency replay, error
 envelopes, and authentication against both topologies. It also proves that the
-external Starter consumer can run Flyway V1–V84 and expose the same `/v1` client
+external Starter consumer can run Flyway V1..latest and expose the same `/v1` client
 contract. The isolated topology additionally exercises the live Native/OpenAI
 consumer contract and async Collection Purge HTTP lifecycle against its temporary
 PostgreSQL database. Evidence is written to

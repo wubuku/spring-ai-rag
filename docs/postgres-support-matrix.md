@@ -6,7 +6,7 @@ real `pgvector/pgvector` official image containers, not a mocked database.
 
 ## Conclusion
 
-| PostgreSQL | Official image | pgvector | Full V1–V84 migrations | Core gated suites | Status |
+| PostgreSQL | Official image | pgvector | Full V1..latest migrations | Core gated suites | Status |
 |---|---|---|---|---|---|
 | 15 | `pgvector/pgvector:pg15` (15.19) | 0.8.7 | Pass | 62 tests pass | Supported |
 | 16 | `pgvector/pgvector:pg16` (16.15) | 0.8.7 | Pass | Full nightly gated suite + 62 tests pass | Supported (default) |
@@ -33,7 +33,7 @@ principle but this matrix does not verify each version, so it is not a promise; 
 
 Each version runs:
 
-1. **Full migrations**: apply every script V1–V84 under
+1. **Full migrations**: apply every script V1..latest under
    `spring-ai-rag-core/src/main/resources/db/migration/` in Flyway order to catch
    version-specific syntax/behaviour differences;
 2. **Extension version**: `SELECT extversion FROM pg_extension WHERE extname='vector'`,

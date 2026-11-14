@@ -803,3 +803,34 @@ hash 以 `git log -1 --oneline` 为准；本账本不内嵌自身提交 hash，�
 - **Git 交付边界**：按用户/监控方指令「未获明确授权不 merge/push」，本分支停在
   `feature/multi-tenancy-phase1` 本地提交，等待用户最终批准后按 delivery-workflow §8
   合并回 `main` 并推送；本任务不主动观察对抗式审核 agent 状态。
+
+## 6. V85 纠正迁移（2026-11-14，合并 main 后 STRICT 真实 PG 复跑缺陷修复）
+
+> 监控方在 main 上复跑 9 组 STRICT 真实 PG 集成（44 跑 2 败）通报两个缺陷；
+> 用户已批准合并 main 并 push（`1ad305c7`），V82/V84 视为已执行迁移，禁止改写。
+
+### 6.1 缺陷与裁决
+
+| 项 | 严重度 | 现象 | 根因 | 处置 |
+|---|---|---|---|---|
+| 缺陷 1 | **S2 一致性** | `TenantBaseMigrationPostgresIntegrationTest#platformGlobalTablesDoNotCarryTenantIdButCredentialsDo` 断言 `rag_tenant_quota_policy` 不应有 tenant_id，实际有 | **测试断言口径错，不是 schema 错**：WP10 设计本意是「PLATFORM_GLOBAL 按 tenant_id 键控、无 RLS」，`TenantTableCatalog` / `MULTI_TENANCY_TABLE_CATALOG.md` §5 已明确裁决；「PLATFORM_GLOBAL 无 tenant_id 列」把「无 RLS」误写成「无键控列」，全仓只有 `rag_tenant` 主表与 WP10 三张配额表带 tenant_id，其余 20 张 PLATFORM_GLOBAL 均无 | **catalog 裁决正确，不改**；测试改为「PLATFORM_GLOBAL 表不得启用 RLS」+ 显式断言三张配额表保持 tenant_id 键控（查询由 `TenantQuotaPolicyRepository` / `TenantQuotaLedger` 显式带谓词，登记访问点） |
+| 缺陷 2 | **S1 安全** | 同测试 `#everyTenantPrivateTableHasTenantIdColumn` 断言 `rag_tenant_result_receipt` 缺 `tenant_id NOT NULL DEFAULT 'default'` | V82 的 3 张 TENANT_PRIVATE 证据表 tenant_id 均 `NOT NULL` 但**缺 DEFAULT**（主键首列，回填需谨慎）；SINGLE 下若写入方漏显式 tenant_id，无 DB 默认兜底；STRICT 的 RLS WITH CHECK 会拒写但 DB 层缺统一口径 | **新增 V85 纠正迁移**：三表统一 `ALTER COLUMN tenant_id SET DEFAULT 'default'`（纯事务 DDL，不改历史行——列已 NOT NULL 均有值）；补 tenant-leading 复合索引 `idx_rag_tenant_result_receipt_scope (tenant_id, collection_id, owner_principal_id)`（与 V82 owner 索引/主键/唯一约束互补）；终态断言：三表 DEFAULT + RLS 仍 ENABLE+FORCE、索引存在、三张 PLATFORM_GLOBAL 配额表**不得启用 RLS**且保持键控 |
+
+### 6.2 V85 红绿证据
+
+| 验证 | 结果 |
+|---|---|
+| 修复前（main `1ad305c7` 干净库复跑，`-Dtenant-base.it.enabled=true`） | **5 跑 2 败**（与监控方通报一致：缺陷 1 `rag_tenant_quota_policy 不应有 tenant_id 列`；缺陷 2 `rag_tenant_result_receipt 缺少 tenant_id NOT NULL DEFAULT 'default'`） |
+| 修复后同开关复跑 | **5/5 绿**（V85 迁移按序应用，断言通过） |
+| 文档门禁 `verify-project-docs.sh` | **24/24**（迁移范围标签同步 V85：AGENTS / developer-reference* / README* / project-docs skill；其余文档按 WP12 教训改「V1..最新版本」防漂移） |
+
+### 6.3 教训
+
+- 「平台全局表无 tenant_id 列」与「平台全局表无 RLS」是两个不同不变量；V84 按键控
+  设计被断言口径误伤。PLATFORM_GLOBAL 的安全边界是**无 RLS + 显式谓词访问点登记**，
+  不是无键控列。
+- V82 三张证据表漏 DEFAULT 是与 V80「统一加列口径」不一致的同类漂移；主键首列加
+  DEFAULT 不能回填历史行（NOT NULL 已保证），只能前向纠正。
+- WP12 的「V1..Vn 标签随迁移链漂移」教训再次应验：本次门禁揪出 5 处过期标签
+  （AGENTS / developer-reference* / README* / project-docs skill），按门禁契约写死
+  当前值 V85；其余文档改为「V1..最新版本」。

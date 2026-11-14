@@ -2,7 +2,7 @@
 
 > 机器可读单一事实源：`spring-ai-rag-core/src/main/java/com/springairag/core/tenant/TenantTableCatalog.java`
 >（本文与其必须保持一致，新增表先改 catalog + 本文再写迁移）。
-> 基线：Flyway V1–V84 共 **76 张存活业务表**（V1–V74 的 69 张存量表 + V75 新增
+> 基线：Flyway V1..最新版本 共 **76 张存活业务表**（V1–V74 的 69 张存量表 + V75 新增
 > `rag_tenant` + V82 新增 3 张 WP8 结果/回调证据表 + V84 新增 3 张 WP10 租户级配额表；
 > V26 已 DROP 的 `rag_vector_store` 不登记）；
 > 表集合不写死，以迁移脚本与 `TenantTableCatalogTest` 动态基线比对为准。
