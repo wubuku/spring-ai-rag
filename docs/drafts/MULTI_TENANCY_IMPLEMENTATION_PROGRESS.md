@@ -767,3 +767,39 @@ hash 以 `git log -1 --oneline` 为准；本账本不内嵌自身提交 hash，�
 ### WP10 提交
 
 `6fc3f760` — `feat(multi-tenancy): WP10 租户级配额与用量硬阈值`（amend 后最终 hash）。
+
+### WP12 提交与完成定义（2026-11-14 收口）
+
+- WP12 提交：`git log -1`（`feat(multi-tenancy): WP12 文档收口、端点声明启动期全覆盖与发布验证`）。
+  本账本按纪律不嵌入自身提交 hash。
+- **实现检查 `3/3`**：按 delivery-workflow §7，编码完成后重新计数（此前「未开始」）。
+  实现检查过程中自纠 2 个真实缺陷（缺陷 A：describe() 自产自销使漏声明红测不可失败；
+  缺陷 B：按 `/api/v1/platform/` 前缀猜平台端点、误标真实平台端点
+  `/api/v1/rag/tenants`），修复后归零重跑：R1 冷读者/范围/冻结决策无实质问题 →
+  `1/3`；R2 代码/数据/API/安全锚点与静态门禁（24/24 + 端点守卫门禁）→ `2/3`；
+  R3 实施顺序/§7 矩阵/发布回滚/交付风险（全量 `clean test` 8595/0/0、
+  `verify-release.sh` 19/0/16）→ `3/3`。
+- **§7 验收矩阵**：迁移（V74→V84 双路径演练）、RLS（A/B 双租户 + 无 GUC + 跨租户写 +
+  错误 GUC + 连接池复用）、启动 verifier（负向集）、请求链路（GUC 回读 + 非事务自动提交）、
+  Endpoint guard（describe() 真实快照 + 漏声明红测）、后台任务（21/5/3 清单 + 上下文清理）、
+  结果/回调（owner/receipt/任意 task ID 拒绝）、SSE（逐次重查 ACL）、SINGLE 守卫
+  （凭据全 default + 拒绝非 default）逐行有证据，见 §2b–§2k 各包验证台账。
+- **完成定义达成**：WP1–WP12 全部收口；规划检查 `3/3`、实现检查 `3/3`；
+  总门禁 24/24；全量 JVM 测试 8595/0/0；发布脚本 19/0/16（跳过项均为显式 opt-in，不假绿）。
+- **两处已知未验项（如实留档，不冒充已验）**：
+  1. **大表在线 CONCURRENTLY / 分批回填 / 锁窗口演练**：V78 事故后迁移链已改为纯事务
+     DDL，V79/V81 保留 INVALID 检测与清理指引；本任务未在生产规模 embedding 大表上做
+     在线索引演练，属**上线前运维专项**（规划 §7 已列为阻断项，实施阶段以「迁移链不产生
+     INVALID + 测试连接 lock_timeout/statement_timeout 兜底」替代，不改写为「已验」）。
+  2. **`--with-local-runtime` / `--with-runtime-e2e` HTTP E2E 与真实 LLM smoke**：需
+     `.env` 凭据、独占 18081 端口及真实模型服务，本任务环境不具备；`verify-release.sh`
+     相关 16 个 SKIP 均为显式 opt-in，无一假绿。
+- **外部参考经验教训充分性复核**：[外部参考经验教训](MULTI_TENANCY_EXTERNAL_LESSONS.md)
+  §1 速查 / §4.2–4.9（seedance `multitenancy-verification/` 7 案例、红绿证据、否决弯路、
+  可复用 SQL/骨架）/ §5（AI-Native-BOS 术语分层、承重列、函数静默失效）/ §6 影响清单 /
+  §7 复现命令完整落档；实施期 WP3/WP5/WP9/WP10/WP11 逐包引用其教训（GUC 三件套、
+  幽灵租户、异步上下文、RLS 负向、凭据表不启用 RLS 等）。三份 `docs/drafts/` 文档对参考
+  项目材料**全部使用相对路径文本**，无绝对路径；复核命令 `rg '/Users/yangjiefeng' docs/drafts/MULTI_TENANCY*.md` 无匹配。
+- **Git 交付边界**：按用户/监控方指令「未获明确授权不 merge/push」，本分支停在
+  `feature/multi-tenancy-phase1` 本地提交，等待用户最终批准后按 delivery-workflow §8
+  合并回 `main` 并推送；本任务不主动观察对抗式审核 agent 状态。
