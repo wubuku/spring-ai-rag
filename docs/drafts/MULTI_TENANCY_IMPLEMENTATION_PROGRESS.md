@@ -824,6 +824,7 @@ hash 以 `git log -1 --oneline` 为准；本账本不内嵌自身提交 hash，�
 | 修复后同开关复跑 | **5/5 绿**（V85 迁移按序应用，断言通过） |
 | 9 组 STRICT 真实 PG 集成（`verify-gated-it.sh` 全 tenant 开关） | **44/44 绿**（HNSW 基准 1 + RLS verifier 负向 9 + 基类迁移 5 + WP8 证据 4 + RLS 双租户 5 + GUC 三件套 4 + JobDispatcher 4 + WP10 配额 8 + WP9 生命周期 4） |
 | 静态门禁（端点守卫 / WP10 配额 / WP3+WP11 RLS / 依赖版本 / 集成开关 / 无悲观锁） | 全绿 |
+| `mvn -o clean test`（全 reactor，SINGLE 回归） | **BUILD SUCCESS**：API 568 + documents 90 + core 8595 + starter 49，**0 failures / 0 errors**（core 306 skipped 为 `-D` 门控集成测试，已由上表 9 组 44/44 覆盖） |
 | 文档门禁 `verify-project-docs.sh` | **24/24**（迁移范围标签同步 V85：AGENTS / developer-reference* / README* / project-docs skill；其余文档按 WP12 教训改「V1..最新版本」防漂移） |
 
 ### 6.3 教训
@@ -836,3 +837,9 @@ hash 以 `git log -1 --oneline` 为准；本账本不内嵌自身提交 hash，�
 - WP12 的「V1..Vn 标签随迁移链漂移」教训再次应验：本次门禁揪出 5 处过期标签
   （AGENTS / developer-reference* / README* / project-docs skill），按门禁契约写死
   当前值 V85；其余文档改为「V1..最新版本」。
+- 首次 `verify-release.sh` 因新建 worktree 未装 `node_modules` 报 6 项 WebUI 假红
+  （`npm run lint/test:run/build` exit 127，连带 Maven webui package / 内嵌 bundle /
+  发布产物契约）。**不是产品缺陷**：按 WORKTREE.md 不跨 worktree 共享运行时资源，
+  在 worktree 内 `npm ci` 后重跑取证；不把假红写成修复完成。
+- `verify-release.sh --skip-playwright --skip-docker --skip-helm`（worktree 内 npm ci 后）
+  **20 passed / 0 failed / 15 skipped**（跳过项均为显式 opt-in，不假绿）。
