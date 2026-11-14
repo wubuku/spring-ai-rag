@@ -822,6 +822,8 @@ hash 以 `git log -1 --oneline` 为准；本账本不内嵌自身提交 hash，�
 |---|---|
 | 修复前（main `1ad305c7` 干净库复跑，`-Dtenant-base.it.enabled=true`） | **5 跑 2 败**（与监控方通报一致：缺陷 1 `rag_tenant_quota_policy 不应有 tenant_id 列`；缺陷 2 `rag_tenant_result_receipt 缺少 tenant_id NOT NULL DEFAULT 'default'`） |
 | 修复后同开关复跑 | **5/5 绿**（V85 迁移按序应用，断言通过） |
+| 9 组 STRICT 真实 PG 集成（`verify-gated-it.sh` 全 tenant 开关） | **44/44 绿**（HNSW 基准 1 + RLS verifier 负向 9 + 基类迁移 5 + WP8 证据 4 + RLS 双租户 5 + GUC 三件套 4 + JobDispatcher 4 + WP10 配额 8 + WP9 生命周期 4） |
+| 静态门禁（端点守卫 / WP10 配额 / WP3+WP11 RLS / 依赖版本 / 集成开关 / 无悲观锁） | 全绿 |
 | 文档门禁 `verify-project-docs.sh` | **24/24**（迁移范围标签同步 V85：AGENTS / developer-reference* / README* / project-docs skill；其余文档按 WP12 教训改「V1..最新版本」防漂移） |
 
 ### 6.3 教训
