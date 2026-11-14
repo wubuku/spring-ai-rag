@@ -44,7 +44,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V74
+- [x] Flyway inventory is V1–V84
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] Document PATCH/disable/restore/permanent-delete and external triple identity are covered
@@ -80,7 +80,7 @@ The release artifact itself is a gate, not just “it compiles”:
   bytes, unique runtime coordinates, and byte equality across WebUI `dist/`, the
   committed embedded bundle, and the jar; stale hashed assets left in the jar fail.
 - `--with-jar-blackbox` starts the packaged fat jar (not an IDE or
-  `spring-boot:run`) against real PostgreSQL + a mock provider: Flyway V1..V73 applied
+  `spring-boot:run`) against real PostgreSQL + a mock provider: Flyway V1..latest applied
   in order with no failures, `/actuator/health` UP, Collection/Document/embedding/search
   usable, `/webui` serving the entry page, `theme-init.js`/favicon with correct
   content types and bodies (static scripts never degrade to HTML), and graceful

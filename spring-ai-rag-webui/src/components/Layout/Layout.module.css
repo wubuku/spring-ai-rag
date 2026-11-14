@@ -65,6 +65,17 @@
   color: currentColor;
 }
 
+/* WP9：租户只读条。普通内容默认 text-align: start（WebUI 对齐规则），
+   不使用居中；数字/状态来自 /api/v1/rag/auth/me，不暴露凭据。 */
+.tenantInfo {
+  padding: 10px 16px;
+  text-align: start;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  border-top: 1px solid var(--color-border);
+  word-break: break-word;
+}
+
 .consoleActions {
   padding: 12px 16px;
   border-top: 1px solid var(--color-border);

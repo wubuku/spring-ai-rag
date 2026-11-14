@@ -17,6 +17,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import com.springairag.core.tenant.TenantContext;
+import com.springairag.core.tenant.TenantScopedJob;
+import com.springairag.core.tenant.TenantWorkItemAssert;
 
 @Component
 @ConditionalOnProperty(
@@ -24,6 +27,7 @@ import java.util.concurrent.TimeUnit;
         name = "managed-suites-enabled",
         havingValue = "true",
         matchIfMissing = true)
+@TenantScopedJob
 public class EvaluationSuiteWorker {
 
     private static final Logger log = LoggerFactory.getLogger(EvaluationSuiteWorker.class);
@@ -83,19 +87,27 @@ public class EvaluationSuiteWorker {
                 break;
             }
             EvaluationSuiteRepository.RunRow run = claimed.getFirst();
-            workers.execute(() -> process(run, leaseOwner));
+            // WP8：poll() 已在逐租户 scope 内；内层任务显式携带快照并断言 claim 行 tenant。
+            workers.execute(TenantContext.wrap(() -> {
+                TenantWorkItemAssert.assertMatchesScope(
+                        run.tenantId(), "evaluation run " + run.id());
+                process(run, leaseOwner);
+            }));
         }
     }
 
     private void process(
             EvaluationSuiteRepository.RunRow run,
             String leaseOwner) {
+        // WP8：心跳也走独立线程池，必须逐次重绑 claim 行 tenant，不能依赖 ThreadLocal。
         var heartbeat = heartbeats.scheduleAtFixedRate(
-                () -> {
+                TenantContext.wrap(() -> {
+                    TenantWorkItemAssert.assertMatchesScope(
+                            run.tenantId(), "evaluation heartbeat " + run.id());
                     if (repository.heartbeat(run.id(), leaseOwner, 120) == 0) {
                         log.warn("Evaluation run {} lost lease", run.id());
                     }
-                },
+                }),
                 40, 40, TimeUnit.SECONDS);
         try {
             service.executeRun(run, leaseOwner);

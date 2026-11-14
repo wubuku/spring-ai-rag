@@ -194,6 +194,12 @@ rag:
 实例本地的丢失事件指标，但不会从 provider 调用路径发起重试。retention
 使用有界批次和较短的数据库 statement timeout。
 
+多租户（WP10）下，每次模型调用记账都会显式携带请求上下文中的租户 ID；
+平台管理员可通过 `rag_tenant_quota_policy`（`V84`，PLATFORM_GLOBAL，无 RLS）
+为指定租户启用 `daily/monthly_token_limit` 聚合硬阈值。阈值生效后，
+租户级 DAY/MONTH 窗口账本（`rag_tenant_quota_window`）用条件 UPDATE/CAS
+在既有 per-principal 预算之上做第二层聚合硬阈值；两层任一超限，
+整个预留事务回滚并返回 429。这不是 billing、充值或成员间分配语义。
 `GET /api/v1/rag/usage` 返回按 principal 隔离、按 UTC 日期范围聚合的用量。
 普通认证 principal 只能查询自身；ADMIN 或 environment root 可以查询全部
 principal 或指定 principal。因为响应可能聚合大量数据库行，token 合计使用
@@ -1848,3 +1854,67 @@ Starter 默认自动装配完整 Core Bean Graph；外部 Consumer 不需要主�
 使用 `scripts/verify-openai-sdk-e2e.sh`，而不是通过 WebUI 可用性推断。2026-11-04 的
 SDK 全链路与暴露面复核结论、受控开启门槛见
 [OpenAI 兼容就绪度](openai-compatibility-readiness-zh-CN.md) §11。
+
+## 多租户配置（WP5）
+
+租户运行模式由 `rag.tenant.mode` 控制，默认 `SINGLE`；不配置即保持当前单租户行为，
+无配置迁移要求。
+
+```yaml
+rag:
+  tenant:
+    mode: SINGLE   # 或 STRICT
+```
+
+| 模式 | 行为 |
+|---|---|
+| `SINGLE`（默认） | 所有请求固定解析到 `default` 租户；仍写 `tenant_id`、仍走同一 SQL/任务路径；不启用 RLS 与 verifier；启动时校验凭据表 `tenant_id` 全为 `default`，存在非 default 凭据即拒绝启动（fail-closed）。 |
+| `STRICT` | 按凭据绑定租户解析；RLS `ENABLE+FORCE`；启动时执行 `TenantRlsVerifier` 全项校验（三角色 / RLS 覆盖 / policy 语义 / 函数体依赖 / 无 GUC 0 行）。 |
+
+**`SINGLE` 关闭 RLS 不等于「已经多租户」。** `SINGLE` 只保证所有请求落在同一个 `default`
+租户上（兼容性底座），数据面没有任何行级隔离：`tenant_id` 是普通列而不是安全边界，
+绕过应用路径的直接 SQL 写入不会被拦截。因此只有在 `STRICT` 下、通过
+`TenantRlsVerifier` 启动校验、且运维确认应用角色为 `NOSUPERUSER NOBYPASSRLS` 时，
+本仓才提供多租户隔离保证。对外声明多租户能力前必须满足上述条件。
+
+请求链路的三件套对两种模式都生效：
+
+1. **checkout RESET**：借出连接时清掉上一位租户的 `app.current_tenant_id` 残留；
+2. **session 级 set_config**：`SELECT set_config('app.current_tenant_id', ?, false)`，
+   自动提交路径（非事务 `JdbcTemplate.update`）同样有效，不依赖 `SET LOCAL`；
+3. **归还 RESET**：连接归还池前再次 RESET，避免下家租户继承上家 GUC；
+   物理连接创建时的兜底由 Hikari `connection-init-sql` / `data-source-properties.options` 承担
+   （第二层卫生，不能替代 checkout 清理）。
+
+首条租户作用域读查询前做 GUC 回读断言：`current_setting('app.current_tenant_id', true)` 回显值
+必须等于当前上下文，不一致立即拒绝连接（fail-closed），把「读 0 行 ≠ 成功」变成可测护栏。
+
+`X-Tenant-Id` 请求头不用于租户解析（仅 dev 调试工具可用，且不能提升角色）。
+解析顺序：宿主可信 resolver（本版未提供）→ 凭据绑定 `tenant_id` → 单租户 `default`；
+凭据未绑定或租户状态非 `ACTIVE` 一律 fail-closed，不落回 `default`。
+
+相关静态门禁：`scripts/verify-multi-tenancy-rls.sh`（WP3）与
+`scripts/verify-multi-tenancy-guc.sh`（WP5，核对 GUC 三件套与非事务 JDBC 现场清单）。
+
+### 租户生命周期 actor 白名单（WP9）
+
+平台面（创建/暂停/恢复/禁用/软删租户）的调用方白名单由 `rag.tenant.lifecycle-actors`
+配置，默认只有 `environment-root`：
+
+```yaml
+rag:
+  tenant:
+    mode: SINGLE
+    lifecycle-actors:
+      - environment-root
+```
+
+- 白名单之外的 actor 一律 403，并且**每次调用都记 capability 审计**（actor / 目标租户 /
+  允许与否），不记录租户私有正文。
+- actor 只能来自认证后的 principal 身份，**不接受请求头自称的 actor**。
+- 生命周期端点在 root 凭据未配置时同样 fail-closed（403），避免任何一条静态/数据库凭据
+  绕开平台白名单创建租户。
+- 生命周期管理端点是平台面（`/api/v1/rag/tenants`），与凭据表一样不走业务租户 RLS；
+  业务数据面不暴露任何跨租户入口。
+
+相关静态门禁：`scripts/verify-multi-tenancy-lifecycle.sh`（WP9）。

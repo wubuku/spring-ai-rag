@@ -56,7 +56,7 @@ const MOBILE_BREAKPOINT = 768;
 
 export function Layout() {
   const { t } = useTranslation();
-  const { logout } = useApiKeyAuth();
+  const { identity, logout } = useApiKeyAuth();
   const location = useLocation();
   const navigationType = useNavigationType();
   const mainRef = useRef<HTMLElement>(null);
@@ -178,6 +178,17 @@ export function Layout() {
             </NavLink>
           ))}
         </nav>
+        {identity && (
+          // WP9：只读展示当前凭据绑定的租户、运行模式与租户状态。
+          // 不做租户切换器 / 邀请码（规划 §6 WP9 明确排除）；缺省值保证旧后端响应不炸。
+          <div className={styles.tenantInfo} data-testid="tenant-info">
+            {t('tenant.readOnly', {
+              tenantId: identity.tenantId ?? 'default',
+              mode: identity.tenantMode ?? 'SINGLE',
+              status: identity.tenantStatus ?? 'ACTIVE',
+            })}
+          </div>
+        )}
         <div className={styles.consoleActions}>
           <button type="button" className={styles.logoutBtn} onClick={logout}>
             <LogOut size={16} aria-hidden="true" />

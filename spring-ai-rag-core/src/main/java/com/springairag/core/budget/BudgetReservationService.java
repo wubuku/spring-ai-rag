@@ -3,6 +3,8 @@ package com.springairag.core.budget;
 import com.springairag.core.properties.RagLlmBudgetProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.usage.LlmUsageSnapshot;
+import com.springairag.core.tenant.TenantContext;
+import com.springairag.core.tenant.TenantQuotaEnforcer;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -36,14 +38,31 @@ public class BudgetReservationService {
     private final JdbcTemplate jdbcTemplate;
     private final RagLlmBudgetProperties properties;
     private final TransactionTemplate transactionTemplate;
+    /**
+     * WP10：租户级硬阈值执行器（可选；未装配时只保留 per-principal 预算）。
+     *
+     * <p>租户预留与 principal 预留同事务：任一层超限都整体回滚，不留半预留。</p>
+     */
+    private final TenantQuotaEnforcer tenantQuotaEnforcer;
 
     public BudgetReservationService(
             JdbcTemplate jdbcTemplate,
             RagProperties ragProperties,
             PlatformTransactionManager transactionManager) {
+        this(jdbcTemplate, ragProperties, transactionManager, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public BudgetReservationService(
+            JdbcTemplate jdbcTemplate,
+            RagProperties ragProperties,
+            PlatformTransactionManager transactionManager,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            TenantQuotaEnforcer tenantQuotaEnforcer) {
         this.jdbcTemplate = jdbcTemplate;
         this.properties = ragProperties.getLlmBudget();
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.tenantQuotaEnforcer = tenantQuotaEnforcer;
     }
 
     public Reservation reserve(ReservationRequest request) {
@@ -220,8 +239,35 @@ public class BudgetReservationService {
                 policy.monthlyTokenLimit(), policy.monthlyCostLimit())) {
             throw new BudgetLimitException("Monthly LLM budget exceeded", retryAfterSeconds(now, dayStart, monthStart));
         }
+        // WP10：租户级硬阈值（同一事务；无上下文时也按 default 施加，
+        // 避免 STRICT 下漏上下文绕过租户阈值；上游无上下文 fail-closed 契约另行拒绝请求）。
+        TenantQuotaEnforcer.Reservation tenantReservation = reserveTenantQuota(now, request);
+        if (tenantReservation != null) {
+            tenantQuotaEnforcer.recordReservation(reservationId, tenantReservation);
+        }
 
         return new Reservation(reservationId, true, true);
+    }
+
+    /**
+     * WP10：按当前租户上下文预留租户级窗口。
+     *
+     * <p>无执行器时返回 null（不施加租户级阈值）；无上下文时按
+     * {@code default} 租户施加，不让「漏上下文」变成绕过阈值的通道。
+     * 上游无上下文 fail-closed 契约另外负责拒绝请求本身。</p>
+     */
+    private TenantQuotaEnforcer.Reservation reserveTenantQuota(
+            Instant now, ReservationRequest request) {
+        if (tenantQuotaEnforcer == null) {
+            return null;
+        }
+        TenantContext context = TenantContext.current();
+        String tenantId = context != null && context.tenantId() != null
+                && !context.tenantId().isBlank()
+                ? context.tenantId()
+                : "default";
+        return tenantQuotaEnforcer.reserve(
+                tenantId, now, request.estimatedTokens());
     }
 
     private Reservation reuse(ExistingReservation row, ReservationRequest request, BigDecimal cost) {
@@ -271,6 +317,15 @@ public class BudgetReservationService {
         BigDecimal reservedCost = expired ? ZERO : row.estimatedCost();
         settleWindow(row.principalId(), "DAY", row.dayWindowStart(), tokenDelta, costDelta, reservedTokens, reservedCost);
         settleWindow(row.principalId(), "MONTH", row.monthWindowStart(), tokenDelta, costDelta, reservedTokens, reservedCost);
+        // WP10：租户级窗口同步结算（DB 驱动，不依赖线程上下文）。
+        if (tenantQuotaEnforcer != null) {
+            if (expired) {
+                tenantQuotaEnforcer.settleByReservationId(reservation.reservationId(),
+                        row.estimatedTokens());
+            } else {
+                tenantQuotaEnforcer.settleByReservationId(reservation.reservationId(), tokens);
+            }
+        }
         return true;
     }
 
@@ -303,6 +358,14 @@ public class BudgetReservationService {
             } else {
                 releaseWindow(row.principalId(), "DAY", row.dayWindowStart(), row.estimatedTokens(), row.estimatedCost());
                 releaseWindow(row.principalId(), "MONTH", row.monthWindowStart(), row.estimatedTokens(), row.estimatedCost());
+            }
+            // WP10：租户级窗口同步释放（DB 驱动，不依赖线程上下文）。
+            if (tenantQuotaEnforcer != null) {
+                if (expired) {
+                    tenantQuotaEnforcer.settleByReservationId(reservationId, row.estimatedTokens());
+                } else {
+                    tenantQuotaEnforcer.releaseByReservationId(reservationId);
+                }
             }
         }
     }

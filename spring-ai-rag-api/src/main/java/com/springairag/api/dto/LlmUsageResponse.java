@@ -32,7 +32,26 @@ public record LlmUsageResponse(
         @Schema(description = "Usage grouped by Chat mode")
         List<ModeBreakdown> byMode,
         @Schema(description = "Usage grouped by UTC day")
-        List<DayBreakdown> byDay) {
+        List<DayBreakdown> byDay,
+        @Schema(description = "Tenant-scoped aggregate totals; null when not requested")
+        TenantTotals tenantTotals) {
+
+    /** 向后兼容：旧调用方不带 tenantTotals。 */
+    public LlmUsageResponse(
+            boolean recordingEnabled,
+            long localLostEventsSinceStart,
+            Scope scope,
+            LocalDate from,
+            LocalDate to,
+            Totals totals,
+            List<CostBreakdown> costs,
+            List<ModelBreakdown> byModel,
+            List<PurposeBreakdown> byPurpose,
+            List<ModeBreakdown> byMode,
+            List<DayBreakdown> byDay) {
+        this(recordingEnabled, localLostEventsSinceStart, scope, from, to,
+                totals, costs, byModel, byPurpose, byMode, byDay, null);
+    }
 
     public LlmUsageResponse {
         costs = costs == null ? List.of() : List.copyOf(costs);
@@ -40,6 +59,13 @@ public record LlmUsageResponse(
         byPurpose = byPurpose == null ? List.of() : List.copyOf(byPurpose);
         byMode = byMode == null ? List.of() : List.copyOf(byMode);
         byDay = byDay == null ? List.of() : List.copyOf(byDay);
+    }
+
+    public record TenantTotals(
+            @Schema(description = "Tenant ID whose usage is aggregated")
+            String tenantId,
+            @Schema(description = "Aggregate usage counters for the tenant")
+            Totals totals) {
     }
 
     public record Scope(

@@ -204,6 +204,15 @@ database error increments the local lost-event metric and is not retried by
 the provider path. Retention uses bounded batches and a short database
 statement timeout.
 
+Under multi-tenancy (WP10), every recorded model invocation fact carries the
+tenant ID of the request context. A platform administrator can enable
+`daily/monthly_token_limit` aggregate hard thresholds per tenant through
+`rag_tenant_quota_policy` (`V84`, PLATFORM_GLOBAL, no RLS). When enabled, the
+tenant-level DAY/MONTH window ledger (`rag_tenant_quota_window`) applies a
+second aggregation hard threshold on top of the existing per-principal budget
+using conditional UPDATE/CAS; exceeding either layer rolls back the whole
+reservation transaction and returns 429. This is not billing, top-up, or
+member-level allocation semantics.
 `GET /api/v1/rag/usage` exposes principal-scoped aggregate data for an
 inclusive UTC date range. A normal authenticated principal can query only
 itself; an ADMIN or environment root may query all principals or one selected
@@ -2048,3 +2057,80 @@ the complete disable boundary. The default value of
 infer service readiness from WebUI availability. The 2026-11-04 end-to-end SDK and
 exposure audit decision, plus the controlled enablement gate, are in
 [OpenAI compatibility readiness](openai-compatibility-readiness.md) §11.
+
+## Multi-tenancy Configuration (WP5)
+
+Tenant run mode is controlled by `rag.tenant.mode`, defaulting to `SINGLE`; no
+configuration is required to keep current single-tenant behavior.
+
+```yaml
+rag:
+  tenant:
+    mode: SINGLE   # or STRICT
+```
+
+| Mode | Behavior |
+|---|---|
+| `SINGLE` (default) | Every request resolves to the `default` tenant; `tenant_id` is still written and the same SQL/task path is used; RLS and the verifier are off; startup fails closed if any credential row has `tenant_id != 'default'`. |
+| `STRICT` | Tenants resolve from credential binding; RLS `ENABLE+FORCE`; startup runs the full `TenantRlsVerifier` (three roles / RLS coverage / policy semantics / trigger function bodies / zero rows without GUC). |
+
+**Turning RLS off under `SINGLE` does not mean the deployment is multi-tenant.**
+`SINGLE` only pins every request to the same `default` tenant (the compatibility
+base): there is no row-level isolation on the data plane, `tenant_id` is an
+ordinary column rather than a security boundary, and a direct SQL write that
+bypasses the application path is not blocked. This repository provides
+multi-tenant isolation guarantees only under `STRICT`, after the
+`TenantRlsVerifier` startup check passes and the application role is confirmed
+`NOSUPERUSER NOBYPASSRLS`. Do not claim multi-tenancy before all of that holds.
+
+The request-path three-piece contract applies to both modes:
+
+1. **Checkout RESET**: clear any leftover `app.current_tenant_id` from the previous tenant
+   when a connection is handed out.
+2. **Session-scoped set_config**: `SELECT set_config('app.current_tenant_id', ?, false)`;
+   also effective on the autocommit path (non-transactional `JdbcTemplate.update`), not
+   relying on `SET LOCAL`.
+3. **Return RESET**: clear the GUC again before the connection goes back to the pool;
+   physical-connection hygiene is provided by the Hikari `connection-init-sql` /
+   `data-source-properties.options` (a second layer, never a replacement for checkout).
+
+Before the first tenant-scoped read, a GUC read-back assertion compares
+`current_setting('app.current_tenant_id', true)` with the current context; a mismatch
+rejects the connection immediately (fail-closed), turning "zero rows does not mean
+success" into an enforceable guard.
+
+The `X-Tenant-Id` header is never used for tenant resolution (dev debug tooling only and
+never privilege-escalating). Resolution order: trusted host resolver (not provided in
+this release) → credential-bound `tenant_id` → single-tenant `default`. An unbound
+credential or a non-`ACTIVE` tenant fails closed and never falls back to `default`.
+
+Related static gates: `scripts/verify-multi-tenancy-rls.sh` (WP3) and
+`scripts/verify-multi-tenancy-guc.sh` (WP5, GUC three-piece plus the non-transactional
+JDBC inventory).
+
+### Tenant lifecycle actor whitelist (WP9)
+
+The whitelist of callers allowed to run platform-side tenant operations
+(create / suspend / resume / disable / soft-delete) is configured through
+`rag.tenant.lifecycle-actors`; by default only `environment-root` is allowed:
+
+```yaml
+rag:
+  tenant:
+    mode: SINGLE
+    lifecycle-actors:
+      - environment-root
+```
+
+- An actor outside the whitelist gets 403, and **every call is audited** as a capability
+  event (actor / target tenant / allowed or not); no tenant-private content is recorded.
+- The actor is taken from the authenticated principal identity. A self-declared actor in
+  a request header is never accepted.
+- The lifecycle endpoints fail closed (403) when the root credential is not configured, so
+  that no static or database credential can bypass the platform whitelist and create a
+  tenant.
+- The lifecycle endpoints are platform-side (`/api/v1/rag/tenants`) and, like the
+  credential tables, do not go through business-tenant RLS. No cross-tenant entry point
+  exists on the business data plane.
+
+Related static gate: `scripts/verify-multi-tenancy-lifecycle.sh` (WP9).

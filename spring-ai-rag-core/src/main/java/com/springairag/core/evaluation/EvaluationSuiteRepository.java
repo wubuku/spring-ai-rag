@@ -136,7 +136,8 @@ public class EvaluationSuiteRepository {
                 VALUES (?, ?, ?, ?, ?::jsonb, ?, ?)
                 RETURNING id, suite_version_id, owner_principal_id, status,
                     configuration_snapshot::text, code_revision, embedding_profile_key,
-                    aggregate_metrics::text, error, started_at, finished_at, created_at
+                    aggregate_metrics::text, error, started_at, finished_at, created_at,
+                    tenant_id
                 """,
                 this::mapRun,
                 id, versionId, ownerPrincipalId, status,
@@ -167,7 +168,8 @@ public class EvaluationSuiteRepository {
                 ON CONFLICT DO NOTHING
                 RETURNING id, suite_version_id, owner_principal_id, status,
                     configuration_snapshot::text, code_revision, embedding_profile_key,
-                    aggregate_metrics::text, error, started_at, finished_at, created_at
+                    aggregate_metrics::text, error, started_at, finished_at, created_at,
+                    tenant_id
                 """,
                 this::mapRun,
                 id, versionId, ownerPrincipalId, status,
@@ -180,7 +182,8 @@ public class EvaluationSuiteRepository {
         List<RunRow> rows = jdbcTemplate.query("""
                 SELECT id, suite_version_id, owner_principal_id, status,
                     configuration_snapshot::text, code_revision, embedding_profile_key,
-                    aggregate_metrics::text, error, started_at, finished_at, created_at
+                    aggregate_metrics::text, error, started_at, finished_at, created_at,
+                    tenant_id
                 FROM rag_evaluation_runs
                 WHERE id = ? AND owner_principal_id = ?
                 """,
@@ -219,7 +222,8 @@ public class EvaluationSuiteRepository {
                   AND r.status = 'PENDING'
                 RETURNING r.id, r.suite_version_id, r.owner_principal_id, r.status,
                     r.configuration_snapshot::text, r.code_revision, r.embedding_profile_key,
-                    r.aggregate_metrics::text, r.error, r.started_at, r.finished_at, r.created_at
+                    r.aggregate_metrics::text, r.error, r.started_at, r.finished_at, r.created_at,
+                    r.tenant_id
                 """,
                 this::mapRun, Math.max(1, limit), workerId, Math.max(30, leaseSeconds));
     }
@@ -347,7 +351,17 @@ public class EvaluationSuiteRepository {
                 rs.getString("error"),
                 rs.getObject("started_at", OffsetDateTime.class),
                 rs.getObject("finished_at", OffsetDateTime.class),
-                rs.getObject("created_at", OffsetDateTime.class));
+                rs.getObject("created_at", OffsetDateTime.class),
+                tenantColumnOrNull(rs));
+    }
+
+    /** 旧单测 fixture 不含 tenant_id 列时返回 null（生产 SQL 必须投影该列）。 */
+    private static String tenantColumnOrNull(ResultSet rs) throws SQLException {
+        try {
+            return rs.getString("tenant_id");
+        } catch (SQLException missing) {
+            return null;
+        }
     }
 
     private CaseRow mapCase(ResultSet rs, int rowNum) throws SQLException {
@@ -389,7 +403,19 @@ public class EvaluationSuiteRepository {
             UUID id, UUID suiteVersionId, String ownerPrincipalId, String status,
             JsonNode configurationSnapshot, String codeRevision, String embeddingProfileKey,
             JsonNode aggregateMetrics, String error,
-            OffsetDateTime startedAt, OffsetDateTime finishedAt, OffsetDateTime createdAt) {
+            OffsetDateTime startedAt, OffsetDateTime finishedAt, OffsetDateTime createdAt,
+            String tenantId) {
+
+        /** WP8 兼容构造器：旧调用点（含测试 fixture）未知 tenant。 */
+        public RunRow(
+                UUID id, UUID suiteVersionId, String ownerPrincipalId, String status,
+                JsonNode configurationSnapshot, String codeRevision, String embeddingProfileKey,
+                JsonNode aggregateMetrics, String error,
+                OffsetDateTime startedAt, OffsetDateTime finishedAt, OffsetDateTime createdAt) {
+            this(id, suiteVersionId, ownerPrincipalId, status, configurationSnapshot,
+                    codeRevision, embeddingProfileKey, aggregateMetrics, error,
+                    startedAt, finishedAt, createdAt, null);
+        }
     }
 
     public record CaseRow(

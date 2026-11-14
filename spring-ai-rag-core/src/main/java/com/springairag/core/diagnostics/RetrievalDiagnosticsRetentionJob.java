@@ -6,11 +6,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import com.springairag.core.tenant.TenantScopedJob;
 
 /**
  * 按 created_at 分批删除过期诊断记录。失败不影响检索请求。
  */
 @Component
+@TenantScopedJob
 public class RetrievalDiagnosticsRetentionJob {
 
     private static final Logger log =

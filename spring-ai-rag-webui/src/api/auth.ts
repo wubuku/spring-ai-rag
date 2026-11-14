@@ -11,6 +11,12 @@ export interface ApiKeyIdentity {
   principalRole: 'NORMAL' | 'ADMIN' | null;
   collectionAccessMode: 'RESTRICTED' | 'UNRESTRICTED';
   allowedCollectionKeys: string[] | null;
+  /** WP9：当前凭据绑定的租户（root / legacy-static 为 default）。 */
+  tenantId: string;
+  /** WP9：运行模式（SINGLE / STRICT）；仅只读展示，不提供切换入口。 */
+  tenantMode: 'SINGLE' | 'STRICT';
+  /** WP9：绑定租户状态（ACTIVE / SUSPENDED / DISABLED）。 */
+  tenantStatus: 'ACTIVE' | 'SUSPENDED' | 'DISABLED';
 }
 
 export const authApi = {

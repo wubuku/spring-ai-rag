@@ -1244,6 +1244,73 @@ declare capability semantics with `@ApiRoutePolicy`.
 
 ---
 
+## 9. Multi-tenancy Isolation Architecture (WP2–WP10)
+
+Multi-tenancy is delivered as four layers: column binding + RLS backstop +
+explicit request context + background-task propagation:
+
+- **Schema layer**: V75–V82 establish the tenant base for 73 business tables —
+  tenant-private tables carry `tenant_id NOT NULL`, composite unique/FK
+  constraints and tenant-leading indexes; 45 tables (WP2–WP4) plus the 3 WP8
+  evidence tables enable `ENABLE + FORCE ROW LEVEL SECURITY` with the canonical
+  policy `tenant_isolation` bound to the session GUC `app.current_tenant_id`;
+  platform-global and credential tables stay RLS-free (authentication precedes
+  tenant resolution). Per-table adjudication lives in
+  `docs/drafts/MULTI_TENANCY_TABLE_CATALOG.md`.
+- **Request layer**: `TenantContextFilter` resolves `TenantContext` from the
+  principal snapshot; the app DataSource is wrapped by `TenantGucDataSource`,
+  which applies the session-level GUC trio on every checkout (RESET on checkout
+  → `set_config(..., false)` → RESET on return) and asserts the GUC readback,
+  failing closed on mismatch. **transaction-local is an in-transaction
+  hardening only; non-transactional autocommit paths must rely on the
+  session-level GUC.**
+- **Background-task layer**: `TenantJobDispatcher` centralizes scheduling
+  (fail-closed rejection without context plus audit alert), `TenantTaskDecorator`
+  wraps thread pools; after-commit callbacks capture the context snapshot **at
+  registration time**; inner workers (embedding/evaluation/alert delivery) wrap
+  submissions with `TenantContext.wrap`.
+- **Results and SSE layer**: any task ID never triggers an external Provider
+  query; the result owner quadruple (tenant/collection/owner/receipt) is
+  persisted in the V82 evidence tables; Provider callbacks follow
+  "verify signature → receipt → replay → authoritative query"; SSE re-checks
+  ACL on **every delivery**, so revocation stops pushes immediately (see
+  [SSE protocol](SSE-PROTOCOL.md#81-多租户逐次授权wp8)).
+- **Modes and guards**: `rag.tenant.mode=SINGLE` (default, fixed to `default`)
+  or `STRICT` (principal bound to a tenant); under SINGLE, startup verifies all
+  credential rows are `default` and creating a non-`default` tenant is refused,
+  backed by the fail-closed `TenantModeGuard`.
+  **Single-tenant mode with RLS off is not multi-tenancy**: SINGLE is only the
+  compatibility base, `tenant_id` is an ordinary column rather than a security
+  boundary, and row-level isolation holds only under `STRICT` with a passing
+  `TenantRlsVerifier` startup check and a `NOSUPERUSER NOBYPASSRLS` application
+  role.
+- **Lifecycle layer (WP9)**: V83 adds the `rag_tenant.deleted_at` soft-delete
+  marker as pure transactional DDL; `TenantLifecycleService` puts the tenant row
+  and its initial principal inside one `TransactionTemplate.execute` so a failed
+  principal insert cannot leave a "ghost tenant"; `TenantLifecycleController` is
+  a platform-side endpoint guarded by `PlatformCapability.TENANT_LIFECYCLE`
+  (actor whitelist + audit) and fails closed when root credentials are not
+  configured. The `ACTIVE/SUSPENDED/DISABLED` state machine only tightens.
+  The authentication projection carries `tenantId/tenantStatus`, and
+  `rag_api_key` rows inherit the principal's tenant binding;
+  `GET /api/v1/rag/auth/me` and the WebUI sidebar display the current tenant,
+  mode and status in read-only form, with no tenant switcher or invite code.
+
+- **Tenant quota layer (WP10)**: `rag_tenant_quota_policy` /
+  `rag_tenant_quota_window` / `rag_tenant_quota_reservation` (V84,
+  PLATFORM_GLOBAL, no RLS) add tenant-level DAY/MONTH aggregate hard thresholds
+  on top of the existing per-principal budget. The tenant reservation shares the
+  principal reservation transaction; settle/release recover the tenant window
+  from the DB by `reservation_id` (no ThreadLocal dependency on async threads).
+  Usage events explicitly carry `tenant_id` (V76 column + WP10 write), and the
+  recorder thread pool propagates context through `TenantContext.wrap`;
+  `GET /api/v1/rag/usage?tenantScope=current` aggregates only the current tenant,
+  fails closed without context, and never accepts arbitrary tenant IDs.
+
+Configuration and runtime semantics are in
+[configuration](configuration.md#多租户配置-wp5); security boundaries and residual
+risks are in [security boundary](security-boundary.md).
+
 ## Appendix: Tech Stack
 
 | Component | Technology | Version |

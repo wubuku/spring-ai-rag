@@ -16,9 +16,11 @@ import org.springframework.context.annotation.Profile;
 
 import java.util.List;
 import java.util.UUID;
+import com.springairag.core.tenant.TenantScopedJob;
 
 @Component
 @Profile("postgresql")
+@TenantScopedJob
 public class EmbeddingProfileBackfillWorker {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddingProfileBackfillWorker.class);

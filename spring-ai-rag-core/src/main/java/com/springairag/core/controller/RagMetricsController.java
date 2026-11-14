@@ -177,12 +177,35 @@ public class RagMetricsController {
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to,
             @RequestParam(required = false) String principalId,
+            @RequestParam(required = false) String tenantScope,
             HttpServletRequest request) {
         // Batch 825: this used to be
         //   `if (usageQueryService == null) throw new IllegalStateException(...)`.
         // `LlmUsageQueryService` is an unconditional @Service, so the branch was a
         // claim about deployment shape no running application can satisfy. Same rule
         // Batch 822 applied to the other throwing guards.
+        if (tenantScope == null || tenantScope.isBlank()) {
+            // 旧调用方（含 4 参契约测试）继续走 4 参重载，不返回 tenantTotals。
+            return usageQueryService.query(
+                    ChatPrincipal.from(request),
+                    from,
+                    to,
+                    principalId);
+        }
+        return usageQueryService.query(
+                ChatPrincipal.from(request),
+                from,
+                to,
+                principalId,
+                tenantScope);
+    }
+
+    /** 向后兼容：旧调用方不带 tenantScope（不返回租户聚合）。 */
+    public LlmUsageResponse getUsage(
+            String from,
+            String to,
+            String principalId,
+            HttpServletRequest request) {
         return usageQueryService.query(
                 ChatPrincipal.from(request),
                 from,

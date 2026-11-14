@@ -16,6 +16,9 @@
     "search": "Search",
     "settings": "Settings"
   },
+  "tenant": {
+    "readOnly": "Tenant: {{tenantId}} · {{mode}} · {{status}} (read-only)"
+  },
   "unlock": {
     "title": "Unlock Management Console",
     "rootApiKey": "Root API Key",

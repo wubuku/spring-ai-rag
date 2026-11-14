@@ -322,7 +322,7 @@ def run_blackbox(args: argparse.Namespace, version: str) -> None:
         check(ranks == list(range(1, len(ranks) + 1)),
               "Flyway installed_rank 连续且无重复", str(ranks[:5]))
         check(versions == expected_versions,
-              "Flyway 按 V1..V73 顺序全部应用",
+              "Flyway 按 V1..最新版本顺序全部应用",
               f"history={versions[:5]}...{versions[-3:]} expected={expected_versions[-3:]}")
         check(not failed, "Flyway 无失败迁移记录", str(failed[:3]))
 

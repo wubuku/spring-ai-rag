@@ -38,7 +38,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V74
+- [x] Flyway 迁移范围为 V1–V84
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖
@@ -71,7 +71,7 @@ OpenAI 兼容服务发布还应显式运行 `scripts/verify-release.sh --with-op
   内嵌模块 jar 与本地 `target` 字节一致、运行时依赖坐标唯一，以及 WebUI `dist/`、
   已提交内嵌产物和 jar 内文件三者逐字节一致；jar 内残留旧 hash 资源会直接失败。
 - `--with-jar-blackbox` 用打包产出的 fat jar（不是 IDE 或 `spring-boot:run`）启动真实
-  PostgreSQL + mock provider：断言 Flyway V1..V73 按序全部成功且无失败记录、
+  PostgreSQL + mock provider：断言 Flyway V1..最新版本按序全部成功且无失败记录、
   `/actuator/health` UP、Collection/Document/embedding/search 可用、`/webui` 返回入口页、
   `theme-init.js`/favicon 的 content-type 与内容正确（静态脚本不会退化成 HTML），
   SIGTERM 后进入 graceful shutdown。需要本机 PostgreSQL（`psql`）。

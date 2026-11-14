@@ -23,9 +23,9 @@ public class LlmUsageRepository {
                 prompt_tokens, completion_tokens, total_tokens, usage_available,
                 input_cost_per_million, output_cost_per_million, pricing_available,
                 configured_cost, cost_available, cost_unit, duration_ms,
-                started_at, completed_at)
+                started_at, completed_at, tenant_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?)
+                    ?, ?, ?)
             ON CONFLICT (logical_execution_id, call_ordinal) DO NOTHING
             """;
 
@@ -86,6 +86,7 @@ public class LlmUsageRepository {
                     set(statement, 22, event.durationMs());
                     set(statement, 23, Timestamp.from(event.startedAt()));
                     set(statement, 24, Timestamp.from(event.completedAt()));
+                    set(statement, 25, event.tenantId());
                 });
         return affected == 1;
     }

@@ -23,6 +23,8 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import com.springairag.core.tenant.TenantContext;
+import com.springairag.core.tenant.TenantScopedJob;
 
 /** Event-driven、lease 化且有界的 durable notification worker。 */
 @Component
@@ -30,6 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
         prefix = "rag.notifications.delivery",
         name = "enabled",
         havingValue = "true")
+@TenantScopedJob
 public class AlertNotificationDeliveryWorker {
 
     private static final Logger log =
@@ -100,7 +103,7 @@ public class AlertNotificationDeliveryWorker {
             return;
         }
         try {
-            executor.execute(this::dispatchLoop);
+            executor.execute(TenantContext.wrap(this::dispatchLoop));
         } catch (RejectedExecutionException error) {
             dispatchScheduled.set(false);
             if (!shuttingDown.get()) {
@@ -147,14 +150,17 @@ public class AlertNotificationDeliveryWorker {
                 continue;
             }
             try {
-                executor.execute(() -> {
+                // WP8：告警投递表是 PLATFORM_GLOBAL（WP1 裁决），无 claim 行 tenant；
+                // 但调度器仍按租户私有事件触发逐租户 scope，内层任务必须显式携带快照，
+                // 避免线程池复用时丢失 GUC 绑定。不得伪造 default 作为载荷 tenant。
+                executor.execute(TenantContext.wrap(() -> {
                     try {
                         process(claimed, leaseToken);
                     } finally {
                         slots.release();
                         wakeUp();
                     }
-                });
+                }));
             } catch (RejectedExecutionException error) {
                 slots.release();
                 log.warn("Claimed alert notification could not be submitted; "

@@ -6,9 +6,11 @@ import com.springairag.core.embeddingjob.EmbeddingJobRepository;
 import com.springairag.core.embeddingjob.EmbeddingJob;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import com.springairag.core.tenant.TenantScopedJob;
 
 /** 有界收敛处理账本与旧 Job 状态的后台任务。 */
 @Component
+@TenantScopedJob
 public class DocumentProcessingHousekeeping {
 
     private final DocumentProcessingRunRepository runRepository;

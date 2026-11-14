@@ -5,7 +5,7 @@
 
 ## 结论
 
-| PostgreSQL | 官方镜像 | pgvector | 全量迁移 V1–V73 | 核心 gated 套件 | 状态 |
+| PostgreSQL | 官方镜像 | pgvector | 全量迁移 V1–V84 | 核心 gated 套件 | 状态 |
 |---|---|---|---|---|---|
 | 15 | `pgvector/pgvector:pg15`（15.19） | 0.8.7 | 通过 | 62 tests 通过 | 支持 |
 | 16 | `pgvector/pgvector:pg16`（16.15） | 0.8.7 | 通过 | 完整 gated 套件 nightly + 62 tests 通过 | 支持（默认） |
@@ -33,7 +33,7 @@
 每个版本都会执行：
 
 1. **全量迁移**：按 Flyway 顺序执行 `spring-ai-rag-core/src/main/resources/db/migration/`
-   下 V1–V73 全部脚本，确认没有版本相关语法/行为差异；
+   下 V1–V84 全部脚本，确认没有版本相关语法/行为差异；
 2. **扩展版本**：`SELECT extversion FROM pg_extension WHERE extname='vector'`，并断言
    ≥ 0.5.0；
 3. **HNSW**：创建 `USING hnsw (embedding vector_cosine_ops)` 索引，校验索引定义；

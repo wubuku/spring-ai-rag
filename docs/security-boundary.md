@@ -235,6 +235,7 @@ The script creates a temporary database and mock provider and deletes both on ex
 - Multiple keys of one managed principal share ownership (files are owned per principal, not per key). That is design semantics, not cross-tenant access.
 - Audit logs and export artifacts are data-plane data (governed by deployment permissions); the confidentiality boundary for application logs and metrics is in §9.
 - With authentication disabled there is no principal concept; internal paths (plugins/tools) operate globally. That is the established behavior for isolated environments.
+- Multi-tenancy (WP8 stage) uses two SSE authorization layers: connection-time ACL plus re-check on **every delivery**. If a key is revoked or expires while subscribed, the next event delivery is dropped and the old subscription receives nothing. `RagDocumentController.embedDocumentStream` is wired; remaining SSE entrypoints adopt `TenantAuthorizedSsePublisher` incrementally (current implementation surface is request-scoped short streams with no long-lived subscription registry, so the exposure is bounded). Any task ID never triggers an external Provider query; results are authoritative via the owner quadruple (tenant/collection/owner/receipt) in the V82 evidence tables.
 
 ---
 
@@ -481,3 +482,39 @@ returns to Unlock; a new tab stays locked; an injected in-page script scanning
 storage/globals/form values finds no credential; logout clears storage; no request
 URL or `Referer` contains the credential, which appears only in the `X-API-Key`
 request header.
+
+## 10.5 Tenant quota and usage-aggregation boundary (WP10)
+
+- `rag_tenant_quota_policy/window/reservation` (V84) are PLATFORM_GLOBAL tables:
+  no RLS, keyed by `tenant_id`, read/written only through the registered access
+  points (`TenantQuotaPolicyRepository` / `TenantQuotaLedger`), and every read
+  must carry an explicit `tenant_id` predicate.
+- The tenant aggregate threshold is a second capacity control applied after the
+  tenant is already resolved — it is not a tenant-resolution mechanism. Without
+  context the threshold applies to the `default` tenant (so a dropped context
+  cannot bypass the limit); the upstream fail-closed contract separately
+  rejects context-less requests.
+- `GET /api/v1/rag/usage?tenantScope=current` aggregates only the tenant of the
+  request context and never accepts an arbitrary tenant ID parameter.
+  Cross-tenant enumeration is a platform capability, not exposed through the
+  business usage endpoint. A missing tenant context fails closed (403);
+  omitting `tenantScope` keeps the old shape (no `tenantTotals`), for backward
+  compatibility.
+
+## 11. Tenant lifecycle platform-side boundary (WP9)
+
+- The `/api/v1/rag/tenants` endpoints are platform-side: only an actor with a
+  configured environment root credential, root authentication, and a place in the
+  `rag.tenant.lifecycle-actors` whitelist may call them. When the root credential
+  is not configured the endpoints fail closed (403); no static or database
+  credential can create a tenant.
+- Every lifecycle call is audited as a capability event (actor / target tenant /
+  allowed or not) without tenant-private content. Rejecting a non-`default`
+  tenant creation in SINGLE mode records a `REJECT` audit entry as well.
+- After a tenant is `DISABLED` or soft-deleted (`deleted_at`), the tenant-status
+  subquery in the authentication projection returns no row and
+  `PrincipalTenantResolver` fails closed (treated as non-`ACTIVE`), so existing
+  credentials stop resolving immediately.
+- The business data plane has no cross-tenant entry point: credential tables and
+  the tenant lifecycle platform table do not use RLS but are only accessed on the
+  authentication and platform-management paths, never on business queries.

@@ -390,6 +390,14 @@ check_scripts_and_commands() {
       scripts/verify-container-image.sh \
       scripts/verify-openapi-breaking-change.mjs \
       scripts/verify-no-pessimistic-locks.sh \
+      scripts/verify-multi-tenancy-rls.sh \
+      scripts/verify-multi-tenancy-guc.sh \
+      scripts/verify-multi-tenancy-endpoint-guard.sh \
+      scripts/verify-multi-tenancy-jobs.sh \
+      scripts/verify-multi-tenancy-wp8.sh \
+      scripts/verify-multi-tenancy-lifecycle.sh \
+      scripts/verify-multi-tenancy-quota.sh \
+      scripts/verify-multi-tenancy-redteam.sh \
       scripts/run-claude-grok.sh; do
     [[ -x "$script" ]] || {
       echo "Documented script is missing or not executable: $script" >&2
@@ -561,5 +569,82 @@ run_check "Git whitespace" check_git_whitespace
 run_check "Added-line secret scan" check_added_secrets
 run_check "Pessimistic-lock gate self-test" check_pessimistic_lock_self_test
 run_check "Gates can fail closed" check_gates_can_fail
+
+# WP5：租户 GUC 三件套与非事务 JDBC 现场清单静态门禁。
+check_multi_tenant_guc_gate() {
+  local script="scripts/verify-multi-tenancy-guc.sh"
+  [[ -x "$script" ]] || {
+    echo "Multi-tenancy GUC gate is missing or not executable: $script" >&2
+    return 1
+  }
+  "$script"
+}
+run_check "Multi-tenancy GUC gate" check_multi_tenant_guc_gate
+
+# WP6：端点 tenant+ACL 声明覆盖与业务包平台边界静态门禁。
+check_multi_tenant_endpoint_guard_gate() {
+  local script="scripts/verify-multi-tenancy-endpoint-guard.sh"
+  [[ -x "$script" ]] || {
+    echo "Multi-tenancy endpoint guard gate is missing or not executable: $script" >&2
+    return 1
+  }
+  "$script"
+}
+run_check "Multi-tenancy endpoint guard gate" check_multi_tenant_endpoint_guard_gate
+
+# WP7：后台任务租户作用域收敛静态门禁。
+check_multi_tenant_jobs_gate() {
+  local script="scripts/verify-multi-tenancy-jobs.sh"
+  [[ -x "$script" ]] || {
+    echo "Multi-tenancy jobs gate is missing or not executable: $script" >&2
+    return 1
+  }
+  "$script"
+}
+run_check "Multi-tenancy jobs gate" check_multi_tenant_jobs_gate
+
+# WP8：结果 owner / 回调权威 / SSE 逐次授权 / 内层 worker 租户传播静态门禁。
+check_multi_tenant_wp8_gate() {
+  local script="scripts/verify-multi-tenancy-wp8.sh"
+  [[ -x "$script" ]] || {
+    echo "Multi-tenancy WP8 gate is missing or not executable: $script" >&2
+    return 1
+  }
+  "$script"
+}
+run_check "Multi-tenancy WP8 gate" check_multi_tenant_wp8_gate
+
+# WP9：租户生命周期 / 原子创建 / 凭据绑定 / 平台 capability 守卫 / WebUI 只读展示静态门禁。
+check_multi_tenant_lifecycle_gate() {
+  local script="scripts/verify-multi-tenancy-lifecycle.sh"
+  [[ -x "$script" ]] || {
+    echo "Multi-tenancy lifecycle gate is missing or not executable: $script" >&2
+    return 1
+  }
+  "$script"
+}
+run_check "Multi-tenancy lifecycle gate" check_multi_tenant_lifecycle_gate
+
+# WP10：租户级配额 / 用量硬阈值静态门禁。
+check_multi_tenant_quota_gate() {
+  local script="scripts/verify-multi-tenancy-quota.sh"
+  [[ -x "$script" ]] || {
+    echo "Multi-tenancy quota gate is missing or not executable: $script" >&2
+    return 1
+  }
+  "$script"
+}
+run_check "Multi-tenancy quota gate" check_multi_tenant_quota_gate
+
+# WP11：红队矩阵静态门禁（10 维负向证据齐全 + 总入口自登记）。
+check_multi_tenant_redteam_gate() {
+  local script="scripts/verify-multi-tenancy-redteam.sh"
+  [[ -x "$script" ]] || {
+    echo "Multi-tenancy red-team gate is missing or not executable: $script" >&2
+    return 1
+  }
+  "$script"
+}
+run_check "Multi-tenancy red-team gate" check_multi_tenant_redteam_gate
 
 echo "Project documentation verification: $PASS_COUNT checks passed."

@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import com.springairag.core.tenant.TenantScopedJob;
 
 /**
  * Scheduled chat history cleanup service (TTL expiration policy).
@@ -25,6 +26,7 @@ import java.util.UUID;
  * Default retention: 30 days, configurable via {@code rag.memory.message-ttl-days}.
  */
 @Service
+@TenantScopedJob
 public class ChatHistoryCleanupService {
 
     private static final Logger log = LoggerFactory.getLogger(ChatHistoryCleanupService.class);

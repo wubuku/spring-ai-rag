@@ -11,6 +11,8 @@ import com.springairag.core.security.ApiCapabilitySupport;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.security.ApiRoutePolicy;
 import com.springairag.core.service.CollectionIdentityResolver;
+import com.springairag.core.config.RagProperties;
+import com.springairag.core.tenant.TenantMode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -41,12 +43,15 @@ public class ApiKeyIdentityController {
 
     private final EnvironmentRootCredentialResolver rootCredentialResolver;
     private final CollectionIdentityResolver collectionIdentityResolver;
+    private final RagProperties ragProperties;
 
     public ApiKeyIdentityController(
             EnvironmentRootCredentialResolver rootCredentialResolver,
-            CollectionIdentityResolver collectionIdentityResolver) {
+            CollectionIdentityResolver collectionIdentityResolver,
+            RagProperties ragProperties) {
         this.rootCredentialResolver = rootCredentialResolver;
         this.collectionIdentityResolver = collectionIdentityResolver;
+        this.ragProperties = ragProperties;
     }
 
     @Operation(summary = "Inspect the current authenticated API principal")
@@ -95,6 +100,11 @@ public class ApiKeyIdentityController {
                 environmentRoot
                         ? ROOT_CAPABILITIES
                         : ApiCapabilitySupport.fullCapabilities());
+        // WP9：WebUI 只读展示当前租户与模式。默认按 root / legacy-static 的
+        // default + ACTIVE 填充；数据库凭据分支会用认证投影覆盖 tenantId/tenantStatus。
+        response.setTenantId("default");
+        response.setTenantMode(ragProperties.getTenant().getMode().name());
+        response.setTenantStatus("ACTIVE");
         Object authenticated = request.getAttribute(
                 ApiKeyAuthFilter.AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE);
         if (ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY.equals(type)) {
@@ -131,6 +141,10 @@ public class ApiKeyIdentityController {
         response.setPrincipalRole(principal.getRole().name());
         response.setCapabilities(ApiCapabilitySupport.effectiveForRole(
                 principal.getRole(), principal.getCapabilities()));
+        response.setTenantId(principal.getTenantId() == null
+                ? "default" : principal.getTenantId());
+        response.setTenantStatus(principal.getTenantStatus() == null
+                ? "DISABLED" : principal.getTenantStatus());
         if (ApiKeyCollectionAccess.isUnrestricted(principal)) {
             response.setCollectionAccessMode(CollectionAccessMode.UNRESTRICTED);
             response.setAllowedCollectionKeys(null);

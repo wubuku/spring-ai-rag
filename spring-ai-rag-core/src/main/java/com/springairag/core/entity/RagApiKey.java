@@ -71,6 +71,10 @@ public class RagApiKey implements ApiAccessPolicy {
     @Column(nullable = false, length = 20)
     private ApiKeyRole role = ApiKeyRole.NORMAL;
 
+    /** WP9：绑定的租户 id（V80 起该列存在；认证先于租户解析，凭据表无 RLS）。 */
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId = "default";
+
     public RagApiKey() {
     }
 
@@ -126,4 +130,6 @@ public class RagApiKey implements ApiAccessPolicy {
     public void setRevokedAt(LocalDateTime revokedAt) { this.revokedAt = revokedAt; }
     public LocalDateTime getRetireAt() { return retireAt; }
     public void setRetireAt(LocalDateTime retireAt) { this.retireAt = retireAt; }
+    public String getTenantId() { return tenantId; }
+    public void setTenantId(String tenantId) { this.tenantId = tenantId; }
 }

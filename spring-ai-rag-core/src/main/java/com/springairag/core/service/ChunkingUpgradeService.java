@@ -33,9 +33,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import com.springairag.core.tenant.TenantScopedJob;
 
 /** 保留真实旧身份，在provider成功后原子升级关键词和活动Profile向量。 */
 @Service
+@TenantScopedJob
 public class ChunkingUpgradeService implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(ChunkingUpgradeService.class);
     private static final String SUPPORTED =

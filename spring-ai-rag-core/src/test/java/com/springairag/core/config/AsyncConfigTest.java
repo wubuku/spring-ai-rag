@@ -16,7 +16,7 @@ class AsyncConfigTest {
     @Test
     void getAsyncExecutor_createsThreadPool() {
         RagProperties props = new RagProperties();
-        AsyncConfig config = new AsyncConfig(props);
+        AsyncConfig config = new AsyncConfig(props, () -> java.util.List.of("default"));
 
         Executor executor = config.getAsyncExecutor();
 
@@ -31,7 +31,7 @@ class AsyncConfigTest {
         props.getAsync().setMaxPoolSize(8);
         props.getAsync().setQueueCapacity(50);
 
-        AsyncConfig config = new AsyncConfig(props);
+        AsyncConfig config = new AsyncConfig(props, () -> java.util.List.of("default"));
         ThreadPoolTaskExecutor executor = (ThreadPoolTaskExecutor) config.getAsyncExecutor();
 
         assertEquals(2, executor.getCorePoolSize());
@@ -41,7 +41,7 @@ class AsyncConfigTest {
     @Test
     void getAsyncExecutor_usesPropertyDefaults() {
         RagProperties props = new RagProperties();
-        AsyncConfig config = new AsyncConfig(props);
+        AsyncConfig config = new AsyncConfig(props, () -> java.util.List.of("default"));
 
         ThreadPoolTaskExecutor executor =
                 (ThreadPoolTaskExecutor) config.getAsyncExecutor();
@@ -60,7 +60,7 @@ class AsyncConfigTest {
     @Test
     void getAsyncUncaughtExceptionHandler_logsTheFailure() throws Exception {
         RagProperties props = new RagProperties();
-        AsyncConfig config = new AsyncConfig(props);
+        AsyncConfig config = new AsyncConfig(props, () -> java.util.List.of("default"));
 
         AsyncUncaughtExceptionHandler handler =
                 config.getAsyncUncaughtExceptionHandler();

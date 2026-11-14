@@ -2,6 +2,8 @@
 
 > [English](MULTI_TENANCY_IMPLEMENTATION_PLAN.md) | [中文](MULTI_TENANCY_IMPLEMENTATION_PLAN.md)
 >
+> 实施进度（唯一账本，2026-11-13 起在隔离 worktree 维护）：[MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md](MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md)
+>
 > 状态：**复审 APPROVE + 二次挑战 4 项已处理；因 N1 属核心决策表述矛盾已归零重跑连续 `3/3`；待用户确认，禁止开始业务代码实现**。
 >
 > 语言：**仅中文**。本文是 `docs/drafts/` 活动规划，待规划批准后实施；不提供英文对照版，
@@ -115,7 +117,7 @@
 
 | # | 事实 | 近距离证据 |
 |---|---|---|
-| 1 | Flyway 当前 `V1–V74`，69 张表；**唯一约束与索引不写汇总数**（`CREATE UNIQUE INDEX`、列级 inline `UNIQUE`、表级 `UNIQUE(...)` / `CONSTRAINT ... UNIQUE` / `ADD CONSTRAINT ... UNIQUE` 多种形式，`grep` 口径易漂移），**以 WP1 逐张表清单为权威**；55 个 `JdbcTemplate` 文件、22 个 JPA Repository | `spring-ai-rag-core/src/main/resources/db/migration/`；[AGENTS.md](../../AGENTS.md) §2；[外部经验](MULTI_TENANCY_EXTERNAL_LESSONS.md) §4.9 / §7.3 |
+| 1 | Flyway 当前 `V1–V80`，70 张表（69 存量 + V75 `rag_tenant`）；**唯一约束与索引不写汇总数**（`CREATE UNIQUE INDEX`、列级 inline `UNIQUE`、表级 `UNIQUE(...)` / `CONSTRAINT ... UNIQUE` / `ADD CONSTRAINT ... UNIQUE` 多种形式，`grep` 口径易漂移），**以 WP1 逐张表清单为权威**；55 个 `JdbcTemplate` 文件、22 个 JPA Repository | `spring-ai-rag-core/src/main/resources/db/migration/`；[AGENTS.md](../../AGENTS.md) §2；[外部经验](MULTI_TENANCY_EXTERNAL_LESSONS.md) §4.9 / §7.3 |
 | 2 | 认证过滤器只做 key 校验，无租户字段；`AuthenticatedApiPrincipal` 无 `tenantId` | [`ApiKeyAuthFilter.java`](../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/ApiKeyAuthFilter.java)、[`AuthenticatedApiPrincipal.java`](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/AuthenticatedApiPrincipal.java) |
 | 3 | `RagSecurityProperties.enabled=false` 默认无认证；STRICT 模式必须显式拒绝此组合 | [`RagSecurityProperties.java`](../../spring-ai-rag-core/src/main/java/com/springairag/core/properties/RagSecurityProperties.java)、[安全边界](../security-boundary-zh-CN.md) |
 | 4 | ACL 在凭证白名单上，范围求交与越权拒绝在 `ApiKeyCollectionAccess` | [`ApiKeyCollectionAccess.java`](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)、`V24__api_key_allowed_collections.sql` |

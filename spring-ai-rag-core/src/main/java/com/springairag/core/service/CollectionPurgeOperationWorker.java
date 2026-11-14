@@ -14,10 +14,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 import java.util.UUID;
+import com.springairag.core.tenant.TenantScopedJob;
 
 /** 使用持久化 CAS 租约协调多实例 Collection Purge 分批执行。 */
 @Component
 @Profile("postgresql")
+@TenantScopedJob
 public class CollectionPurgeOperationWorker {
 
     private static final Logger log = LoggerFactory.getLogger(CollectionPurgeOperationWorker.class);

@@ -1,5 +1,6 @@
 package com.springairag.core.embeddingjob;
 
+import com.springairag.core.tenant.TenantContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -31,17 +32,32 @@ public class EmbeddingJobWakeupPublisher {
                     .stream()
                     .anyMatch(WakeupSynchronization.class::isInstance);
             if (!alreadyRegistered) {
+                // WP7：捕获租户上下文；afterCommit 显式传播到回调线程作用域。
                 TransactionSynchronizationManager.registerSynchronization(
-                        new WakeupSynchronization());
+                        new WakeupSynchronization(TenantContext.current()));
             }
             return;
         }
-        publishNow();
+        publishNow(TenantContext.current());
     }
 
-    private void publishNow() {
+    private void publishNow(TenantContext tenantSnapshot) {
         try {
-            eventPublisher.publishEvent(new EmbeddingJobsAvailableEvent());
+            if (tenantSnapshot == null) {
+                eventPublisher.publishEvent(new EmbeddingJobsAvailableEvent());
+                return;
+            }
+            TenantContext previous = TenantContext.current();
+            try {
+                TenantContext.set(tenantSnapshot);
+                eventPublisher.publishEvent(new EmbeddingJobsAvailableEvent());
+            } finally {
+                if (previous == null) {
+                    TenantContext.clear();
+                } else {
+                    TenantContext.set(previous);
+                }
+            }
         } catch (RuntimeException e) {
             // 数据库任务已经可靠落盘，低频恢复扫描会处理本次通知失败。
             log.warn("Failed to publish embedding job wake-up event", e);
@@ -51,9 +67,15 @@ public class EmbeddingJobWakeupPublisher {
     private final class WakeupSynchronization
             implements TransactionSynchronization {
 
+        private final TenantContext tenantSnapshot;
+
+        private WakeupSynchronization(TenantContext tenantSnapshot) {
+            this.tenantSnapshot = tenantSnapshot;
+        }
+
         @Override
         public void afterCommit() {
-            publishNow();
+            publishNow(tenantSnapshot);
         }
     }
 }

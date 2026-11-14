@@ -223,6 +223,7 @@ python3 scripts/verify-security-boundary.py
 - 同一 managed principal 的多个 key 共享归属（文件按 principal 而非按 key），这是设计语义，不是越权。
 - 审计日志、导出产物属于数据面（按部署侧权限管理）；应用日志与指标的保密边界见 §9。
 - 未启用认证时没有 principal 概念，插件/工具调用等内部路径按全量处理；这是隔离环境的既有行为。
+- 多租户（WP8 阶段）SSE 授权是「建连时 ACL + 每次**投递**重查」双层：key 在订阅存续期间被撤销或过期后，下一次事件投递即被丢弃，旧订阅不再收事件；`RagDocumentController.embedDocumentStream` 已接线，其余 SSE 入口按 `TenantAuthorizedSsePublisher` 逐步收口（当前实现面为 request-scoped 短流，无长期订阅注册表，风险敞口有限）。任意 task ID 不触发外部 Provider 查询，结果以 V82 证据表的 owner 四元组（tenant/collection/owner/receipt）为权威。
 
 ---
 
@@ -447,3 +448,28 @@ python3 scripts/verify-webui-credential-security-e2e.py
 真实后端 + 真实 Chromium：解锁后扫描全部存储面；刷新回到 Unlock；新标签页
 保持锁定；页面内注入脚本扫描存储/全局/表单读不到凭据；登出后存储清空；
 所有请求 URL 与 `Referer` 不含凭据，凭据只出现在 `X-API-Key` 请求头。
+
+## 租户级配额与用量聚合边界（WP10）
+
+- `rag_tenant_quota_policy/window/reservation`（V84）是 PLATFORM_GLOBAL 表：
+  无 RLS、按 `tenant_id` 键控，仅由 `TenantQuotaPolicyRepository` /
+  `TenantQuotaLedger` 登记访问点读写，任何读取都必须显式带 `tenant_id` 谓词。
+- 租户聚合阈值是「在租户已经确定之后」的第二层容量控制，不是租户解析手段；
+  无上下文时按 `default` 租户施加阈值（不让漏上下文绕过阈值），
+  上游无上下文 fail-closed 契约另外负责拒绝请求。
+- `GET /api/v1/rag/usage?tenantScope=current` 只按请求上下文中的租户聚合，
+  不接受任意租户 ID 参数；跨租户枚举属平台能力，不经业务用量端点开放。
+  无租户上下文时 fail-closed（403），默认（不带 `tenantScope`）不返回
+  `tenantTotals`，向后兼容。
+
+## 租户生命周期平台面边界（WP9）
+
+- `/api/v1/rag/tenants` 系列端点属于平台管理面：只允许「已配置环境 root 凭据 +
+  通过 root 认证 + 在 `rag.tenant.lifecycle-actors` 白名单内」的 actor；
+  root 未配置时 fail-closed（403），任何静态/数据库凭据都不能创建租户。
+- 每次生命周期调用都记 capability 审计（actor / 目标租户 / 允许与否），
+  不记录租户私有正文；SINGLE 模式拒绝创建非 `default` 租户时同样记 `REJECT` 审计。
+- 租户状态 `DISABLED` 与软删（`deleted_at`）之后，认证投影里的租户状态子查询返回空，
+  `PrincipalTenantResolver` 一律 fail-closed（视为非 `ACTIVE`），旧凭据立刻失效。
+- 业务数据面没有跨租户入口：凭据表与租户生命周期平台表都不开 RLS，
+  但只在认证与平台管理路径访问，不参与业务查询链路。

@@ -53,11 +53,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import com.springairag.core.tenant.TenantScopedJob;
 
 /**
  * preview-first、owner-scoped、单事务的 Collection 永久清理协调器。
  */
 @Service
+@TenantScopedJob
 public class CollectionPurgeService {
 
     private static final SecureRandom RANDOM = new SecureRandom();

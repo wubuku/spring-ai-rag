@@ -333,3 +333,13 @@ PDF 导入与 Embedding 进度端点仍使用各自的进度事件，不采用 C
 OpenAI 兼容流的请求、scope 和错误信封见
 [中文 REST API](rest-api-zh-CN.md#openai-chat-completions-兼容预览) /
 [English REST API](rest-api.md#openai-chat-completions-compatibility-preview)。
+
+### 8.1 多租户逐次授权（WP8）
+
+多租户模式下，进度 SSE 与 Chat SSE 的每**一次**事件投递都会重查当前 API Key 的 ACL
+（`TenantSseAccessChecker.canRead`）：若 key 在订阅存续期间被撤销或过期，下一次投递即
+被丢弃，旧订阅不会再收到事件。这是建连时授权之外的运行时防线——建连成功不代表
+后续事件永远可收。`rag.tenant.mode=STRICT` 下，事件归属租户与当前上下文租户不一致
+的事件同样被丢弃。实现见 `TenantAuthorizedSsePublisher`，负向契约见
+`TenantWp8ContractTest`；当前生产接线为 `RagDocumentController.embedDocumentStream`
+的进度推送，其他 SSE 入口按同一组件逐步收口，不设长期订阅注册表。

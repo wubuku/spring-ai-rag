@@ -905,7 +905,11 @@ public class ApiKeyManagementService {
                         ApiCapabilitySupport.effectiveForRole(
                                 p.getRole(),
                                 ApiCapabilitySupport.normalizePersisted(
-                                        p.getCapabilities()))))
+                                        p.getCapabilities())),
+                        // WP9：凭据绑定的租户与租户状态随认证投影带出，
+                        // STRICT 模式由 PrincipalTenantResolver 校验，不再走 default 兜底。
+                        p.getTenantId(),
+                        tenantStatusOrNonActive(p.getTenantStatus())))
                 .orElse(null);
         if (principal != null) {
             touchLastUsed(principal.getPrincipalId(), now);
@@ -945,7 +949,30 @@ public class ApiKeyManagementService {
                 ApiCapabilitySupport.effectiveForRole(
                         principal.getRole(),
                         ApiCapabilitySupport.normalizePersisted(
-                                principal.getCapabilities())));
+                                principal.getCapabilities())),
+                // WP9：绑定租户与租户状态（查不到租户行 → 非 ACTIVE → STRICT fail-closed）。
+                principal.getTenantId(),
+                tenantStatusOrNonActive(currentTenantStatus(principal.getTenantId())));
+    }
+
+    /** 读取绑定租户的当前状态；租户行不存在（软删/缺失）一律按非 ACTIVE 处理。 */
+    private String currentTenantStatus(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return null;
+        }
+        try {
+            return jdbcTemplate.queryForObject(
+                    "SELECT status FROM rag_tenant WHERE tenant_id = ? AND deleted_at IS NULL",
+                    String.class, tenantId);
+        } catch (RuntimeException error) {
+            log.warn("读取租户状态失败（按非 ACTIVE 处理）：tenant={}", tenantId, error);
+            return null;
+        }
+    }
+
+    /** 租户状态缺省一律降级为非 ACTIVE（fail-closed，不落回 default/ACTIVE）。 */
+    private static String tenantStatusOrNonActive(String status) {
+        return status == null || status.isBlank() ? "DISABLED" : status;
     }
 
     private void touchLastUsed(String principalId, LocalDateTime now) {
@@ -979,6 +1006,9 @@ public class ApiKeyManagementService {
         credential.setEnabled(true);
         credential.setRole(principal.getRole());
         credential.setAllowedCollectionIds(principal.getAllowedCollectionIds());
+        // WP9：凭据行继承 principal 的租户绑定；认证投影按 p.tenantId 解析，
+        // rag_api_key.tenant_id 不再悄悄落回 default（STRICT 下会串租户）。
+        credential.setTenantId(principal.getTenantId());
         credential.setCreatedAt(now);
         return credential;
     }
