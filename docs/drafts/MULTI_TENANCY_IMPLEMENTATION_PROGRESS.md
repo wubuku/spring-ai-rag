@@ -552,7 +552,7 @@ SINGLE→STRICT 切换 / 回退 / 备份恢复执行语义落档。详细演练�
 | `node scripts/verify-dependency-versions.mjs` | **已运行（绿）** | 55 依赖 / 1658 管理版本 |
 | `node scripts/verify-integration-test-switches.mjs` | **已运行（绿）** | 42 开关 / 299 测试 / 42 类全部有 run path |
 | `mvn -o -pl spring-ai-rag-core -am clean test` | **已运行（绿）** | **8587 tests, 0 failures, 0 errors, 306 skipped** |
-| 文档绝对路径检查（升级演练草稿） | **已运行（绿）** | `rg '/Users/yangjiefeng'` 无匹配，跨仓引用为相对路径文本 |
+| 文档绝对路径检查（升级演练草稿） | **已运行（绿）** | 以用户主目录绝对路径字面量为模式的 `rg` 复核零命中，跨仓引用为相对路径文本 |
 
 ### WP11 提交
 
@@ -799,7 +799,7 @@ hash 以 `git log -1 --oneline` 为准；本账本不内嵌自身提交 hash，�
   可复用 SQL/骨架）/ §5（AI-Native-BOS 术语分层、承重列、函数静默失效）/ §6 影响清单 /
   §7 复现命令完整落档；实施期 WP3/WP5/WP9/WP10/WP11 逐包引用其教训（GUC 三件套、
   幽灵租户、异步上下文、RLS 负向、凭据表不启用 RLS 等）。三份 `docs/drafts/` 文档对参考
-  项目材料**全部使用相对路径文本**，无绝对路径；复核命令 `rg '/Users/yangjiefeng' docs/drafts/MULTI_TENANCY*.md` 无匹配。
+  项目材料**全部使用相对路径文本**，无绝对路径；以用户主目录绝对路径字面量为模式对三份 `MULTI_TENANCY*.md` 做 `rg` 复核，零命中。
 - **Git 交付边界**：按用户/监控方指令「未获明确授权不 merge/push」，本分支停在
   `feature/multi-tenancy-phase1` 本地提交，等待用户最终批准后按 delivery-workflow §8
   合并回 `main` 并推送；本任务不主动观察对抗式审核 agent 状态。
