@@ -9,6 +9,11 @@
 > **配套方案**：[多租户平台技术路线与可插拔方案](MULTI_TENANCY_TECH_ROADMAP.md)
 > —— 方向已定、代码未实施。
 >
+> **实施完成（2026-11-14）**：方向 C 已按
+> [多租户化实施规划](MULTI_TENANCY_IMPLEMENTATION_PLAN.md) 全部实施并合并回 `main`
+> （合并提交 `1ad305c7`）。本文第 5 节缺口 3–6 的处置结果与逐包证据见
+> [实施进度账本](MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md)；本文其余内容为历史调研快照。
+>
 > **补充考古（2026-11-13）**：[多租户外部参考经验教训](MULTI_TENANCY_EXTERNAL_LESSONS.md)
 > 记录后续发现的 `../seedance-research/` 与 `../AI-Native-Business-Operating-System/` 经验；
 > 本文第 3–7 节的现状结论不变，实施前须一并阅读补充考古第 6 节影响清单。
@@ -206,7 +211,12 @@ RLS 迁移、`TenantContext` 或租户管理面。
 |------|------|------|
 | 2026-11-04 | 缺口 1、2 关闭：文件、评估历史、反馈增加 owner/collection 归属并按 principal 过滤；遗留无归属行对受限 key fail-closed，可选用回填脚本 | `V71__security_boundary_ownership.sql`、`scripts/verify-security-upgrade-path.py`、`scripts/backfill-security-ownership.py` |
 | 2026-11-04 | 技术方向确定：选 C（单仓单 schema、表永远租户化、单租户固定 `default` 的 N=1、多租户强制 RLS；插件只插解析/任务分发/运营模块）；**代码未实施** | [多租户平台技术路线与可插拔方案](MULTI_TENANCY_TECH_ROADMAP.md) |
+| 2026-11-14 | 方向 C 实施完成并合并 `main`（`1ad305c7` + V85 纠正 `cc181480`）：缺口 3 由 STRICT 模式强制 `rag.security.enabled=true` 关闭（SINGLE 保持现状）；缺口 4 由 RLS `ENABLE+FORCE` + 启动 verifier 兜底；缺口 5 `collection_key` 改 `(tenant_id, collection_key)`；缺口 6 租户级配额聚合落地（V84）。全量 STRICT 集成 44/44、SINGLE 回归 8587/0/0 | [实施进度账本](MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md) |
 
 截至本节记录，仍未实现：缺口 3（默认无认证）、4（ACL 只到 Collection、无 RLS 兜底）、
 5（`collection_key` 全局唯一）、6（无租户层级/租户级配额）。第 2 节的方向只是实施输入，
 不是完成状态。
+
+**2026-11-14 后注**：上一段为 2026-11-04 时点快照；四个缺口已随实施完成关闭
+（逐项处置见本节新增行），当前真实能力以代码与
+[实施进度账本](MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md) 为准。

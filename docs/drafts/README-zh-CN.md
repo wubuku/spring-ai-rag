@@ -50,7 +50,14 @@
   已覆盖/需补强/新增盲点三张影响清单与复现命令；**方向裁决不变、代码未实施**，仅中文。
 - [多租户化实施规划](MULTI_TENANCY_IMPLEMENTATION_PLAN.md)：在现状调研、技术路线与
   外部经验教训考古之上形成的冻结规划；含 12 个工作包、一次性验收矩阵、三轮检查 `3/3` 记录；
-  仅中文，**待用户批准，禁止提前开始业务实现**。
+  仅中文。**已实施完毕**：WP1–WP12 于 2026-11-14 完成并合并回 `main`
+  （合并提交 `1ad305c7`，含 V85 纠正迁移 `cc181480`）。
+- [多租户化实施进度](MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md)：实施期间唯一进度账本；
+  记录各工作包验证台账、红绿证据、已知未验项与恢复入口；仅中文。
+- [多租户表归属清单](MULTI_TENANCY_TABLE_CATALOG.md)：69 张表逐张裁决
+  （租户私有 / 平台全局 / 凭据），机器可读源为 `TenantTableCatalog.java`；仅中文。
+- [多租户升级演练](MULTI_TENANCY_UPGRADE_REHEARSAL.md)：大表 `CONCURRENTLY` 锁窗口、
+  分批回填与 STRICT→SINGLE 回退前置条件记录；仅中文。
 - [知识图谱模块评审](KNOWLEDGE_GRAPH_MODULE_REVIEW.md)：对一份外部知识图谱方案的批评性评审、
   与本仓真实实现的逐条对齐及分阶段落地路径；仅中文，待 D1–D3 决策收敛后再决定是否转为正式文档。
 

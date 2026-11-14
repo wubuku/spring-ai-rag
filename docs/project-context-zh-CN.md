@@ -483,6 +483,14 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 
 ## 7. 安全与 Collection ACL
 
+本仓自 2026-11-14 起内置多租户隔离底座（方案 C：单仓单 schema、表永远租户化）。
+`rag.tenant.mode` 默认 `SINGLE`——所有请求固定解析到 `default` 租户，行为与升级前
+零变化；`STRICT` 模式启用真实租户解析、PostgreSQL RLS（`ENABLE+FORCE` +
+`NOBYPASSRLS` 应用角色）与启动 `TenantRlsVerifier` 校验，凭据绑定租户，
+`TenantModeGuard` 保证 SINGLE 模式下所有凭据 `tenant_id='default'` 且拒绝创建非
+`default` 租户。配置见 [configuration-zh-CN.md](configuration-zh-CN.md) 的
+「多租户配置」一节；实施记录见 `docs/drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md`。
+
 当前支持两种兼容运行模式。
 
 独立服务 MVP 模式由 `RAG_ROOT_API_KEY` 显式启用：

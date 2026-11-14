@@ -622,6 +622,18 @@ See [rest-api.md](rest-api.md) and [SSE-PROTOCOL.md](SSE-PROTOCOL.md).
 
 ## 7. Security And Collection ACL
 
+Since 2026-11-14 the repository ships a built-in multi-tenancy isolation base
+(route C: single repository, single schema, tenant-aware tables from day one).
+`rag.tenant.mode` defaults to `SINGLE` — every request resolves to the fixed
+`default` tenant with zero behavior change from before the upgrade. `STRICT`
+mode enables real tenant resolution backed by PostgreSQL RLS (`ENABLE+FORCE`
+with a `NOBYPASSRLS` application role) plus a startup `TenantRlsVerifier`;
+credentials are tenant-bound, and `TenantModeGuard` guarantees that in SINGLE
+mode every credential has `tenant_id='default'` and non-`default` tenant
+creation is refused. See the multi-tenancy configuration section in
+[configuration.md](configuration.md) and the implementation ledger in
+`docs/drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md`.
+
 Two compatible operating modes are available.
 
 Standalone-service MVP mode is enabled explicitly by `RAG_ROOT_API_KEY`:

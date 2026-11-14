@@ -54,18 +54,27 @@ Active plans are listed here and in `docs/index*`.
   (Chinese only): the 2026-11-04 route decision (single repository and schema, tenant-aware
   tables from day one, single-tenant as fixed-`default` N=1, mandatory RLS for multi-tenant),
   EE/CE archaeology, four implementation phases, six decisions, and three risks. The direction
-  is decided; the code is not implemented.
+  was decided and has since been implemented: all 12 work packages completed 2026-11-14 and
+  merged to `main` (`1ad305c7`, plus the V85 corrective migration `cc181480`). See the
+  implementation plan and progress ledger below for the authoritative record.
 - [Multi-tenancy external reference lessons (supplementary archaeology)](MULTI_TENANCY_EXTERNAL_LESSONS.md)
   (Chinese only): a read-only archaeology supplement covering `../seedance-research/`
   (a runnable multi-tenancy PoC plus production checklists) and
   `../AI-Native-Business-Operating-System/` (real-PostgreSQL migration rehearsal); it fixes the
   relative-path convention, lists what the roadmap already covers, what needs strengthening, and
-  the new blind spots, and gives reproduction commands. The direction decision is unchanged and the
-  code is not implemented.
+  the new blind spots, and gives reproduction commands. The direction decision was unchanged
+  and the implementation has since landed (see the plan and progress ledger below).
 - [Multi-tenancy implementation plan](MULTI_TENANCY_IMPLEMENTATION_PLAN.md)
   (Chinese only): frozen plan built on the status audit, technical roadmap, and external
   reference archaeology; 12 work packages, a one-shot acceptance matrix, and a `3/3`
-  planning-check record. Awaiting user approval; implementation must not start early.
+  planning-check record. **Implemented**: WP1–WP12 completed 2026-11-14 and merged to `main`
+  (`1ad305c7`, plus the V85 corrective migration `cc181480`).
+- [Multi-tenancy progress ledger](MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md),
+  [table catalog](MULTI_TENANCY_TABLE_CATALOG.md), and
+  [upgrade rehearsal](MULTI_TENANCY_UPGRADE_REHEARSAL.md) (Chinese only): the per-package
+  verification ledger with known-unverified items, the 69-table ownership adjudication
+  (machine-readable source `TenantTableCatalog.java`), and big-table `CONCURRENTLY` /
+  rollback-precondition rehearsal notes.
 - [Knowledge-graph module review](KNOWLEDGE_GRAPH_MODULE_REVIEW.md) (Chinese only): critical
   review of an external knowledge-graph proposal, item-by-item alignment with this
   repository's real implementation, and a phased landing path; it becomes a formal document
