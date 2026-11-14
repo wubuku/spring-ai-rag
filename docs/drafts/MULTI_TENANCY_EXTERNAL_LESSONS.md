@@ -56,13 +56,13 @@
 | 团队布局路径（本文正文用法） | 本机实际位置（相对本仓库根） |
 |---|---|
 | `../AI-Native-Business-Operating-System/…` | `../AI-Native-Business-Operating-System/…`（当前已同级，可直接解析） |
-| `../seedance-research/…` | `../../../.hermes/workspace/seedance-research/…` |
+| `../seedance-research/…` | 「用户级 workspace 挂载点/seedance-research/」（相对层级：仓库根向上两级后再下钻；按团队布局归一后即 `../seedance-research/…`） |
 | `../Blueforce-Tech-Inc/BlueCortexEE/` | `../../Blueforce-Tech-Inc/BlueCortexEE/` |
 | `../Blueforce-Tech-Inc/BlueCortexCE/` | `../../Blueforce-Tech-Inc/BlueCortexCE/` |
 
 - 相对 `docs/drafts/` 目录直接解析时，在仓库根相对路径前补 `../`：
   例如 `../seedance-research/…` → `../../../seedance-research/…`；本机 seedance 对应
-  `../../../../../.hermes/workspace/seedance-research/…`。
+  「用户级 workspace 挂载点/seedance-research/」的相对层级，不使用绝对路径字面量，也不写具体个人目录名。
 - 若后续把仓库迁移进团队统一布局，只需删除上表"本机实际位置"列的偏差行，正文无需改动。
 - **所有外部路径都是行内代码文本，不是仓内 Markdown 链接**。这是刻意的：文档门禁
   `scripts/verify-project-docs.sh` 会把跨仓 Markdown 链接判为「链接逃出仓库」。
