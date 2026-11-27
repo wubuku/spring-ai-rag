@@ -68,6 +68,7 @@
 | 多模型与外部 `models.json` | [multi-model-external-config-zh-CN.md](docs/multi-model-external-config-zh-CN.md) |
 | 测试 / 质量默认 / 发版 | [testing-guide-zh-CN.md](docs/testing-guide-zh-CN.md) · [quality-defaults-zh-CN.md](docs/quality-defaults-zh-CN.md) · [release-checklist-zh-CN.md](docs/release-checklist-zh-CN.md) |
 | 验证基线 / 每个结论由哪条门禁证明 / 当前结论与已知缺口 / 红了先看哪里 | [verification-baseline-zh-CN.md](docs/verification-baseline-zh-CN.md)（[EN](docs/verification-baseline.md)） |
+| 多租户（SINGLE/STRICT、RLS/GUC、生命周期/配额、当前结论与未验项） | [configuration-zh-CN.md](docs/configuration-zh-CN.md#多租户配置-wp5) · [architecture-zh-CN.md](docs/architecture-zh-CN.md#9-多租户隔离架构wp2wp10) · [验证基线 §9.1](docs/verification-baseline-zh-CN.md#91-多租户当前结论2026-11-14) · [实施进度账本](docs/drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md) |
 | 接手近期验证交付，确认哪些已做、哪些没做 | [验证基线总览](docs/verification-baseline-zh-CN.md#9-当前验证结论2026-11-05) · [后续改进 TODO](docs/TODO-zh-CN.md) |
 | 规划 / 实施 / 验收 / Git 交付 | [delivery-workflow-zh-CN.md](docs/delivery-workflow-zh-CN.md)（[EN](docs/delivery-workflow.md)） |
 | 部署 / 境内网络 / 排障 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) · [china-network-guide-zh-CN.md](docs/china-network-guide-zh-CN.md) · [troubleshooting-zh-CN.md](docs/troubleshooting-zh-CN.md) |

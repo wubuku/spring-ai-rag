@@ -1,7 +1,9 @@
 # 多租户平台技术路线与可插拔方案
 
-> 状态：**技术方向已定，代码尚未实施**。本文是设计输入与决策记录，不是"已实现"声明。
-> 当前真实能力仍以 [MULTI_TENANCY_STATUS.md](MULTI_TENANCY_STATUS.md) 为准。
+> 状态：**技术方向已定并已实施**（WP1–WP12 于 2026-11-14 完成并合并 `main`：`1ad305c7`，
+> V85 纠正 `cc181480`）。本文保留为设计输入与决策记录；当前能力以代码、长青文档与
+> [实施进度账本](MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md)为准。
+> 当前真实能力以[验证基线 §9.1](../verification-baseline-zh-CN.md#91-多租户当前结论2026-11-14)与[实施进度账本](MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md)为准；[MULTI_TENANCY_STATUS.md](MULTI_TENANCY_STATUS.md) 为历史调研快照。
 >
 > **补充考古（2026-11-13）**：[多租户外部参考经验教训](MULTI_TENANCY_EXTERNAL_LESSONS.md)
 > 补充考察 `../seedance-research/`（可运行多租户 PoC）与

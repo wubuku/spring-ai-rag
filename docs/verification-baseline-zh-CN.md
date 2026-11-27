@@ -292,6 +292,28 @@ CI 在 WebUI job 的 `Committed static build matches a fresh build` 步骤执行
 - 本表“未实测”只表示本轮本地没有重新跑，**不等于通过**；nightly 的“绿”
   以最近一次成功运行为准。
 
+### 9.1 多租户当前结论（2026-11-14）
+
+- **实现状态**：方向 C（单仓单 schema、表永远租户化）已实施完成。
+  `rag.tenant.mode` 默认 `SINGLE`（固定 `default`，N=1 兼容底座）；
+  `STRICT` 为真实隔离模式。迁移 V75–V85；WP1–WP12 完成并合并 `main`
+  （`1ad305c7`，V85 纠正 `cc181480`）。权威设计与红绿证据见
+  [实施进度账本](drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md)、
+  [实施规划](drafts/MULTI_TENANCY_IMPLEMENTATION_PLAN.md)、
+  [表归属清单](drafts/MULTI_TENANCY_TABLE_CATALOG.md)与
+  [升级演练](drafts/MULTI_TENANCY_UPGRADE_REHEARSAL.md)；行为契约见
+  [多租户配置](configuration-zh-CN.md#多租户配置-wp5)与
+  [架构 §9](architecture-zh-CN.md#9-多租户隔离架构wp2wp10)。
+- **本地实测证据**：八道 `verify-multi-tenancy-*.sh` 专项门禁 +
+  `verify-project-docs.sh` **24/24**；9 组 STRICT 真实 PostgreSQL 集成
+  **44/44**；SINGLE 全量 `mvn clean test` **8595/0/0**；V74→V84
+  双路径升级 schema 逐字一致；HNSW+RLS 基准 `rlsQueryMs=8 / noRls=5`、
+  开销 `1.6×` ≤ `3×` 门槛。
+- **隔离边界**：`SINGLE` 关闭 RLS **不等于**可做多租户；只有 `STRICT` +
+  `TenantRlsVerifier` 启动校验通过 + 应用角色 `NOSUPERUSER NOBYPASSRLS`
+  才提供行级隔离。无租户上下文一律 fail-closed。
+- **已知未验项**：见 §10 的多租户行；未验项不冒充通过。
+
 ## 10. 已知红 / 跳过 / 未实施（及原因）
 
 | 项 | 状态 | 原因 / 边界 | 落档位置 |
@@ -305,6 +327,11 @@ CI 在 WebUI job 的 `Committed static build matches a fresh build` 步骤执行
 | `alerts-real` / `rerank-document-diversity-real` | 跳过 | 需要人工告警与 rerank fixture，nightly 不自动跑 | 本文 §5 |
 | 真实 embedding goldenset、手工 release、CodeQL、容器 | 本机未实测 | 付费/CI 专属/需完整发版环境 | 本文 §2、§5 |
 | 样本量 | 偏小 | 32 文档 / 48 查询，bootstrap 区间偏宽；分组结论只作方向 | [quality-defaults-zh-CN.md](quality-defaults-zh-CN.md) |
+| 多租户：生产级大表在线索引重建 / 分批回填 | 未实测 | V78 `CONCURRENTLY` 挂事故后迁移链改为纯事务 DDL；百万级 `rag_embeddings` 的在线锁窗口需运维独占库专项演练，不以空库结果外推 | [升级演练](drafts/MULTI_TENANCY_UPGRADE_REHEARSAL.md) |
+| 多租户：混合语料 Recall@K | 未测 | 基准用 2000 行合成向量且 planner 走 Seq Scan，只证明 ANN 索引可用与延迟门槛；全局 HNSW top-k 被其他租户占满的风险需生产规模复测 | [实施进度账本](drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md) |
+| 多租户：真实外部 Provider 回调 | 未走通 | WP8 以计数器/探针证明「任意 task ID 不触发外部 Provider」，真实回调模拟属红队后续项 | [实施进度账本](drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md) |
+| 多租户：真实 LLM 本地运行时 HTTP E2E | 跳过 | `--with-local-runtime` 需 `.env` 凭据与独占 18081 端口；显式 opt-in，不以 Mock 冒充 | 本文 §6 |
+| 多租户 SSE 接线范围 | 单端点 | 逐次授权已实现，但当前仅 `embedDocumentStream` 一个 request-scoped 短流接线，无长期订阅注册表 | [SSE 协议](SSE-PROTOCOL.md#81-多租户逐次授权wp8) |
 
 ## 11. 下一步还能往哪打（候选，未承诺）
 

@@ -303,6 +303,31 @@ CI runs the same rebuild and directory comparison in the WebUI job step
 - “Not measured” in these tables means this round did not re-run it locally and
   **does not mean pass**. A nightly “green” means the latest successful run.
 
+### 9.1 Multi-Tenancy Conclusions (2026-11-14)
+
+- **Implementation status**: direction C (single repository, single schema,
+  tenant-aware tables from day one) is implemented. `rag.tenant.mode` defaults to
+  `SINGLE` (fixed `default`, N=1 compatibility base); `STRICT` is the real
+  isolation mode. Migrations V75-V85; WP1-WP12 completed and merged to `main`
+  (`1ad305c7`, V85 correction `cc181480`). Authoritative design and red/green
+  evidence: [progress ledger](drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md),
+  [implementation plan](drafts/MULTI_TENANCY_IMPLEMENTATION_PLAN.md),
+  [table catalog](drafts/MULTI_TENANCY_TABLE_CATALOG.md), and
+  [upgrade rehearsal](drafts/MULTI_TENANCY_UPGRADE_REHEARSAL.md); behavior
+  contracts: [multi-tenancy configuration](configuration.md#multi-tenancy-configuration-wp5)
+  and [architecture section 9](architecture.md#9-multi-tenancy-isolation-architecture-wp2wp10).
+- **Measured locally**: eight `verify-multi-tenancy-*.sh` static gates plus
+  `verify-project-docs.sh` **24/24**; nine groups of STRICT real-PostgreSQL
+  integration tests **44/44**; SINGLE full `mvn clean test` **8595/0/0**;
+  V74-to-latest dual-path upgrade produces byte-identical normalized schema;
+  HNSW+RLS benchmark `rlsQueryMs=8 / noRls=5`, overhead `1.6x` within the `3x` gate.
+- **Isolation boundary**: turning RLS off under `SINGLE` **does not** make a
+  deployment multi-tenant. Row-level isolation exists only under `STRICT`, after
+  `TenantRlsVerifier` startup checks pass and the application role is
+  `NOSUPERUSER NOBYPASSRLS`. Missing tenant context always fails closed.
+- **Known unverified items**: see the multi-tenancy rows in section 10; nothing
+  unverified is claimed as passing.
+
 ## 10. Known Red / Skipped / Not Implemented (And Why)
 
 | Item | Status | Reason / boundary | Where documented |
@@ -316,6 +341,11 @@ CI runs the same rebuild and directory comparison in the WebUI job step
 | `alerts-real` / `rerank-document-diversity-real` | Skipped | need manual alert and rerank fixtures; nightly does not run them | section 5 here |
 | Real-embedding goldenset, manual release, CodeQL, container | Not measured locally | paid / CI-only / needs a full release environment | sections 2 and 5 here |
 | Sample size | Small | 32 documents / 48 queries make bootstrap intervals wide; group conclusions are directional only | [quality-defaults.md](quality-defaults.md) |
+| Multi-tenancy: production-scale online index rebuild / batched backfill | Not measured | After the V78 `CONCURRENTLY` hang, the migration chain is transaction-only DDL; online lock windows on a million-row `rag_embeddings` need a dedicated rehearsal on an ops-owned database, not extrapolation from an empty DB | [upgrade rehearsal](drafts/MULTI_TENANCY_UPGRADE_REHEARSAL.md) |
+| Multi-tenancy: mixed-corpus Recall@K | Not measured | The benchmark uses 2,000 synthetic rows with a sequential scan; it proves ANN index usability and the latency gate only. Global HNSW top-k crowding by other tenants still needs a production-scale retest | [progress ledger](drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md) |
+| Multi-tenancy: real external Provider callback | Not exercised | WP8 uses counters/probes to prove that an arbitrary task ID does not trigger a Provider; a real callback simulation remains a red-team follow-up | [progress ledger](drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md) |
+| Multi-tenancy: real-LLM local-runtime HTTP E2E | Skipped | `--with-local-runtime` needs `.env` credentials and a dedicated port 18081; explicitly opt-in, never substituted with mocks | section 6 here |
+| Multi-tenancy SSE wiring scope | Single endpoint | Per-delivery reauthorization is implemented, but only `embedDocumentStream` is wired as a request-scoped short stream; there is no long-lived subscription registry | [SSE protocol](SSE-PROTOCOL.md#81-多租户逐次授权wp8) |
 
 ## 11. Where To Push Next (Candidates, Not Commitments)
 

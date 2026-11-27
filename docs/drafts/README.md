@@ -72,8 +72,9 @@ Active plans are listed here and in `docs/index*`.
 - [Multi-tenancy progress ledger](MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md),
   [table catalog](MULTI_TENANCY_TABLE_CATALOG.md), and
   [upgrade rehearsal](MULTI_TENANCY_UPGRADE_REHEARSAL.md) (Chinese only): the per-package
-  verification ledger with known-unverified items, the 69-table ownership adjudication
-  (machine-readable source `TenantTableCatalog.java`), and big-table `CONCURRENTLY` /
+  verification ledger with known-unverified items, the 76-table ownership adjudication
+  (48 tenant-private / 24 platform-global / 4 credential; machine-readable source
+  `TenantTableCatalog.java`), and big-table `CONCURRENTLY` /
   rollback-precondition rehearsal notes.
 - [Knowledge-graph module review](KNOWLEDGE_GRAPH_MODULE_REVIEW.md) (Chinese only): critical
   review of an external knowledge-graph proposal, item-by-item alignment with this

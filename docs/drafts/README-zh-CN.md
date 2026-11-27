@@ -43,19 +43,21 @@
   缺口 1、2 已在 V71 关闭，保留为持续跟踪现状的调研稿。
 - [多租户平台技术路线与可插拔方案](MULTI_TENANCY_TECH_ROADMAP.md)：记录 2026-11-04 的路线
   决策（单仓单 schema、表永远租户化、单租户为固定 `default` 的 N=1、多租户强制 RLS）、
-  EE/CE 考古、四阶段落地、六条决策与三大风险；**方向已定、代码未实施**，仅中文。
+  EE/CE 考古、四阶段落地、六条决策与三大风险；**方向已定并已实施**（WP1–WP12 于
+  2026-11-14 完成并合并 `main`，含 V85 纠正）；仅中文，当前能力以代码与长青文档为准。
 - [多租户外部参考经验教训（补充考古）](MULTI_TENANCY_EXTERNAL_LESSONS.md)：只读考古，
   补充考察 `../seedance-research/`（含可运行多租户 PoC 与生产 checklist）与
   `../AI-Native-Business-Operating-System/`（真实 PG 迁移演练）；含路径基准约定、
-  已覆盖/需补强/新增盲点三张影响清单与复现命令；**方向裁决不变、代码未实施**，仅中文。
+  已覆盖/需补强/新增盲点三张影响清单与复现命令；**方向裁决不变，实施已完成**（见下方
+  规划与进度账本）；仅中文。
 - [多租户化实施规划](MULTI_TENANCY_IMPLEMENTATION_PLAN.md)：在现状调研、技术路线与
   外部经验教训考古之上形成的冻结规划；含 12 个工作包、一次性验收矩阵、三轮检查 `3/3` 记录；
   仅中文。**已实施完毕**：WP1–WP12 于 2026-11-14 完成并合并回 `main`
   （合并提交 `1ad305c7`，含 V85 纠正迁移 `cc181480`）。
 - [多租户化实施进度](MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md)：实施期间唯一进度账本；
   记录各工作包验证台账、红绿证据、已知未验项与恢复入口；仅中文。
-- [多租户表归属清单](MULTI_TENANCY_TABLE_CATALOG.md)：69 张表逐张裁决
-  （租户私有 / 平台全局 / 凭据），机器可读源为 `TenantTableCatalog.java`；仅中文。
+- [多租户表归属清单](MULTI_TENANCY_TABLE_CATALOG.md)：76 张表逐张裁决
+  （租户私有 48 / 平台全局 24 / 凭据 4），机器可读源为 `TenantTableCatalog.java`；仅中文。
 - [多租户升级演练](MULTI_TENANCY_UPGRADE_REHEARSAL.md)：大表 `CONCURRENTLY` 锁窗口、
   分批回填与 STRICT→SINGLE 回退前置条件记录；仅中文。
 - [知识图谱模块评审](KNOWLEDGE_GRAPH_MODULE_REVIEW.md)：对一份外部知识图谱方案的批评性评审、
