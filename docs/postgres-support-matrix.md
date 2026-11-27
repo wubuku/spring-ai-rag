@@ -47,9 +47,15 @@ Each version runs:
    (`rag_collection.collection_key`, `rag_embedding_jobs.document_kind` /
    `chunker_version`, `rag_api_key.principal_id` / `credential_version`) have
    `attnotnull = true` after migration;
-7. **RLS fact**: the current schema enables **no RLS** and has no policies; tenant
-   isolation is enforced at the application layer. The matrix only confirms this has not
-   drifted with the PostgreSQL version — it is not a claim that RLS is supported.
+7. **RLS fact (post-V80/V82/V85 update)**: since V80/V82/V85 the schema enables
+   `ENABLE + FORCE ROW LEVEL SECURITY` with the canonical `tenant_isolation` policy on
+   48 `TENANT_PRIVATE` tables (24 `PLATFORM_GLOBAL` and 4 `CREDENTIAL` tables remain
+   RLS-free; `rag.tenant.mode=SINGLE` keeps RLS/verifier off by default, while `STRICT`
+   enforces them at startup via `TenantRlsVerifier`). Note: `scripts/verify-postgres-version-matrix.py`
+   still carries its pre-V80 no-RLS probe and has not yet been updated to per-table RLS
+   assertions; PG 16 RLS verification is currently covered by
+   `TenantRlsVerifierPostgresIntegrationTest`, `TenantRlsIsolationPostgresIntegrationTest`,
+   and `scripts/verify-multi-tenancy-rls.sh`.
 
 On top of that, the **core gated suites** cover the main retrieval and data-lifecycle paths:
 
@@ -79,8 +85,11 @@ only the core set above to avoid duplicated cost.
   tune them at runtime, so they are not a version difference.
 - PostgreSQL 18 image and core paths are verified, but 18 is not yet in the “full gated
   nightly” set; promoting 18 to default requires running the full suite first.
-- RLS: the repository currently has no RLS/policy. If RLS is introduced, the
-  “RLS not implicitly enabled” check must become per-table policy assertions.
+- RLS: V80/V82/V85 enable `ENABLE + FORCE ROW LEVEL SECURITY` and `tenant_isolation`
+  policies on 48 `TENANT_PRIVATE` tables (verified on PG 16 by the multi-tenancy gated
+  suites). Updating the legacy “RLS not implicitly enabled” check in
+  `scripts/verify-postgres-version-matrix.py` to per-table policy assertions across
+  PG 15/17/18 remains open.
 
 ## Reproducing locally
 

@@ -1667,7 +1667,7 @@ mvn -pl spring-ai-rag-core -am \
 抢占与崩溃接管在 `ChatSessionPostgresIntegrationTest`（`-Dchat.it.enabled=true`）中覆盖。
 语义说明见[多实例语义](multi-instance-semantics-zh-CN.md)。
 
-### 多租户真实 PostgreSQL 门控套件（WP2–WP9）
+### 多租户真实 PostgreSQL 门控套件（WP2–WP10）
 
 多租户各工作包的真实 PostgreSQL 套件各有独立 opt-in 开关，均由
 `./scripts/verify-gated-it.sh` 聚合运行；单独复跑某个套件时也可显式传参：

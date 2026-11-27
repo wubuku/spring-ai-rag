@@ -1,7 +1,7 @@
 # Security Boundaries and Tenant Isolation
 
-> Applies to `1.0.0` (Flyway `V71`).  
-> Related: [REST API authentication](rest-api-zh-CN.md#认证), [configuration](configuration-zh-CN.md), [testing guide](testing-guide-zh-CN.md).
+> Applies to `1.0.0` (core ownership baseline Flyway `V71`; multi-tenancy extensions `V75–V85`).
+> Related: [REST API authentication](rest-api.md#authentication), [configuration](configuration.md), [testing guide](testing-guide.md).
 
 This page records the data-plane authorization boundary, the gaps that were fixed, conclusions on input attack surfaces, and how the boundary is verified. It is not an exhaustive security inventory; it pins down **paths that actually allowed cross-tenant access** and the regression entry points that keep them closed.
 

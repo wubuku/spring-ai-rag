@@ -35,7 +35,7 @@
 | `mvn test` | 全模块单元与契约测试通过；OpenAPI 形状与 WebUI 路由契约不漂移 | 111.2s | JDK 21；不需要数据库（契约测试显式关闭 Flyway） | `.verification/ci/mvn-test.log`、`target/surefire-reports/` |
 | `mvn -f demos/demo-basic-rag/pom.xml test` | demo 的配置绑定不遮蔽 core 配置，环境变量不会静默失效 | 2.6s | JDK 21 | demo 的 `application.yml` 与 `RagProperties` 绑定 |
 | `./scripts/verify-project-tests.sh` | 76 项仓库门禁通过（可见性、接线、静态契约、WebUI 规范、自测） | 45.6s | Node、`rg`、Maven surefire 报告 | 脚本输出的第一个 `FAIL`；第 4 节逐项 |
-| `./scripts/verify-project-docs.sh` | 17 项文档门禁通过（链接、双语结构、翻译、代码真相、脚本登记、密钥、空白） | 4.2s | Node、`rg`、git | 第 4 节里的 `verify-*` 文档项与失败文件名 |
+| `./scripts/verify-project-docs.sh` | 24 项文档门禁通过（链接、双语结构、翻译、代码真相、脚本登记、密钥、空白及多租户专项门禁） | 4.2s | Node、`rg`、git | 第 4 节里的 `verify-*` 文档项与失败文件名 |
 | Flyway 迁移清单 | 迁移文件名格式、版本连续且无重复 | <1s | shell、`find` | `spring-ai-rag-core/src/main/resources/db/migration/` |
 | OpenAPI 破坏性变更 | 启动 demo 取真实 `/v3/api-docs`，新增可选字段不算破坏 | 未实测 | JDK 21、PostgreSQL、demo jar | `/tmp/openapi-app.log`、`target/openapi-baseline` 差异 |
 | `npx tsc -b` | WebUI 类型检查通过 | 未单测 | Node、依赖安装 | `tsc` 报错文件与行号 |

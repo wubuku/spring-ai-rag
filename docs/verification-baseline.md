@@ -39,7 +39,7 @@
 | `mvn test` | all module unit and contract tests pass; OpenAPI shape and WebUI route contracts do not drift | 111.2s | JDK 21; no database (contract tests disable Flyway) | `.verification/ci/mvn-test.log`, `target/surefire-reports/` |
 | `mvn -f demos/demo-basic-rag/pom.xml test` | demo configuration binding does not shadow core settings; env vars do not silently stop working | 2.6s | JDK 21 | demo `application.yml` and `RagProperties` binding |
 | `./scripts/verify-project-tests.sh` | 76 repository gates pass (visibility, wiring, static contracts, WebUI policy, self-tests) | 45.6s | Node, `rg`, Maven surefire reports | the first `FAIL` in the log; section 4 for each gate |
-| `./scripts/verify-project-docs.sh` | 17 documentation gates pass (links, bilingual structure, translation, docs-code truth, script registration, secrets, whitespace) | 4.2s | Node, `rg`, git | the failing `verify-*` documentation item and file name |
+| `./scripts/verify-project-docs.sh` | 24 documentation gates pass (links, bilingual structure, translation, docs-code truth, script registration, secrets, whitespace, and multi-tenancy static gates) | 4.2s | Node, `rg`, git | the failing `verify-*` documentation item and file name |
 | Flyway migration inventory | migration file names, version continuity, and no duplicates | <1s | shell, `find` | `spring-ai-rag-core/src/main/resources/db/migration/` |
 | OpenAPI breaking change | starts the demo and compares the real `/v3/api-docs`; new optional fields are not breaking | not measured | JDK 21, PostgreSQL, demo jar | `/tmp/openapi-app.log`, baseline diff under `target/openapi-baseline` |
 | `npx tsc -b` | WebUI type checking passes | not measured separately | Node, installed dependencies | the reported `tsc` file and line |

@@ -1078,11 +1078,13 @@ hash，操作按 owner 隔离、可恢复且有界。审计日志不由普通擦
 
 多租户化按「列绑定 + RLS 兜底 + 请求链路显式上下文 + 后台任务传播」四层落地：
 
-- **Schema 层**：V75–V82 给 73 张业务表建立租户底座——租户私有表带
-  `tenant_id NOT NULL`、复合唯一/复合外键与 tenant-leading 索引，45 张（WP2–WP4）
-  外加 3 张 WP8 证据表启用 `ENABLE + FORCE ROW LEVEL SECURITY` 与规范 policy
-  `tenant_isolation`（绑定会话 GUC `app.current_tenant_id`）；平台全局表与凭据表
-  不开 RLS（凭据认证先于租户解析）。逐张裁决见
+- **Schema 层**：V75–V85 给 76 张存活业务表建立租户底座（租户私有 48 /
+  平台全局 24 / 凭据 4）——租户私有表带 `tenant_id NOT NULL DEFAULT 'default'`
+  （V85 补齐 V82 三张证据表的 `DEFAULT` 与复合索引）、复合唯一/复合外键与
+  tenant-leading 索引，全部 48 张租户私有表（45 张 WP2–WP4 + 3 张 WP8 证据表）
+  启用 `ENABLE + FORCE ROW LEVEL SECURITY` 与规范 policy `tenant_isolation`
+  （绑定会话 GUC `app.current_tenant_id`）；平台全局表与凭据表不开 RLS
+  （凭据认证先于租户解析，V80 起带 `tenant_id` 绑定列）。逐张裁决见
   `docs/drafts/MULTI_TENANCY_TABLE_CATALOG.md`。
 - **请求链路层**：`TenantContextFilter` 从 principal 快照解析 `TenantContext`；
   app DataSource 由 `TenantGucDataSource` 包装，每次借出连接设置 session 级

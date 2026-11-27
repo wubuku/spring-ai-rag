@@ -2,9 +2,10 @@
 
 > [English](MULTI_TENANCY_IMPLEMENTATION_PLAN.md) | [中文](MULTI_TENANCY_IMPLEMENTATION_PLAN.md)
 >
-> 实施进度（唯一账本，2026-11-13 起在隔离 worktree 维护）：[MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md](MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md)
+> 实施进度（唯一账本）：[MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md](MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md)
 >
-> 状态：**复审 APPROVE + 二次挑战 4 项已处理；因 N1 属核心决策表述矛盾已归零重跑连续 `3/3`；待用户确认，禁止开始业务代码实现**。
+> 状态：**已实施完成并合并 `main`**（2026-11-14，合并提交 `1ad305c7` + V85 纠正迁移 `cc181480`）。
+> 本文正文保留为 2026-11-13 冻结的规划基线（复审 APPROVE + 二次挑战 4 项处理 + 连续 `3/3` 检查）；当前真实实现状态见进度账本与长青文档。
 >
 > 语言：**仅中文**。本文是 `docs/drafts/` 活动规划，待规划批准后实施；不提供英文对照版，
 > 双语索引指向同一文件。
@@ -19,11 +20,7 @@
 > 工作区布局书写；本机实际落点与换算表见 [外部参考经验教训](MULTI_TENANCY_EXTERNAL_LESSONS.md) §2，
 > 冷读者按字面路径扑空时以换算表为准。
 >
-> 基线：`main` @ `b83b5584`（规划初稿）；考古补遗见 `b2e8de96`；Flyway `V1–V74`。
-> 本轮只改规划文档，未修改生产代码、配置、迁移或测试。
->
-> 进度账本（待创建）：`docs/drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md`；
-> 规划批准并开始首次生产改动前写入初始 checkpoint，届时本文与进度文档开头互相链接。
+> 规划初稿基线：`main` @ `b83b5584`；考古补遗见 `b2e8de96`；规划时 Flyway `V1–V74`（实施完成后为 `V1–V85`）。
 
 ---
 

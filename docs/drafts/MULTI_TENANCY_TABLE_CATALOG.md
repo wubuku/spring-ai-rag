@@ -117,17 +117,22 @@
 5. **`rag_audit_log` / `rag_client_error`** 平台遥测：写入点遍布认证前后，v1 无租户列；
    引入租户上下文后如需按租户审计，重新评估归属。
 
-## 4. WP8（V82）新增表与 RLS 覆盖口径
+## 4. WP8（V82）新增表与 V85 纠正口径
 
 V80 是已执行迁移，按仓纪律不回写；V82 的 3 张证据表自带
 `ENABLE + FORCE ROW LEVEL SECURITY` + 规范 policy `tenant_isolation`
 （USING/WITH CHECK 绑定 `app.current_tenant_id`）与终态断言。
+`V85__tenant_receipt_default_and_global_scope_correction.sql` 对 V82 三表前向补齐
+`ALTER COLUMN tenant_id SET DEFAULT 'default'`，并为 `rag_tenant_result_receipt`
+补齐 tenant-leading 复合索引 `idx_rag_tenant_result_receipt_scope (tenant_id, collection_id, owner_principal_id)`，
+同时内建终态断言确保三表保留 `ENABLE + FORCE RLS`。
 `scripts/verify-multi-tenancy-rls.sh` 的覆盖规则相应为「V80 清单 ⊆ catalog，
 catalog − V80 清单 == V82 三表」；`TenantRlsVerifier` 只校验 V80 清单，
-V82 表由 V82 自身断言 + `TenantWp8EvidencePostgresIntegrationTest` 真实 PG 集成校验。
+V82 表由 V82/V85 自身断言 + `TenantWp8EvidencePostgresIntegrationTest` /
+`TenantBaseMigrationPostgresIntegrationTest` 真实 PG 集成校验。
 
 
-## 5. WP10（V84）新增表与 PLATFORM_GLOBAL 口径
+## 5. WP10（V84）新增表与 PLATFORM_GLOBAL 口径（含 V85 断言）
 
 `V84__tenant_quota_windows.sql` 新增 3 张 PLATFORM_GLOBAL 表（第 74–76 行）：
 `rag_tenant_quota_policy`（策略）、`rag_tenant_quota_window`（DAY/MONTH
@@ -135,5 +140,6 @@ CAS 账本）、`rag_tenant_quota_reservation`（`reservation_id` → 租户窗�
 三者都按 `tenant_id` 键控，**无 RLS**：容量治理在「确定租户之后」执行，
 平台表读写由 `TenantQuotaPolicyRepository` / `TenantQuotaLedger` 登记访问点承担，
 任何查询必须显式带 `tenant_id` 谓词。V80 的 RLS 清单不因此扩表；
-`TenantRlsVerifier` 仍只校验 TENANT_PRIVATE 清单。V84 纯事务 DDL、无
-CONCURRENTLY，含三表与 `default` 租户种子的终态断言。
+`TenantRlsVerifier` 仍只校验 TENANT_PRIVATE 清单。V84 与 V85 均为纯事务 DDL、无
+CONCURRENTLY；V84 含三表与 `default` 租户种子的终态断言，V85 追加「三张配额表按
+`tenant_id` 键控且不得启用 RLS」的终态断言。

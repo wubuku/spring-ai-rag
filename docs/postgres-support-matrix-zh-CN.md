@@ -44,8 +44,14 @@
    （`rag_collection.collection_key`、`rag_embedding_jobs.document_kind` /
    `chunker_version`、`rag_api_key.principal_id` / `credential_version`）
    在迁移后 `attnotnull = true`；
-7. **RLS 事实**：当前 schema **没有启用 RLS**，也没有 policy；租户隔离在应用层完成。
-   矩阵只确认这一点没有随 PostgreSQL 版本漂移，而不是把 RLS 当作已支持能力。
+7. **RLS 事实（V80/V82/V85 后更新）**：自 V80/V82/V85 起，schema 已在 48 张
+   `TENANT_PRIVATE` 表上启用 `ENABLE + FORCE ROW LEVEL SECURITY` 及规范策略
+   `tenant_isolation`（24 张 `PLATFORM_GLOBAL` 表与 4 张 `CREDENTIAL` 表无 RLS；
+   默认 `rag.tenant.mode=SINGLE` 仍关闭 RLS/verifier，`STRICT` 模式在启动时由
+   `TenantRlsVerifier` 强制校验）。注意：`scripts/verify-postgres-version-matrix.py`
+   目前仍保留 V80 前的“无 RLS”探针，尚未更新为逐表策略断言；PG 16 上的真实 RLS
+   校验现由 `TenantRlsVerifierPostgresIntegrationTest`、
+   `TenantRlsIsolationPostgresIntegrationTest` 与 `scripts/verify-multi-tenancy-rls.sh` 承担。
 
 在此基础上，**核心 gated 套件**覆盖检索与数据生命周期的主要路径：
 
@@ -72,8 +78,10 @@ pg16 另有 nightly 完整 gated 套件（全部 33 个类），矩阵任务只�
 - `hnsw.ef_search` 等 GUC 由扩展注册；应用未在运行期修改这些参数，所以不构成版本差异。
 - PostgreSQL 18 的镜像与核心路径已验证，但尚未纳入“完整 gated 套件 nightly”；若要
   把 18 升为默认，需要先补跑完整套件。
-- RLS：仓库当前没有 RLS/policy。若未来引入 RLS，本矩阵的“RLS 未被隐式启用”检查需要
-  改成逐表策略断言。
+- RLS：V80/V82/V85 已在 48 张 `TENANT_PRIVATE` 表启用 `ENABLE + FORCE ROW LEVEL SECURITY`
+  与 `tenant_isolation` 策略（PG 16 由多租户门控集成测试验证）。将
+  `scripts/verify-postgres-version-matrix.py` 中旧版“RLS 未被隐式启用”检查改为覆盖
+  PG 15/17/18 的逐表策略断言，仍为待补项。
 
 ## 如何复跑
 

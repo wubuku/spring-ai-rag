@@ -10,15 +10,13 @@
 
 | 项 | 值 |
 |---|---|
-| 记录时间 | 2026-11-14 |
-| 工作区 | 隔离 worktree `../spring-ai-rag-multi-tenancy` |
-| 分支 | `feature/multi-tenancy-phase1` |
-| 基线 commit | `04e2e678`（本地 `main`，规划终审核 APPROVE 后的规划 checkpoint） |
-| 主工作区 | `../spring-ai-rag`，`main` @ `04e2e678`，创建 worktree 时 clean |
-| 工作区状态 | **WP12 已收口**：中英正式文档成对收口、「单租户关 RLS ≠ 多租户」写入配置/架构文档、陈旧迁移版本标签清理、端点 guard 启动期全覆盖（describe() 真实快照 + 人工平台白名单裁决）、总门禁 24/24、全量 `clean test` 8595/0/0、发布脚本 19/0/16。见 §2k |
-| 当前唯一 `in_progress` | 无（WP1–WP12 全部完成；等待实施审核与用户批准后合并回 `main`） |
-| 已完成工作包 | WP1–WP12；证据见 §2b/…/§2i/§2j/§2k |
-| 紧接着要做 | 用户批准后按 delivery-workflow §8 合并回 `main` 并推送；两处**已知未验项**如实留档（大表在线 CONCURRENTLY 演练属上线前运维项、`--with-local-runtime` HTTP E2E 需真实 LLM `.env`） |
+| 记录时间 | 2026-11-14（合并 `main` + V85 纠正后更新） |
+| 当前所在分支 | `main`（已合并 `feature/multi-tenancy-phase1`，合并提交 `1ad305c7`；V85 纠正提交 `cc181480`） |
+| 实施期工作区（历史） | 隔离 worktree `../spring-ai-rag-multi-tenancy`（基线 commit `04e2e678`） |
+| 交付状态 | **WP1–WP12 + V85 已全部合并 `main`**：Flyway `V1–V85`、总文档门禁 **24/24**、9 组 STRICT 真实 PG 集成 **44/44**、全 reactor `mvn clean test`（core 8595/0/0）、`verify-release.sh` **20/0/15**。详见 §2k 与 §6 |
+| 当前唯一 `in_progress` | 无（Phase 1 全部完成并已合并 `main`） |
+| 已完成工作包 | WP1–WP12 + V85 纠正迁移；证据见 §2a–§2k 与 §6 |
+| 已知未验项（留档，不冒充已验） | 生产级大表在线 `CONCURRENTLY` / 分批回填锁窗口演练、混合语料 Recall@K、真实外部 Provider 回调、`--with-local-runtime` 真实 LLM HTTP E2E |
 | 规划检查计数 | `3/3`（终审核 APPROVE，规划基线冻结；本阶段未触发归零） |
 | 实现检查计数 | `3/3`（WP12 实现检查中发现 2 个自纠缺陷 A/B，已修复并重跑取证；按 delivery-workflow §7 归零后重新计数，结论记于 §2k） |
 

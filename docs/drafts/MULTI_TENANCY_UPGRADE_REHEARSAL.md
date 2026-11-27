@@ -18,8 +18,8 @@
 `executeInTransaction=false`，加 `lock_timeout=30s` 后仍稳定复现「等并发事务」→ 30s 超时失败。
 Flyway 非事务迁移执行连接与 schema history 更新连接之间的并发事务无法由迁移脚本自身消除。
 因此 **CONCURRENTLY 退出迁移链**：迁移链一律纯事务内 DDL，保证全新库与 V74 存量库走同一条可重放路径；
-在线 `CONCURRENTLY` 只由 `scripts/verify-multi-tenancy-upgrade.sh` 在生产演练库（有真实大表数据、
-运维独占连接）上单独执行并单独记录锁窗口，不进 Flyway 版本链。
+在线 `CONCURRENTLY` 演练不进 Flyway 版本链，留作上线前运维独占连接专项演练（仓库尚未单独落盘
+在线大表 `CONCURRENTLY` 脚本；双路径 schema 一致性由 `scripts/verify-flyway-schema-paths.sh --early 74` 承担）。
 
 测试侧迁移连接仍保留 `options=-c lock_timeout=30s -c statement_timeout=900000` 作为连接级兜底。
 
@@ -77,6 +77,8 @@ PATH="/usr/local/opt/libpq/bin:$PATH" ./scripts/verify-flyway-schema-paths.sh --
 结论：V75–V84 全部为事务内可重放 DDL，**全新库与 V74 存量库收敛到同一 schema**；
 WP2 的 V78 `CONCURRENTLY` 挂死事故不再存在于版本链。`docs/drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md` §2a/§2b
 记录的 WP2/WP3 历史演练（迁移历史 79/80）已被本次 V84 演练覆盖，不删除历史事实。
+合并后新增的 `V85__tenant_receipt_default_and_global_scope_correction.sql` 同样为纯事务内 DDL
+（已由 `TenantBaseMigrationPostgresIntegrationTest` 5/5 与 9 组 STRICT 集成 44/44 验证）。
 
 **仍未运行 / 不冒充已验**：有真实大表数据（百万级 `rag_embeddings`）的 V74 演练库上的
 在线 `CONCURRENTLY` 锁窗口、每批 10k 行回填实测。本任务按规划 §7 的「真实依赖」门禁要求使用
@@ -110,7 +112,7 @@ PostgreSQL 16 + pgvector 可处置测试库；V74 双路径 schema/数据守恒�
 2. 数据库应用角色为 `NOSUPERUSER NOBYPASSRLS`，且不继承任何 `BYPASSRLS` 平台角色；
    `TenantRlsVerifier` 在 `TenantModeGuard` 的 STRICT 分支启动时逐项校验并 fail-closed。
 3. 所有 `TENANT_PRIVATE` 表 `ENABLE + FORCE ROW LEVEL SECURITY`，policy 绑定
-   `app.current_tenant_id` GUC；V80/V82/V84 终态断言与 `scripts/verify-multi-tenancy-rls.sh` 覆盖。
+   `app.current_tenant_id` GUC；V80/V82/V84/V85 终态断言与 `scripts/verify-multi-tenancy-rls.sh` 覆盖。
 4. 请求链路使用 session 级 GUC 三件套（不是 transaction-local），非事务自动提交路径同样有效；
    `scripts/verify-multi-tenancy-guc.sh` 与 PG 回读测试覆盖。
 5. 先完成 V74 → 最新版本的升级演练（§3.1）与备份点（§5.3），再切模式；切换本身不执行数据迁移。
