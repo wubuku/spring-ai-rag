@@ -30,6 +30,7 @@
 | 备份数据与隔离恢复演练 | [数据备份与隔离恢复](backup-restore-zh-CN.md) | [测试指南](testing-guide-zh-CN.md) |
 | 删除文档/集合/会话，或判断孤儿与保留策略 | [删除语义与数据保留](deletion-and-retention-zh-CN.md) | [测试指南](testing-guide-zh-CN.md)、[配置参考](configuration-zh-CN.md#collection-永久清理与退役) |
 | 审查数据面授权、文件归属与跨租户隔离 | [安全边界与租户隔离](security-boundary-zh-CN.md) | [REST API：认证](rest-api-zh-CN.md#认证)、[测试指南](testing-guide-zh-CN.md) |
+| 理解或改造多租户（SINGLE/STRICT、RLS/GUC、新增表/端点/任务约束） | [架构 §9 多租户隔离](architecture-zh-CN.md#9-多租户隔离架构wp2wp10)、[多租户配置](configuration-zh-CN.md#多租户配置-wp5) | [验证基线 §9.1](verification-baseline-zh-CN.md#91-多租户当前结论2026-11-14)、[表归属清单](drafts/MULTI_TENANCY_TABLE_CATALOG.md)、[实施进度账本](drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md) |
 | 多轮真实问答、双实例与恢复发布闸门 | [质量稳定性与生产恢复验收](quality-production-acceptance-zh-CN.md) | [备份恢复](backup-restore-zh-CN.md) |
 | 对接 / 调试 HTTP API | [rest-api-zh-CN.md](rest-api-zh-CN.md) | Swagger：`/swagger-ui.html` |
 | 防止 HTTP 契约破坏性变更 | [接口兼容门禁](api-compatibility-zh-CN.md) | 基线 `testdata/api-contract/openapi-baseline.json` |
@@ -153,6 +154,7 @@ OpenClaw 的 `TOOLS.md`、`MEMORY.md`、`memory/`、`HEARTBEAT.md` 等本地状�
 | `spring-ai-rag-api/` | DTO、SPI（`DomainRagExtension` 等） |
 | `spring-ai-rag-core/` | 实现 + `SpringAiRagApplication` 可运行入口 |
 | `spring-ai-rag-core/.../chat/`、`.../rag/` | 模式化 Chat 执行、Modular RAG 与 Tool Calling |
+| `spring-ai-rag-core/.../tenant/` | 多租户隔离核心：`TenantConfiguration`、`TenantContextFilter`、`TenantGucDataSource`、`TenantRlsVerifier`、`TenantTableCatalog`、`TenantEndpointDeclarationCatalog`、`TenantJobDispatcher` |
 | `spring-ai-rag-core/.../config/RagProperties.java` | `rag.*` 配置绑定 |
 | `spring-ai-rag-core/src/main/resources/application.yml` | 主配置（端口 8081） |
 | `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1..最新版本** |

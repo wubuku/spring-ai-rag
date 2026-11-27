@@ -483,13 +483,20 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 
 ## 7. 安全与 Collection ACL
 
-本仓自 2026-11-14 起内置多租户隔离底座（方案 C：单仓单 schema、表永远租户化）。
+本仓自 2026-11-14 起内置多租户隔离底座（方案 C：单仓单 schema、表永远租户化，
+Flyway V75–V85 全部为纯事务 DDL，禁止 `CONCURRENTLY` 进迁移链）。全库 76 张存活表
+由 `TenantTableCatalog` 统一裁决（48 `TENANT_PRIVATE` / 24 `PLATFORM_GLOBAL` /
+4 `CREDENTIAL`），核心实现位于 `com.springairag.core.tenant`。
 `rag.tenant.mode` 默认 `SINGLE`——所有请求固定解析到 `default` 租户，行为与升级前
-零变化；`STRICT` 模式启用真实租户解析、PostgreSQL RLS（`ENABLE+FORCE` +
-`NOBYPASSRLS` 应用角色）与启动 `TenantRlsVerifier` 校验，凭据绑定租户，
-`TenantModeGuard` 保证 SINGLE 模式下所有凭据 `tenant_id='default'` 且拒绝创建非
-`default` 租户。配置见 [configuration-zh-CN.md](configuration-zh-CN.md) 的
-「多租户配置」一节；实施记录见 `docs/drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md`。
+零变化，但 **`SINGLE` 关闭 RLS 不等于多租户隔离**；`STRICT` 模式启用真实租户解析、
+PostgreSQL RLS（`ENABLE+FORCE` + `NOBYPASSRLS` 应用角色）与启动 `TenantRlsVerifier`
+校验，凭据绑定租户，`TenantModeGuard` 保证 SINGLE 模式下所有凭据 `tenant_id='default'`
+且拒绝创建非 `default` 租户（因此 `STRICT → SINGLE` 回退在存在非 `default` 凭据时会
+fail-closed 拒绝启动）。架构细节见[架构 §9](architecture-zh-CN.md#9-多租户隔离架构wp2wp10)，
+配置见[多租户配置](configuration-zh-CN.md#多租户配置-wp5)，验证结论与未验项见
+[验证基线 §9.1](verification-baseline-zh-CN.md#91-多租户当前结论2026-11-14)，表裁决与
+实施记录见 `docs/drafts/MULTI_TENANCY_TABLE_CATALOG.md` 与
+`docs/drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md`。
 
 当前支持两种兼容运行模式。
 

@@ -1310,6 +1310,22 @@ explicit request context + background-task propagation:
   `GET /api/v1/rag/usage?tenantScope=current` aggregates only the current tenant,
   fails closed without context, and never accepts arbitrary tenant IDs.
 
+- **Core code entry, filter order, and startup route guard (WP6/WP12)**:
+  implementation lives in `com.springairag.core.tenant` (conditionally wired by
+  `TenantConfiguration`). Servlet filter order is fixed as auth (`-10`) → MDC
+  (`-9`) → `TenantContextFilter` (`-8`) → capability (`-5`) → rate limit (`0`).
+  At startup, `TenantEndpointDeclarationCatalog` reads the live
+  `ApiRoutePolicyRegistry.describe()` snapshot to verify full route coverage:
+  a manual semantic allowlist marks only `/api/v1/rag/tenants` as
+  `PLATFORM_ONLY + PLATFORM_CAPABILITY`, while all other protected routes
+  require `TENANT_REQUIRED + COLLECTION_ACL`. Every new table must be
+  registered in `TenantTableCatalog` and
+  `docs/drafts/MULTI_TENANCY_TABLE_CATALOG.md` or `STRICT` startup fails.
+- **Migration discipline**: V75–V85 are pure transactional DDL;
+  `CREATE INDEX CONCURRENTLY` is forbidden inside the Flyway chain (to avoid
+  blocking indefinitely on concurrent open transactions), and online large-table
+  index rebuilds are kept as a separate pre-production ops rehearsal.
+
 Configuration and runtime semantics are in
 [configuration](configuration.md#multi-tenancy-configuration-wp5); security boundaries and residual
 risks are in [security boundary](security-boundary.md).

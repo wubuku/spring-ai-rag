@@ -30,6 +30,7 @@ Additive capabilities: [trustworthy assertions, active diagnostics and offline q
 | Back up data and rehearse isolated recovery | [Backup And Restore](backup-restore.md) | [Testing Guide](testing-guide.md) |
 | Delete documents/collections/sessions, or decide orphans and retention | [Deletion Semantics and Data Retention](deletion-and-retention.md) | [Testing guide](testing-guide.md), [Configuration](configuration.md#permanent-collection-purge-and-retirement) |
 | Review data-plane authorization, file ownership and tenant isolation | [Security Boundaries and Tenant Isolation](security-boundary.md) | [REST API: Authentication](rest-api.md#authentication), [Testing Guide](testing-guide.md) |
+| Understand or modify multi-tenancy (SINGLE/STRICT, RLS/GUC, table/route/job invariants) | [Architecture §9 Multi-tenancy](architecture.md#9-multi-tenancy-isolation-architecture-wp2wp10), [Multi-tenancy configuration](configuration.md#multi-tenancy-configuration-wp5) | [Verification baseline §9.1](verification-baseline.md#91-multi-tenancy-conclusions-2026-11-14), [table catalog](drafts/MULTI_TENANCY_TABLE_CATALOG.md), [progress ledger](drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md) |
 | Repeated real QA, two nodes and recovery gates | [Quality And Production Acceptance](quality-production-acceptance.md) | [Backup And Restore](backup-restore.md) |
 | Integrate / debug HTTP APIs | [rest-api.md](rest-api.md) | Swagger: `/swagger-ui.html` |
 | Prevent breaking HTTP contract changes | [API Compatibility Gate](api-compatibility.md) | Baseline `testdata/api-contract/openapi-baseline.json` |
@@ -153,6 +154,7 @@ OpenClaw local state such as `TOOLS.md`, `MEMORY.md`, `memory/`, and `HEARTBEAT.
 | `spring-ai-rag-api/` | DTOs, SPI (`DomainRagExtension`, etc.) |
 | `spring-ai-rag-core/` | Implementation + runnable `SpringAiRagApplication` |
 | `spring-ai-rag-core/.../chat/`, `.../rag/` | Mode-aware Chat execution, Modular RAG, and Tool Calling |
+| `spring-ai-rag-core/.../tenant/` | Multi-tenancy core: `TenantConfiguration`, `TenantContextFilter`, `TenantGucDataSource`, `TenantRlsVerifier`, `TenantTableCatalog`, `TenantEndpointDeclarationCatalog`, `TenantJobDispatcher` |
 | `spring-ai-rag-core/.../config/RagProperties.java` | `rag.*` binding |
 | `spring-ai-rag-core/src/main/resources/application.yml` | Main config (port 8081) |
 | `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1..latest** |

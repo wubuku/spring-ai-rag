@@ -1122,6 +1122,17 @@ hash，操作按 owner 隔离、可恢复且有界。审计日志不由普通擦
   `TenantContext.wrap` 传播上下文；`GET /api/v1/rag/usage?tenantScope=current`
   只聚合当前租户，无上下文 fail-closed，不接受任意租户 ID。
 
+- **核心代码入口、Filter 顺序与路由守卫（WP6/WP12）**：核心实现集中在
+  `com.springairag.core.tenant`（由 `TenantConfiguration` 条件装配）；Servlet
+  Filter 顺序固定为认证(`-10`) → MDC(`-9`) → `TenantContextFilter`(`-8`) →
+  capability(`-5`) → 限流(`0`)；启动期由 `TenantEndpointDeclarationCatalog` 直接
+  读取 `ApiRoutePolicyRegistry.describe()` 真实快照做全路由声明校验，人工语义白名单
+  仅将 `/api/v1/rag/tenants` 裁决为 `PLATFORM_ONLY + PLATFORM_CAPABILITY`，其余受保护
+  路由为 `TENANT_REQUIRED + COLLECTION_ACL`。新增业务表必须同步登记 `TenantTableCatalog`
+  与 `docs/drafts/MULTI_TENANCY_TABLE_CATALOG.md`，否则 `STRICT` 启动校验失败。
+- **迁移纪律**：V75–V85 全部为纯事务内 DDL；禁止将 `CREATE INDEX CONCURRENTLY` 放进
+  Flyway 迁移链（避免与并发开放事务互等挂死），大表在线索引重建留作上线前独立运维演练。
+
 配置与运行语义见[多租户配置](configuration-zh-CN.md#多租户配置-wp5)；
 安全边界与残余风险见[安全边界](security-boundary-zh-CN.md)。
 

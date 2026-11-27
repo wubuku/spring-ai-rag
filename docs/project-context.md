@@ -623,15 +623,23 @@ See [rest-api.md](rest-api.md) and [SSE-PROTOCOL.md](SSE-PROTOCOL.md).
 ## 7. Security And Collection ACL
 
 Since 2026-11-14 the repository ships a built-in multi-tenancy isolation base
-(route C: single repository, single schema, tenant-aware tables from day one).
-`rag.tenant.mode` defaults to `SINGLE` — every request resolves to the fixed
-`default` tenant with zero behavior change from before the upgrade. `STRICT`
-mode enables real tenant resolution backed by PostgreSQL RLS (`ENABLE+FORCE`
-with a `NOBYPASSRLS` application role) plus a startup `TenantRlsVerifier`;
-credentials are tenant-bound, and `TenantModeGuard` guarantees that in SINGLE
-mode every credential has `tenant_id='default'` and non-`default` tenant
-creation is refused. See the multi-tenancy configuration section in
-[configuration.md](configuration.md) and the implementation ledger in
+(route C: single repository, single schema, tenant-aware tables from day one;
+Flyway V75–V85 are pure transactional DDL with no `CONCURRENTLY` in the
+migration chain). All 76 live tables are adjudicated in `TenantTableCatalog`
+(48 `TENANT_PRIVATE` / 24 `PLATFORM_GLOBAL` / 4 `CREDENTIAL`), and the core
+runtime lives in `com.springairag.core.tenant`. `rag.tenant.mode` defaults to
+`SINGLE` — every request resolves to the fixed `default` tenant with zero
+behavior change from before the upgrade, and **turning RLS off under `SINGLE`
+is not multi-tenant isolation**. `STRICT` mode enables real tenant resolution
+backed by PostgreSQL RLS (`ENABLE+FORCE` with a `NOBYPASSRLS` application role)
+plus a startup `TenantRlsVerifier`; credentials are tenant-bound, and
+`TenantModeGuard` guarantees that in `SINGLE` mode every credential has
+`tenant_id='default'` and non-`default` tenant creation is refused (so rolling
+back `STRICT → SINGLE` fails closed on startup if non-`default` credentials
+exist). See [architecture §9](architecture.md#9-multi-tenancy-isolation-architecture-wp2wp10),
+[multi-tenancy configuration](configuration.md#multi-tenancy-configuration-wp5),
+[verification baseline §9.1](verification-baseline.md#91-multi-tenancy-conclusions-2026-11-14),
+`docs/drafts/MULTI_TENANCY_TABLE_CATALOG.md`, and
 `docs/drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md`.
 
 Two compatible operating modes are available.

@@ -332,6 +332,7 @@ CI 在 WebUI job 的 `Committed static build matches a fresh build` 步骤执行
 | 多租户：真实外部 Provider 回调 | 未走通 | WP8 以计数器/探针证明「任意 task ID 不触发外部 Provider」，真实回调模拟属红队后续项 | [实施进度账本](drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md) |
 | 多租户：真实 LLM 本地运行时 HTTP E2E | 跳过 | `--with-local-runtime` 需 `.env` 凭据与独占 18081 端口；显式 opt-in，不以 Mock 冒充 | 本文 §6 |
 | 多租户 SSE 接线范围 | 单端点 | 逐次授权已实现，但当前仅 `embedDocumentStream` 一个 request-scoped 短流接线，无长期订阅注册表 | [SSE 协议](SSE-PROTOCOL.md#81-多租户逐次授权wp8) |
+| 多租户：PG 版本矩阵脚本 RLS 断言滞后 | 脚本漂移 | `scripts/verify-postgres-version-matrix.py` 仍保留 V80 前「全库无 RLS / 0 policy」检查，尚未更新为逐表策略断言；PG 16 RLS 由多租户门控套件验证，PG 15/17/18 待补 | [PostgreSQL 支持矩阵](postgres-support-matrix-zh-CN.md) |
 
 ## 11. 下一步还能往哪打（候选，未承诺）
 

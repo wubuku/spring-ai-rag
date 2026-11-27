@@ -346,6 +346,7 @@ CI runs the same rebuild and directory comparison in the WebUI job step
 | Multi-tenancy: real external Provider callback | Not exercised | WP8 uses counters/probes to prove that an arbitrary task ID does not trigger a Provider; a real callback simulation remains a red-team follow-up | [progress ledger](drafts/MULTI_TENANCY_IMPLEMENTATION_PROGRESS.md) |
 | Multi-tenancy: real-LLM local-runtime HTTP E2E | Skipped | `--with-local-runtime` needs `.env` credentials and a dedicated port 18081; explicitly opt-in, never substituted with mocks | section 6 here |
 | Multi-tenancy SSE wiring scope | Single endpoint | Per-delivery reauthorization is implemented, but only `embedDocumentStream` is wired as a request-scoped short stream; there is no long-lived subscription registry | [SSE protocol](SSE-PROTOCOL.md#81-多租户逐次授权wp8) |
+| Multi-tenancy: PG version-matrix script RLS assertion drift | Script drift | `scripts/verify-postgres-version-matrix.py` still runs its pre-V80 "no RLS / 0 policies" check and has not been updated to per-table policy assertions; PG 16 RLS is covered by multi-tenancy gated suites, while PG 15/17/18 remain open | [PostgreSQL support matrix](postgres-support-matrix.md) |
 
 ## 11. Where To Push Next (Candidates, Not Commitments)
 
