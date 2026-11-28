@@ -23,8 +23,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -84,12 +88,45 @@ public class HybridRetrieverService {
     private final DocumentDerivationDescriptorProvider descriptorProvider;
     private final int retrievalTimeoutSeconds;
 
+    /**
+     * HNSW 迭代扫描能力探测（可选：纯手工构造的测试实例未注入时不启用）。
+     * GUC 设置只在事务内生效，避免污染连接池。
+     */
+    private HnswIterativeScanSupport hnswSupport;
+    private TransactionTemplate hnswGucTransaction;
+
     /** 可选注入：单元测试直接 new 该服务时不依赖 Micrometer。 */
     private RagMetricsService metricsService; // optional-claim: 兼容按旧构造器手写实例化的单测
 
     @Autowired(required = false)
     public void setMetricsService(RagMetricsService metricsService) {
         this.metricsService = metricsService;
+    }
+
+    @Autowired
+    void setHnswIterativeScanSupport(ObjectProvider<HnswIterativeScanSupport> supportProvider) {
+        this.hnswSupport = supportProvider.getIfAvailable();
+        bindHnswTransactionTemplate();
+    }
+
+    @Autowired
+    void setHnswTransactionManager(ObjectProvider<PlatformTransactionManager> managerProvider) {
+        this.hnswTransactionManager = managerProvider.getIfAvailable();
+        bindHnswTransactionTemplate();
+    }
+
+    private PlatformTransactionManager hnswTransactionManager;
+
+    private void bindHnswTransactionTemplate() {
+        this.hnswGucTransaction = hnswSupport == null || hnswTransactionManager == null
+                ? null
+                : new TransactionTemplate(hnswTransactionManager);
+    }
+
+    /** 测试用注入点：显式绑定能力探测与事务模板，不依赖 Spring 反射注入。 */
+    void configureHnswGuc(HnswIterativeScanSupport support, TransactionTemplate transactionTemplate) {
+        this.hnswSupport = support;
+        this.hnswGucTransaction = transactionTemplate;
     }
     private final int probeTimeoutMs;
     private final com.springairag.core.properties.RagAdmissionProperties admissionProperties;
@@ -1325,7 +1362,50 @@ public class HybridRetrieverService {
         args.add(textChunker);
         args.add(vectorStr);
         args.add(limit);
-        return jdbcTemplate.queryForList(sql, args.toArray());
+        return executeVectorSqlWithHnswGuc(sql, args.toArray(), fragment);
+    }
+
+    /**
+     * 带过滤条件的向量检索必须在事务内执行 SET LOCAL，否则自动提交连接上语句结束即失效。
+     * 若调用方已开启事务则直接复用，无需再次开启；SET LOCAL 随事务结束自动复位。
+     */
+    private List<Map<String, Object>> executeVectorSqlWithHnswGuc(
+            String sql, Object[] args, RetrievalScopeSql.Fragment scopeFragment) {
+        if (!hasVectorFilter(scopeFragment)) {
+            return jdbcTemplate.queryForList(sql, args);
+        }
+        if (hnswSupport == null || !hnswSupport.enabled()) {
+            return jdbcTemplate.queryForList(sql, args);
+        }
+        // GUC 值来自白名单枚举与正整数配置，绝不拼接任何外部/用户输入。
+        String scanMode = hnswSupport.gucValue();
+        int maxScanTuples = retrieval.getHnswMaxScanTuples();
+        // 仅检测调用方是否已在事务中：只读取事务状态，不注册 after-commit 回调，
+        // 因此不属于 WP7 后台任务清单的 after-commit 文件。
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            applyHnswGuc(scanMode, maxScanTuples);
+            return jdbcTemplate.queryForList(sql, args);
+        }
+        if (hnswGucTransaction == null) {
+            return jdbcTemplate.queryForList(sql, args);
+        }
+        return hnswGucTransaction.execute(status -> {
+            applyHnswGuc(scanMode, maxScanTuples);
+            return jdbcTemplate.queryForList(sql, args);
+        });
+    }
+
+    private static boolean hasVectorFilter(RetrievalScopeSql.Fragment fragment) {
+        String predicate = fragment == null ? "" : fragment.sql();
+        return predicate.contains("collection_id")
+                || predicate.contains("jsonb_payload")
+                || predicate.contains("metadata")
+                || predicate.contains("tenant_id");
+    }
+
+    private void applyHnswGuc(String scanMode, int maxScanTuples) {
+        jdbcTemplate.execute("SET LOCAL hnsw.iterative_scan = " + scanMode);
+        jdbcTemplate.execute("SET LOCAL hnsw.max_scan_tuples = " + maxScanTuples);
     }
 
     private void validateQueryVector(float[] queryVector, EmbeddingProfile profile) {

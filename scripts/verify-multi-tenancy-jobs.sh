@@ -27,7 +27,7 @@ rg --pcre2-version >/dev/null 2>&1 || fail "rg pcre2 not available"
 
 # 2) 现场任务文件全部登记（数量动态计算）
 count_registered=$(rg -c 'Map\.entry\(|"$' "$inventory" | head -1 || true)
-task_files=$(rg -l '(?m)^\s*@Scheduled\b|(?m)^\s*@Async\b|implements\s+TransactionSynchronization' \
+task_files=$(rg -l '(?m)^\s*@Scheduled\b|(?m)^\s*@Async\b|TransactionSynchronizationManager\s*\.\s*registerSynchronization|implements\s+TransactionSynchronization' \
     "$root" --glob '*.java' | sort)
 [[ -n "$task_files" ]] || fail "no scheduled/async/after-commit task files found on site"
 

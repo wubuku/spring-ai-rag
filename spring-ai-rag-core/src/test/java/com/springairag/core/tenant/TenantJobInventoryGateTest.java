@@ -53,9 +53,11 @@ class TenantJobInventoryGateTest {
             java.util.regex.Pattern.compile("(?m)^\\s*@Scheduled\\b");
     private static final java.util.regex.Pattern ASYNC =
             java.util.regex.Pattern.compile("(?m)^\\s*@Async\\b");
+    /** 只把真正注册事务同步回调的文件算作 after-commit 任务，不误伤只读事务状态检测。 */
     private static final java.util.regex.Pattern AFTER_COMMIT =
             java.util.regex.Pattern.compile(
-                    "TransactionSynchronizationManager|implements\\s+TransactionSynchronization");
+                    "TransactionSynchronizationManager\\s*\\.\\s*registerSynchronization"
+                            + "|implements\\s+TransactionSynchronization");
 
     private static boolean isTaskFile(String text) {
         return SCHEDULED.matcher(text).find()
