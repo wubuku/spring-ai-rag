@@ -29,6 +29,23 @@ class RateLimitFilterNormalizeTailTest {
         assertEquals(200, response.getStatus());
     }
 
+    @Test
+    void eightArgumentConstructorNormalizesNullTrustedProxyResolver() throws Exception {
+        // 7 参构造器会把 observability 归一为 noop；8 参构造器还必须在
+        // trustedProxies=null 时降级为 TRUST_NONE，不能把伪造的 XFF 当成客户端 IP。
+        var filter = new RateLimitFilter(
+                true, 60, "ip", java.util.Map.of(), "local", null, null, null);
+        var request = new MockHttpServletRequest("GET", "/test");
+        request.addHeader("X-Forwarded-For", "1.2.3.4");
+        var response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, (req, res) -> { });
+
+        assertEquals(200, response.getStatus());
+        assertEquals("127.0.0.1", request.getAttribute(
+                RateLimitFilter.CLIENT_ID_ATTRIBUTE));
+    }
+
     /**
      * The name promised a return value the body never looked at: it called
      * doFilter and its own comment conceded "仅验证不抛异常即可（间接覆盖分支）",

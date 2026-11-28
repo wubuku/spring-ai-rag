@@ -139,4 +139,42 @@ class HnswIterativeScanSupportTest {
                 props.getRetrieval().getHnswIterativeScan());
         assertEquals(30_000, props.getRetrieval().getHnswMaxScanTuples());
     }
+
+    @Test
+    void springAutowiredConstructorReadsRagPropertiesAndDegradesWithoutJdbc() {
+        RagProperties props = new RagProperties();
+        props.getRetrieval().setHnswIterativeScan(
+                RagRetrievalProperties.HnswIterativeScan.STRICT_ORDER);
+        props.getRetrieval().setHnswMaxScanTuples(50_000);
+
+        var support = new HnswIterativeScanSupport(null, props);
+        assertFalse(support.enabled(), "无数据源上下文必须降级为 no-op");
+        assertEquals("strict_order", support.gucValue());
+
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForList(HnswIterativeScanSupport.probeSql(), String.class))
+                .thenReturn(List.of("hnsw.iterative_scan", "hnsw.max_scan_tuples"));
+        var withJdbc = new HnswIterativeScanSupport(jdbc, props);
+        assertTrue(withJdbc.enabled());
+
+        // 无参构造器是空上下文兜底，绝不能阻断启动或启用 GUC。
+        var empty = new HnswIterativeScanSupport();
+        assertFalse(empty.enabled());
+        assertEquals("off", empty.gucValue());
+    }
+
+    @Test
+    void resetCacheForTestRecoversAfterDatabaseBecomesAvailable() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForList(HnswIterativeScanSupport.probeSql(), String.class))
+                .thenReturn(List.of())
+                .thenReturn(List.of("hnsw.iterative_scan", "hnsw.max_scan_tuples"));
+        var support = new HnswIterativeScanSupport(jdbc,
+                RagRetrievalProperties.HnswIterativeScan.RELAXED_ORDER);
+
+        assertFalse(support.enabled());
+        support.resetCacheForTest();
+        assertTrue(support.enabled());
+        verify(jdbc, times(2)).queryForList(HnswIterativeScanSupport.probeSql(), String.class);
+    }
 }

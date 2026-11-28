@@ -59,6 +59,23 @@ class JsonRecordUpsertResponseCompatibilityTest {
     }
 
     @Test
+    void principalLegacySettersRemainWritableForOldConsumers() {
+        IntegrationCapabilitiesResponse.Principal p =
+                new IntegrationCapabilitiesResponse.Principal();
+        p.setPrincipalType("ENVIRONMENT_ROOT");
+        p.setPrincipalRole("ADMIN");
+        p.setCapabilities(List.of("RAG_READ", "RAG_WRITE"));
+        p.setCollectionAccessMode(CollectionAccessMode.UNRESTRICTED);
+        p.setAllowedCollectionKeys(List.of("kb-a", "kb-b"));
+
+        assertEquals("ENVIRONMENT_ROOT", p.getPrincipalType());
+        assertEquals("ADMIN", p.getPrincipalRole());
+        assertEquals(List.of("RAG_READ", "RAG_WRITE"), p.getCapabilities());
+        assertEquals(CollectionAccessMode.UNRESTRICTED, p.getCollectionAccessMode());
+        assertEquals(List.of("kb-a", "kb-b"), p.getAllowedCollectionKeys());
+    }
+
+    @Test
     void upsertResponseOldConstructorsDelegateWithNullContentHash() {
         JsonRecordUpsertResponse legacyShort = new JsonRecordUpsertResponse(
                 1L, 2L, "kb", "ext", "CREATED", true, false, 1,
@@ -90,5 +107,22 @@ class JsonRecordUpsertResponseCompatibilityTest {
                 "COMPLETED", "bge-m3", null, "NONE",
                 null, null, "default", "rev-1", 3L, null, "sha256:abc");
         assertEquals("sha256:abc", extended.contentHash());
+    }
+
+    @Test
+    void fourteenArgumentConstructorStillCompilesAndSerializes() throws Exception {
+        JsonRecordUpsertResponse legacy = new JsonRecordUpsertResponse(
+                1L, 2L, "kb", "ext", "CREATED", true, false, 1,
+                "COMPLETED", "bge-m3", null, "NONE",
+                UUID.randomUUID(), UUID.randomUUID());
+        assertNull(legacy.contentHash());
+        assertNull(legacy.sourceNamespace());
+        JsonNode json = MAPPER.valueToTree(legacy);
+        assertTrue(json.has("documentId"));
+        assertTrue(json.has("contentHash"), "record 主构造器始终序列化该组件；旧客户端应忽略 null");
+        assertTrue(json.get("contentHash").isNull());
+
+        // 19 参主构造器与 18 参兼容构造器并存：record 组件数只增加一。
+        assertEquals(19, JsonRecordUpsertResponse.class.getRecordComponents().length);
     }
 }
