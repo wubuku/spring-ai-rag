@@ -39,11 +39,26 @@ public interface TenantRlsVerifier {
     }
 
     /**
-     * 恒真表达式判定：字符串去空白后为 {@code true}（不区分大小写）即恒真。
+     * 恒真/宽松旁路表达式判定：拒绝空值、恒真 {@code true} 以及含 {@code OR true} 的退化谓词。
      * 规范表达式 {@code tenant_id = current_setting('app.current_tenant_id', true)} 不匹配。
      */
     static boolean isPermissivePolicy(String qual) {
-        return qual != null && qual.strip().equalsIgnoreCase("true");
+        if (qual == null || qual.isBlank()) {
+            return true;
+        }
+        String normalized = qual.strip();
+        if (normalized.equalsIgnoreCase("true")) {
+            return true;
+        }
+        return normalized.matches("(?is).*\\bor\\s*\\(?\\s*true\\b.*");
+    }
+
+    /**
+     * 规范租户隔离谓词判定：非宽松旁路，且显式绑定 {@code app.current_tenant_id} GUC。
+     */
+    static boolean isValidTenantPolicyExpression(String expr) {
+        return !isPermissivePolicy(expr)
+                && expr.contains("current_setting('app.current_tenant_id'");
     }
 
     /** 默认实现：直接对数据库执行全项校验。 */
@@ -140,7 +155,7 @@ public interface TenantRlsVerifier {
             }
         }
 
-        /** policy 语义校验：每张 RLS 表必须有 tenant_isolation policy 且非恒真。 */
+        /** policy 语义校验：每张 RLS 表必须仅有唯一 tenant_isolation policy，且 USING 与 WITH CHECK 均非恒真并绑定 GUC。 */
         private void verifyPolicySemantics(List<String> failures) {
             Map<String, List<Map<String, Object>>> policies = new LinkedHashMap<>();
             jdbc.queryForList("""
@@ -156,17 +171,30 @@ public interface TenantRlsVerifier {
                     failures.add("表 " + lower + " 缺 tenant_isolation policy");
                     continue;
                 }
-                Map<String, Object> p = rows.get(0);
-                if (!"tenant_isolation".equals(p.get("policyname"))) {
-                    failures.add("表 " + lower + " policy 名必须为 tenant_isolation");
+                // PostgreSQL 对多条 PERMISSIVE policy 取逻辑 OR，必须逐条校验并拒绝多余策略。
+                if (rows.size() > 1) {
+                    failures.add("表 " + lower + " 存在多条 RLS policy（共 " + rows.size()
+                            + " 条），禁止额外宽松策略旁路隔离");
                 }
-                if (isPermissivePolicy(String.valueOf(p.get("qual")))
-                        || isPermissivePolicy(String.valueOf(p.get("with_check")))) {
-                    failures.add("表 " + lower + " policy 表达式为恒真（USING/WITH CHECK = true）");
-                }
-                String qual = String.valueOf(p.get("qual"));
-                if (!qual.contains("current_setting('app.current_tenant_id'")) {
-                    failures.add("表 " + lower + " policy 未绑定 app.current_tenant_id GUC");
+                for (Map<String, Object> p : rows) {
+                    String policyName = String.valueOf(p.get("policyname"));
+                    if (!"tenant_isolation".equals(policyName)) {
+                        failures.add("表 " + lower + " policy 名必须为 tenant_isolation，实际=" + policyName);
+                    }
+                    String qual = p.get("qual") == null ? null : String.valueOf(p.get("qual"));
+                    String withCheck = p.get("with_check") == null ? null : String.valueOf(p.get("with_check"));
+                    if (isPermissivePolicy(qual) || isPermissivePolicy(withCheck)) {
+                        failures.add("表 " + lower + " policy " + policyName
+                                + " 表达式为恒真或含 OR true 旁路（USING/WITH CHECK）");
+                    }
+                    if (!isValidTenantPolicyExpression(qual)) {
+                        failures.add("表 " + lower + " policy " + policyName
+                                + " USING 未有效绑定 app.current_tenant_id GUC");
+                    }
+                    if (!isValidTenantPolicyExpression(withCheck)) {
+                        failures.add("表 " + lower + " policy " + policyName
+                                + " WITH CHECK 未有效绑定 app.current_tenant_id GUC");
+                    }
                 }
             }
         }

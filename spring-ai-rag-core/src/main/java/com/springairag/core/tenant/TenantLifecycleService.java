@@ -117,9 +117,30 @@ public final class TenantLifecycleService {
         return transition(tenantId, actorId, TenantStatus.ACTIVE, "RESUME");
     }
 
-    /** 禁用：ACTIVE → DISABLED（终态，不可恢复）。 */
+    /** 禁用：ACTIVE → DISABLED（终态，不可恢复）。受保护的 default 租户禁止禁用。 */
     public TenantProjection disable(String tenantId, String actorId) {
+        if (DEFAULT_TENANT_ID.equals(tenantId)) {
+            audit.record("REJECT", tenantId, actorId,
+                    "DEFAULT_TENANT_PROTECTED: 默认租户 default 禁止禁用");
+            throw new IllegalStateException(
+                    "DEFAULT_TENANT_PROTECTED: 默认租户 default 受保护，禁止禁用");
+        }
         return transition(tenantId, actorId, TenantStatus.DISABLED, "DISABLE");
+    }
+
+    /** 更新租户显示名称（仅限未软删租户）。 */
+    public TenantProjection updateDisplayName(String tenantId, String displayName, String actorId) {
+        Objects.requireNonNull(tenantId, "tenantId must not be null");
+        String status = readStatus(tenantId);
+        if (status == null) {
+            throw new IllegalStateException("租户不存在或已软删：" + tenantId);
+        }
+        jdbc.update(
+                "UPDATE rag_tenant SET display_name = ?, updated_at = CURRENT_TIMESTAMP "
+                        + "WHERE tenant_id = ? AND deleted_at IS NULL",
+                displayName, tenantId);
+        audit.record("UPDATE", tenantId, actorId, "displayName updated");
+        return new TenantProjection(tenantId, TenantStatus.from(status).name());
     }
 
     private TenantProjection transition(String tenantId, String actorId,
@@ -138,9 +159,15 @@ public final class TenantLifecycleService {
         return new TenantProjection(tenantId, target.name());
     }
 
-    /** 软删：幂等标记（不物理删除，保留历史与审计）。 */
+    /** 软删：幂等标记（不物理删除，保留历史与审计）。受保护的 default 租户禁止软删。 */
     public TenantProjection softDelete(String tenantId, String actorId) {
         Objects.requireNonNull(tenantId, "tenantId must not be null");
+        if (DEFAULT_TENANT_ID.equals(tenantId)) {
+            audit.record("REJECT", tenantId, actorId,
+                    "DEFAULT_TENANT_PROTECTED: 默认租户 default 禁止软删");
+            throw new IllegalStateException(
+                    "DEFAULT_TENANT_PROTECTED: 默认租户 default 受保护，禁止软删");
+        }
         executor.markDeleted(tenantId);
         audit.record("DELETE", tenantId, actorId, "软删标记（幂等）");
         return new TenantProjection(tenantId, TenantStatus.DISABLED.name());

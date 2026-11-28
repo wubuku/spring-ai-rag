@@ -15,6 +15,37 @@ public final class PrincipalTenantResolver implements TenantResolver {
 
     public static final String ACTIVE_STATUS = "ACTIVE";
 
+    /** 非 ACTIVE 租户拒绝语义（供 TenantContextFilter 边缘短路返回显式 403）。 */
+    public record TenantDenial(String errorCode, String message) {
+    }
+
+    /**
+     * 对已认证的数据库 API Key 主体评估租户拒绝原因；ACTIVE 或无租户归属时返回 empty。
+     */
+    public static Optional<TenantDenial> evaluateDenial(AuthenticatedApiPrincipal principal) {
+        if (principal == null || principal.getTenantId() == null
+                || principal.getTenantId().isBlank()) {
+            return Optional.empty();
+        }
+        String status = principal.getTenantStatus();
+        if (ACTIVE_STATUS.equalsIgnoreCase(status)) {
+            return Optional.empty();
+        }
+        if ("SUSPENDED".equalsIgnoreCase(status)) {
+            return Optional.of(new TenantDenial(
+                    "TENANT_SUSPENDED",
+                    "Tenant '" + principal.getTenantId() + "' is suspended."));
+        }
+        if ("DISABLED".equalsIgnoreCase(status)) {
+            return Optional.of(new TenantDenial(
+                    "TENANT_DISABLED",
+                    "Tenant '" + principal.getTenantId() + "' is disabled."));
+        }
+        return Optional.of(new TenantDenial(
+                "TENANT_INACTIVE",
+                "Tenant '" + principal.getTenantId() + "' is not active."));
+    }
+
     @Override
     public Optional<String> resolveTenantId(AuthenticatedApiPrincipal principal) {
         if (principal == null || principal.getTenantId() == null

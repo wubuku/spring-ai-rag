@@ -222,10 +222,9 @@ public class TenantLifecycleController {
     }
 
     /**
-     * 平台面门槛：租户生命周期只允许「已配置的环境 root 凭据 + 已通过 root 认证」的调用方。
+     * 平台面门槛：允许「已配置的环境 root 凭据」或「经数据库认证且位于 lifecycle-actors 白名单的平台运营主体」。
      *
-     * <p>未配置 root 时同样拒绝（fail-closed）：否则任何一条静态/数据库凭据都能创建租户，
-     * 等于绕开平台 capability 白名单。</p>
+     * <p>未认证或既非 root 又非合法平台主体的调用一律 fail-closed 返回 403。</p>
      */
     private ResponseEntity<ErrorResponse> requireEnvironmentRoot(HttpServletRequest request) {
         if (rootCredentialResolver.isConfigured()
@@ -233,12 +232,19 @@ public class TenantLifecycleController {
                         ApiKeyAuthFilter.ROOT_AUTHENTICATED_ATTRIBUTE))) {
             return null;
         }
+        // P0-4 修复：允许已通过数据库 API Key 认证的调用方进入后续 registry.execute 白名单校验，
+        // 避免 rag.tenant.lifecycle-actors 永远被硬编码 root 检查阻断。
+        if (ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY.equals(
+                request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_PRINCIPAL_TYPE))
+                && request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE) instanceof String) {
+            return null;
+        }
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .cacheControl(CacheControl.noStore())
                 .body(ErrorResponse.builder()
                         .error("FORBIDDEN")
                         .status(HttpStatus.FORBIDDEN.value())
-                        .message("Only the configured environment root can manage tenants")
+                        .message("Only the configured environment root or an authorized lifecycle actor can manage tenants")
                         .path(request == null ? null : request.getRequestURI())
                         .traceId(RequestTraceFilter.currentRequestTraceId())
                         .build());
@@ -259,10 +265,13 @@ public class TenantLifecycleController {
 
     private ResponseEntity<ErrorResponse> conflict(String detail,
                                                    HttpServletRequest request) {
+        String code = detail != null && detail.contains("DEFAULT_TENANT_PROTECTED")
+                ? "DEFAULT_TENANT_PROTECTED"
+                : "TENANT_CONFLICT";
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .cacheControl(CacheControl.noStore())
                 .body(ErrorResponse.builder()
-                        .error("TENANT_CONFLICT")
+                        .error(code)
                         .status(HttpStatus.CONFLICT.value())
                         .message(detail)
                         .path(request == null ? null : request.getRequestURI())
@@ -288,7 +297,8 @@ public class TenantLifecycleController {
                 ApiKeyAuthFilter.AUTHENTICATED_PRINCIPAL_TYPE);
         Object principalId = request.getAttribute(
                 ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE);
-        if (ApiKeyAuthFilter.PRINCIPAL_ENVIRONMENT_ROOT.equals(principalType)
+        if ((ApiKeyAuthFilter.PRINCIPAL_ENVIRONMENT_ROOT.equals(principalType)
+                || ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY.equals(principalType))
                 && principalId instanceof String id) {
             return id;
         }

@@ -615,9 +615,88 @@ public class ApiKeyManagementService {
         }
     }
 
+    /**
+     * P0-2 修复：为指定 ACTIVE 租户创建新的 Principal 并签发 API Key。
+     * 显式绑定 {@code tenantId}，不再静默落入 {@code default}。
+     */
+    @Transactional
+    public ApiKeyCreatedResponse issueKeyForTenant(
+            String tenantId,
+            ApiKeyCreateRequest request,
+            boolean managed) {
+        requireActiveTenant(tenantId);
+        if (managed) {
+            validateManagedExpiry(request.getExpiresAt());
+        }
+        return createPrincipal(request, ApiKeyRole.NORMAL, tenantId);
+    }
+
+    /**
+     * P0-2 修复：为指定租户下已存在（如开户时创建的 bootstrap 孤儿主体）的 Principal 签发首把或新版本 API Key。
+     */
+    @Transactional
+    public ApiKeyCreatedResponse issueKeyForExistingPrincipal(
+            String tenantId,
+            String principalId,
+            LocalDateTime expiresAt,
+            boolean managed) {
+        requireActiveTenant(tenantId);
+        Objects.requireNonNull(principalId, "principalId must not be null");
+        if (managed && expiresAt != null) {
+            validateManagedExpiry(expiresAt);
+        }
+        if (principalRepository.acquireManagementWrite(principalId) == 0) {
+            throw new RagException(ErrorCode.NOT_FOUND, "API principal was not found");
+        }
+        RagApiPrincipal principal = principalRepository.findByPrincipalId(principalId)
+                .orElseThrow(() -> new RagException(ErrorCode.NOT_FOUND, "API principal was not found"));
+        if (!Objects.equals(tenantId, principal.getTenantId())) {
+            throw new IllegalStateException("Principal does not belong to tenant: " + tenantId);
+        }
+        ensureActive(principal);
+        if (apiKeyRepository.findByPrincipalIdAndEnabledTrueAndRetireAtIsNull(principalId).isPresent()) {
+            throw new IllegalStateException(
+                    "Principal already has an active API key; use rotation instead: " + principalId);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (expiresAt != null) {
+            principal.setExpiresAt(expiresAt);
+        }
+        int version = principal.getNextCredentialVersion() != null
+                ? principal.getNextCredentialVersion() : 1;
+        principal.setNextCredentialVersion(version + 1);
+        principal.setUpdatedAt(now);
+        principalRepository.saveAndFlush(principal);
+
+        String rawKey = generateRawKey();
+        RagApiKey credential = credential(generateKeyId(), rawKey, version, principal, now);
+        apiKeyRepository.save(credential);
+        publishLifecycleAfterCommit(principalId);
+        log.info("API key issued for existing tenant principal: tenantId={}, principalId={}, version={}",
+                tenantId, principalId, version);
+        return createdResponse(rawKey, credential, principal);
+    }
+
+    private void requireActiveTenant(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            throw new IllegalArgumentException("tenantId must not be blank");
+        }
+        String status = currentTenantStatus(tenantId);
+        if (!"ACTIVE".equalsIgnoreCase(status)) {
+            throw new IllegalStateException("Target tenant is not ACTIVE: " + tenantId);
+        }
+    }
+
     private ApiKeyCreatedResponse createPrincipal(
             ApiKeyCreateRequest request,
             ApiKeyRole role) {
+        return createPrincipal(request, role, "default");
+    }
+
+    private ApiKeyCreatedResponse createPrincipal(
+            ApiKeyCreateRequest request,
+            ApiKeyRole role,
+            String tenantId) {
         Objects.requireNonNull(request, "request must not be null");
         LocalDateTime now = LocalDateTime.now();
         String rawKey = generateRawKey();
@@ -631,6 +710,7 @@ public class ApiKeyManagementService {
         principal.setPrincipalId(keyId);
         principal.setName(request.getName());
         principal.setRole(role);
+        principal.setTenantId(tenantId == null || tenantId.isBlank() ? "default" : tenantId);
         principal.setAllowedCollectionIds(allowedIds);
         principal.setExpiresAt(request.getExpiresAt());
         principal.setRequestsPerMinute(request.getRequestsPerMinute());
@@ -644,7 +724,8 @@ public class ApiKeyManagementService {
         RagApiKey credential = credential(keyId, rawKey, 1, principal, now);
         apiKeyRepository.save(credential);
         publishLifecycleAfterCommit(keyId);
-        log.info("API principal created: principalId={}, credentialVersion=1", keyId);
+        log.info("API principal created: tenantId={}, principalId={}, credentialVersion=1",
+                principal.getTenantId(), keyId);
         return createdResponse(rawKey, credential, principal);
     }
 

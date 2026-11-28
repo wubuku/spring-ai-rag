@@ -117,6 +117,22 @@ class TenantRlsVerifierPostgresIntegrationTest {
     }
 
     @Test
+    @DisplayName("P0-1 负向：追加第二条 PERMISSIVE USING (true) policy 必须拒绝启动")
+    void secondPermissivePolicyIsRejected() {
+        admin.execute("CREATE POLICY rag_rogue_permissive ON rag_documents "
+                + "AS PERMISSIVE FOR ALL TO PUBLIC USING (true) WITH CHECK (true)");
+        try {
+            IllegalStateException ex = assertThrows(IllegalStateException.class, verifier()::verify);
+            assertTrue(ex.getMessage().contains("多条 RLS policy")
+                            || ex.getMessage().contains("恒真")
+                            || ex.getMessage().contains("GUC"),
+                    "第二条 USING(true) 必须被 verifier 拒绝，实际：" + ex.getMessage());
+        } finally {
+            admin.execute("DROP POLICY IF EXISTS rag_rogue_permissive ON rag_documents");
+        }
+    }
+
+    @Test
     @DisplayName("负向 3：BYPASSRLS 应用角色被拒绝")
     void bypassRlsRoleIsRejected() {
         admin.execute("ALTER ROLE rag_app BYPASSRLS");
