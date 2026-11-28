@@ -94,7 +94,17 @@ public class TenantConfiguration {
     }
 
     /**
-     * WP9：租户生命周期服务（平台面，仅由 TenantLifecycleController 调用）。
+     * P1-3 修复：默认使用持久化平台审计（写入 V86 {@code rag_platform_audit_event}，无表时平滑降级日志）。
+     */
+    @Bean
+    @ConditionalOnMissingBean(JdbcTenantLifecycleAudit.class)
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnBean(JdbcTemplate.class)
+    public JdbcTenantLifecycleAudit jdbcTenantLifecycleAudit(JdbcTemplate jdbcTemplate) {
+        return new JdbcTenantLifecycleAudit(jdbcTemplate);
+    }
+
+    /**
+     * WP9：租户生命周期服务（平台面，仅由 TenantLifecycleController / OperatorConsoleService 调用）。
      *
      * <p>{@code @ConditionalOnBean} 保证无 JDBC / 无事务管理器的轻量测试上下文
      * （例如 WebMvcTest 的认证装配切片）不会因为这个平台面 bean 启动失败。</p>
@@ -107,13 +117,41 @@ public class TenantConfiguration {
     public TenantLifecycleService tenantLifecycleService(
             JdbcTemplate jdbcTemplate,
             org.springframework.transaction.PlatformTransactionManager transactionManager,
-            RagProperties properties) {
+            RagProperties properties,
+            org.springframework.beans.factory.ObjectProvider<TenantLifecycleAudit> persistentAudit) {
         org.springframework.transaction.support.TransactionTemplate template =
                 new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        TenantLifecycleAudit audit = persistentAudit.getIfAvailable(TenantLifecycleAudit.Logging::new);
         return new TenantLifecycleService(
                 jdbcTemplate, template,
                 properties.getTenant().getMode(),
-                new TenantLifecycleAudit.Logging());
+                audit);
+    }
+
+    /**
+     * Phase 2：运营方管理控制台聚合服务（条件装配，避免影响轻量测试切片）。
+     */
+    @Bean
+    @ConditionalOnMissingBean(OperatorConsoleService.class)
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnBean(
+            {JdbcTemplate.class, TenantLifecycleService.class,
+             ApiKeyManagementService.class, TenantQuotaPolicyRepository.class})
+    public OperatorConsoleService operatorConsoleService(
+            JdbcTemplate jdbcTemplate,
+            TenantLifecycleService lifecycleService,
+            ApiKeyManagementService apiKeyService,
+            TenantQuotaPolicyRepository quotaPolicyRepository,
+            JdbcTenantLifecycleAudit audit,
+            RagProperties properties,
+            org.springframework.beans.factory.ObjectProvider<com.springairag.core.security.ApiRoutePolicyRegistry> routePolicies) {
+        return new OperatorConsoleService(
+                jdbcTemplate,
+                lifecycleService,
+                apiKeyService,
+                quotaPolicyRepository,
+                audit,
+                properties.getTenant().getMode(),
+                routePolicies.getIfAvailable());
     }
 
     /**

@@ -31,7 +31,7 @@ CREATE DATABASE spring_ai_rag
 ### 2.3 迁移
 
 项目使用 Flyway 自动迁移。首次启动时按顺序执行
-`db/migration/V1__*.sql` 至当前最新迁移（V1–V85）。
+`db/migration/V1__*.sql` 至当前最新迁移（V1–V86）。
 V74 存量库到最新迁移的双路径升级演练由
 `scripts/verify-flyway-schema-paths.sh --early 74` 覆盖；迁移链全部为事务内 DDL，
 不把 `CREATE INDEX CONCURRENTLY` 放进版本链。

@@ -46,12 +46,14 @@ public final class TenantEndpointDeclarationCatalog {
     /**
      * 人工语义裁决：平台 capability 端点（不按路径前缀猜）。
      *
-     * <p>新增平台端点必须同时加入本白名单；否则 MANAGEMENT 决策会触发
-     * {@link Projection#validate()} 的未裁决拒绝。本仓当前唯一平台端点为
-     * 租户生命周期 {@code /api/v1/rag/tenants}。</p>
+     * <p>新增平台端点必须同时加入本白名单或前缀集合；否则 MANAGEMENT 决策会触发
+     * {@link Projection#validate()} 的未裁决拒绝。包含租户生命周期
+     * {@code /api/v1/rag/tenants} 与运营方管理控制台 {@code /api/v1/rag/operator/**}。</p>
      */
     private static final Set<String> PLATFORM_CAPABILITY_OVERRIDES = Set.of(
             "/api/v1/rag/tenants");
+
+    private static final String OPERATOR_CONSOLE_PREFIX = "/api/v1/rag/operator";
 
     private TenantEndpointDeclarationCatalog() {
     }
@@ -64,7 +66,9 @@ public final class TenantEndpointDeclarationCatalog {
         for (String line : descriptions) {
             Parsed parsed = parse(line);
             actualPaths.add(parsed.path());
-            boolean platformOverride = PLATFORM_CAPABILITY_OVERRIDES.contains(parsed.path());
+            boolean platformOverride = PLATFORM_CAPABILITY_OVERRIDES.contains(parsed.path())
+                    || parsed.path().equals(OPERATOR_CONSOLE_PREFIX)
+                    || parsed.path().startsWith(OPERATOR_CONSOLE_PREFIX + "/");
             if (platformOverride) {
                 if (!MANAGEMENT_DECISION.equals(parsed.decision())) {
                     invalidPlatformOverrides.add(parsed.path() + " -> " + parsed.decision());

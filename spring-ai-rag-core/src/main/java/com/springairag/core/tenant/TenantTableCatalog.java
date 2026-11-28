@@ -149,7 +149,15 @@ public final class TenantTableCatalog {
             // ---- WP2 新增（V75）：租户主表，平台全局，认证前即需存在 ----
             entry("rag_tenant", TableOwnership.PLATFORM_GLOBAL,
                     "V75 租户主表，跨租户生命周期由平台池管理；认证/租户解析前即需读取",
-                    "平台池：生命周期端点读写；app 只读 tenant 状态")
+                    "平台池：生命周期端点读写；app 只读 tenant 状态"),
+
+            // ---- Operator Console 新增（V86）：持久化平台审计与限时只读支持会话 ----
+            entry("rag_platform_audit_event", TableOwnership.PLATFORM_GLOBAL,
+                    "V86 平台控制面持久化审计流水，按单调 seq 记录租户/凭据/配额/支持会话操作",
+                    "平台池：运营方控制台写入与查询"),
+            entry("rag_operator_support_session", TableOwnership.PLATFORM_GLOBAL,
+                    "V86 受审计的限时只读支持会话记录，强制 read_only=true 且仅用于平台支持追溯",
+                    "平台池：运营方控制台读写")
     );
 
     private static TableEntry entry(String tableName, TableOwnership ownership,
