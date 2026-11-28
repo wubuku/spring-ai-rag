@@ -121,6 +121,18 @@ public class IntegrationCapabilitiesResponse {
         @JsonInclude(JsonInclude.Include.ALWAYS)
         private List<String> allowedCollectionKeys;
 
+        /** 当前凭据绑定的租户（与 /auth/me 同源）；旧客户端无此字段。 */
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        private String tenantId;
+
+        /** 当前租户运行模式（SINGLE / STRICT）。 */
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        private String tenantMode;
+
+        /** 绑定租户状态（ACTIVE / SUSPENDED / DISABLED）。 */
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        private String tenantStatus;
+
         public Principal() {
         }
 
@@ -149,6 +161,12 @@ public class IntegrationCapabilitiesResponse {
         public void setAllowedCollectionKeys(List<String> allowedCollectionKeys) {
             this.allowedCollectionKeys = allowedCollectionKeys;
         }
+        public String getTenantId() { return tenantId; }
+        public void setTenantId(String tenantId) { this.tenantId = tenantId; }
+        public String getTenantMode() { return tenantMode; }
+        public void setTenantMode(String tenantMode) { this.tenantMode = tenantMode; }
+        public String getTenantStatus() { return tenantStatus; }
+        public void setTenantStatus(String tenantStatus) { this.tenantStatus = tenantStatus; }
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)

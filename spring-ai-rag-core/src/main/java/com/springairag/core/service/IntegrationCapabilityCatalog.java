@@ -207,22 +207,22 @@ public class IntegrationCapabilityCatalog {
         Object idAttribute = request.getAttribute(
                 ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE);
         if (ApiKeyAuthFilter.PRINCIPAL_ENVIRONMENT_ROOT.equals(typeAttribute)) {
-            return new IntegrationCapabilitiesResponse.Principal(
+            return tenantProjection(new IntegrationCapabilitiesResponse.Principal(
                     ApiKeyAuthFilter.PRINCIPAL_ENVIRONMENT_ROOT,
                     null,
                     List.of(ApiCapabilitySupport.RAG_READ,
                             ApiCapabilitySupport.RAG_WRITE,
                             "API_KEY_MANAGE"),
                     CollectionAccessMode.UNRESTRICTED,
-                    null);
+                    null), "default", "ACTIVE");
         }
         if (ApiKeyAuthFilter.PRINCIPAL_LEGACY_STATIC.equals(typeAttribute)) {
-            return new IntegrationCapabilitiesResponse.Principal(
+            return tenantProjection(new IntegrationCapabilitiesResponse.Principal(
                     ApiKeyAuthFilter.PRINCIPAL_LEGACY_STATIC,
                     null,
                     ApiCapabilitySupport.fullCapabilities(),
                     CollectionAccessMode.UNRESTRICTED,
-                    null);
+                    null), "default", "ACTIVE");
         }
         if (ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY.equals(typeAttribute)) {
             if (!(idAttribute instanceof String principalId)
@@ -235,26 +235,40 @@ public class IntegrationCapabilityCatalog {
             return databaseProjection(principal);
         }
         if (typeAttribute == null && idAttribute == null) {
-            return new IntegrationCapabilitiesResponse.Principal(
+            return tenantProjection(new IntegrationCapabilitiesResponse.Principal(
                     "LOCAL_AUTH_DISABLED",
                     null,
                     ApiCapabilitySupport.fullCapabilities(),
                     CollectionAccessMode.UNRESTRICTED,
-                    null);
+                    null), "default", "ACTIVE");
         }
         throw unavailable();
+    }
+
+    /**
+     * 与 {@code ApiKeyIdentityController./auth/me} 同源填充租户视图：
+     * 模式取当前运行配置，凭据分支取认证 principal 快照，其余身份沿用 default/ACTIVE。
+     */
+    private IntegrationCapabilitiesResponse.Principal tenantProjection(
+            IntegrationCapabilitiesResponse.Principal projection,
+            String tenantId,
+            String tenantStatus) {
+        projection.setTenantId(tenantId == null ? "default" : tenantId);
+        projection.setTenantMode(properties.getTenant().getMode().name());
+        projection.setTenantStatus(tenantStatus == null ? "DISABLED" : tenantStatus);
+        return projection;
     }
 
     private IntegrationCapabilitiesResponse.Principal databaseProjection(
             AuthenticatedApiPrincipal principal) {
         if (ApiKeyCollectionAccess.isUnrestricted(principal)) {
-            return new IntegrationCapabilitiesResponse.Principal(
+            return tenantProjection(new IntegrationCapabilitiesResponse.Principal(
                     ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY,
                     principal.getRole().name(),
                     ApiCapabilitySupport.effectiveForRole(
                             principal.getRole(), principal.getCapabilities()),
                     CollectionAccessMode.UNRESTRICTED,
-                    null);
+                    null), principal.getTenantId(), principal.getTenantStatus());
         }
         try {
             List<Long> ids = ApiKeyCollectionAccess.parseAllowedIds(
@@ -264,13 +278,14 @@ public class IntegrationCapabilityCatalog {
                     || ids.stream().anyMatch(id -> !keysById.containsKey(id))) {
                 throw unavailable();
             }
-            return new IntegrationCapabilitiesResponse.Principal(
+            return tenantProjection(new IntegrationCapabilitiesResponse.Principal(
                     ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY,
                     principal.getRole().name(),
                     ApiCapabilitySupport.effectiveForRole(
                             principal.getRole(), principal.getCapabilities()),
                     CollectionAccessMode.RESTRICTED,
-                    ids.stream().map(keysById::get).toList());
+                    ids.stream().map(keysById::get).toList()),
+                    principal.getTenantId(), principal.getTenantStatus());
         } catch (DataAccessException | IllegalStateException error) {
             throw unavailable();
         }

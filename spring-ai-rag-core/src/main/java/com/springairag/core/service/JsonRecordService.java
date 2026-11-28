@@ -611,7 +611,8 @@ public class JsonRecordService {
                 document.getSourceNamespace(),
                 document.getSourceRevision(),
                 document.getDocumentRevision(),
-                result.lifecycle());
+                result.lifecycle(),
+                document.getContentHash());
     }
 
     private String normalizeNamespace(String value) {

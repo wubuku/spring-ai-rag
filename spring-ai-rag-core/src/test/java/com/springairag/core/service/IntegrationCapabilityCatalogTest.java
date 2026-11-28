@@ -9,6 +9,7 @@ import com.springairag.core.exception.RagException;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.security.ApiCapabilitySupport;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
+import com.springairag.core.tenant.TenantMode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -105,6 +106,43 @@ class IntegrationCapabilityCatalogTest {
         assertEquals(CollectionAccessMode.UNRESTRICTED,
                 unrestrictedProjection.getCollectionAccessMode());
         assertNull(unrestrictedProjection.getAllowedCollectionKeys());
+    }
+
+    @Test
+    void projectsTenantFieldsFromSameSnapshotAsIdentityEndpoint() {
+        properties.getTenant().setMode(TenantMode.STRICT);
+        AuthenticatedApiPrincipal restricted = new AuthenticatedApiPrincipal(
+                "rag_k_restricted", "rag_k_credential", 1,
+                ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY, ApiKeyRole.NORMAL,
+                "3", null, 1, 120,
+                List.of(ApiCapabilitySupport.RAG_READ),
+                "scenemill-prod", "ACTIVE");
+        when(collectionIdentityResolver.mapKeys(List.of(3L)))
+                .thenReturn(Map.of(3L, "tenant:manual"));
+
+        IntegrationCapabilitiesResponse.Principal projection =
+                catalog.describe(databaseRequest(restricted)).getPrincipal();
+
+        assertEquals("scenemill-prod", projection.getTenantId());
+        assertEquals("STRICT", projection.getTenantMode());
+        assertEquals("ACTIVE", projection.getTenantStatus());
+        assertEquals(CollectionAccessMode.RESTRICTED,
+                projection.getCollectionAccessMode());
+
+        AuthenticatedApiPrincipal unrestricted = new AuthenticatedApiPrincipal(
+                "rag_k_unrestricted", "rag_k_credential", 1,
+                ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY, ApiKeyRole.NORMAL,
+                null, null, 1, 120,
+                List.of(ApiCapabilitySupport.RAG_READ),
+                "default", "SUSPENDED");
+        IntegrationCapabilitiesResponse.Principal unrestrictedProjection =
+                catalog.describe(databaseRequest(unrestricted)).getPrincipal();
+
+        assertEquals("default", unrestrictedProjection.getTenantId());
+        assertEquals("STRICT", unrestrictedProjection.getTenantMode());
+        assertEquals("SUSPENDED", unrestrictedProjection.getTenantStatus());
+        assertEquals(CollectionAccessMode.UNRESTRICTED,
+                unrestrictedProjection.getCollectionAccessMode());
     }
 
     @Test

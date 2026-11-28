@@ -105,6 +105,7 @@ class JsonRecordUpsertResponseMappingTest {
         document.setSourceNamespace("default");
         document.setSourceRevision("rev-9");
         document.setDocumentRevision(3L);
+        document.setContentHash("sha256:record-1-content");
         return document;
     }
 
@@ -149,6 +150,7 @@ class JsonRecordUpsertResponseMappingTest {
         assertEquals("default", response.sourceNamespace());
         assertEquals("rev-9", response.sourceRevision());
         assertEquals(3L, response.documentRevision());
+        assertEquals("sha256:record-1-content", response.contentHash());
         assertSame(lifecycle, response.lifecycle());
     }
 
