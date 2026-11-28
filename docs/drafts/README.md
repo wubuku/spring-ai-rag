@@ -80,6 +80,21 @@ Active plans are listed here and in `docs/index*`.
   review of an external knowledge-graph proposal, item-by-item alignment with this
   repository's real implementation, and a phased landing path; it becomes a formal document
   only after decisions D1–D3 are settled.
+- [Multi-tenancy maturity assessment and P0 audit](MULTI_TENANCY_MATURITY_AND_P0_AUDIT.md)
+  (Chinese only): code-backed maturity verdict, 5 P0 defects/blockers (RLS policy semantics,
+  tenant API key provisioning gap, non-ACTIVE tenant 403 short-circuit, `default` tenant
+  protection & `lifecycle-actors`, mixed-corpus HNSW recall/migration rehearsal), and 4 P1
+  operational gaps with fix specs.
+- [Operator Console design and phased implementation plan](OPERATOR_CONSOLE_DESIGN_AND_PLAN.md)
+  and [Mock-First UI construction manual](OPERATOR_CONSOLE_UI_CONSTRUCTION_MANUAL.md)
+  (Chinese only): RAG Operator Console (multi-tenant admin console) planning package modeled
+  on ESA and `../AI-Agent-Operator-Console/`, covering 6-view IA, security/isolation & V86
+  API contracts, Phase 0–4 roadmap, and a 9-step Mock-First UI construction manual.
+- [Operator Console UI/UX audit](OPERATOR_CONSOLE_UI_UX_AUDIT.md) and
+  [Customer Web UI conservative alignment audit](CUSTOMER_WEBUI_UI_UX_AUDIT.md)
+  (Chinese only): product-manager and full-stack UI/UX audits benchmarking against BOS and
+  ESA's shared `classic-light`/`classic-dark` design language and company glossary, covering
+  Operator Console polish and conservative token/copy alignment for `spring-ai-rag-webui`.
 The processing/recovery, citation/streaming, chunking-correctness, and default-feature/automatic-upgrade/recovery batches,
 including supplemental real-LLM acceptance, are in the
 [historical archive](archive/README.md).

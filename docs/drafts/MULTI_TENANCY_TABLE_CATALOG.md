@@ -2,11 +2,12 @@
 
 > 机器可读单一事实源：`spring-ai-rag-core/src/main/java/com/springairag/core/tenant/TenantTableCatalog.java`
 >（本文与其必须保持一致，新增表先改 catalog + 本文再写迁移）。
-> 基线：Flyway V1..最新版本 共 **76 张存活业务表**（V1–V74 的 69 张存量表 + V75 新增
-> `rag_tenant` + V82 新增 3 张 WP8 结果/回调证据表 + V84 新增 3 张 WP10 租户级配额表；
+> 基线：Flyway V1..最新版本 共 **78 张存活业务表**（V1–V74 的 69 张存量表 + V75 新增
+> `rag_tenant` + V82 新增 3 张 WP8 结果/回调证据表 + V84 新增 3 张 WP10 租户级配额表
+> + V86 新增 2 张运营方控制台平台表；
 > V26 已 DROP 的 `rag_vector_store` 不登记）；
 > 表集合不写死，以迁移脚本与 `TenantTableCatalogTest` 动态基线比对为准。
-> 分类：**TENANT_PRIVATE 48 / PLATFORM_GLOBAL 24 / CREDENTIAL 4**。
+> 分类：**TENANT_PRIVATE 48 / PLATFORM_GLOBAL 26 / CREDENTIAL 4**。
 > 裁决规则来自 [多租户化实施规划](MULTI_TENANCY_IMPLEMENTATION_PLAN.md) §5.2（终审核 APPROVE 基线）。
 > 行为契约：租户私有表 → RLS ENABLE+FORCE + 规范 policy + tenant-leading 索引；
 > 平台全局表 → 无 RLS、无 tenant_id，仅按登记访问点读写；凭据表 → 无 RLS、V80 起
@@ -18,7 +19,7 @@
 | 类别 | 张数 | RLS | tenant-leading 索引 | 典型访问面 |
 |---|---|---|---|---|
 | TENANT_PRIVATE | 48 | ENABLE+FORCE | 必须 | 业务请求链路 / TenantJobDispatcher |
-| PLATFORM_GLOBAL | 24 | 否 | 否 | 平台池（仅登记访问点）或 app 读写（见逐张行） |
+| PLATFORM_GLOBAL | 26 | 否 | 否 | 平台池（仅登记访问点）或 app 读写（见逐张行） |
 | CREDENTIAL | 4 | 否 | 单列 tenant 索引（V80） | app 角色 digest 精确查找；V80 起带 tenant_id 绑定列，认证先于租户解析 |
 
 ## 2. 逐张裁决（按迁移引入顺序）
@@ -101,6 +102,8 @@
 | 74 | `rag_tenant_quota_policy` | 平台全局 | 否 | 否 | `V84__tenant_quota_windows.sql` | 1 | 5 | 0 | 0 | WP10 租户级硬阈值策略（platform 管理面配置；不是 billing/充值），按 tenant_id 唯一 | "平台池：配置读写；app 只读政策" |
 | 75 | `rag_tenant_quota_window` | 平台全局 | 否 | 否 | `V84__tenant_quota_windows.sql` | 1 | 7 | 0 | 0 | WP10 租户级 DAY/MONTH 窗口聚合账本（reserved/settled tokens），CAS 硬阈值 | "app 读写：预留/结算 CAS 与用量 API 聚合" |
 | 76 | `rag_tenant_quota_reservation` | 平台全局 | 否 | 否 | `V84__tenant_quota_windows.sql` | 1 | 5 | 0 | 0 | WP10 principal 预算预留 → 租户级预留映射；异步 settle/release/TTL 从 DB 恢复租户窗口 | "app 读写：预留/结算/释放" |
+| 77 | `rag_platform_audit_event` | 平台全局 | 否 | 否 | `V86__operator_console_audit_and_support.sql` | 1 | 10 | 0 | 0 | V86 平台控制面持久化审计流水，按单调 seq 记录租户/凭据/配额/支持会话操作 | "平台池：运营方控制台写入与查询" |
+| 78 | `rag_operator_support_session` | 平台全局 | 否 | 否 | `V86__operator_console_audit_and_support.sql` | 1 | 10 | 0 | 1 | V86 受审计的限时只读支持会话记录，强制 read_only=true 且仅用于平台支持追溯 | "平台池：运营方控制台读写" |
 
 ## 3. 已知例外与 WP2 落地要求
 

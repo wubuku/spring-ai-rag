@@ -62,6 +62,15 @@
   分批回填与 STRICT→SINGLE 回退前置条件记录；仅中文。
 - [知识图谱模块评审](KNOWLEDGE_GRAPH_MODULE_REVIEW.md)：对一份外部知识图谱方案的批评性评审、
   与本仓真实实现的逐条对齐及分阶段落地路径；仅中文，待 D1–D3 决策收敛后再决定是否转为正式文档。
+- [多租户成熟度评估与 P0 问题审计](MULTI_TENANCY_MATURITY_AND_P0_AUDIT.md)：代码级多租户成熟度评估，
+  记录 5 项 P0 缺陷/阻塞项（RLS 全策略校验、新租户无法通过 REST API 签发 Key、非 ACTIVE 租户未显式 403、`default` 保护与 `lifecycle-actors` 放通、混合语料 HNSW 召回与大表演练）及 4 项 P1 运维缺口与修复规格；仅中文。
+- [运营方管理控制台总设计与分阶段实施规划](OPERATOR_CONSOLE_DESIGN_AND_PLAN.md) 与
+  [UI 原型施工手册（Mock-First）](OPERATOR_CONSOLE_UI_CONSTRUCTION_MANUAL.md)：参考 ESA 与
+  `../AI-Agent-Operator-Console/` 设计的 RAG 运营方管理控制台（多租户管理后台）规划包，含 6 视图 IA、
+  安全隔离与 V86 后端 API 契约、Phase 0–4 路线图，以及面向任意前端 Coding Agent 的 9 步 Mock-First 施工手册；仅中文。
+- [运营方管理控制台 UI/UX 全面审核报告](OPERATOR_CONSOLE_UI_UX_AUDIT.md) 与
+  [客户 Web UI 保守对齐审核报告](CUSTOMER_WEBUI_UI_UX_AUDIT.md)：对照 BOS 与 ESA 共享的
+  `classic-light`/`classic-dark` 统一设计语言与公司级词汇表，分别输出运营方控制台精修清单（词汇表、骨架屏/空态、排序、顶栏与 `DevPanel` 位置）及客户侧 `spring-ai-rag-webui` 保守对齐方案（仅改色值令牌与 i18n 文案，不改功能与布局）；仅中文。
 
 前三批文档处理恢复、引用/流式安全、分块正确性与诊断、默认启用与自动升级、故障后无人值守恢复，以及补充真实 LLM 验收已归档至
 [历史规划归档](archive/README-zh-CN.md)。
