@@ -307,7 +307,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
                                         int retryAfter) throws IOException {
         log.warn("Rate-limit decision: result=rejected backend={} strategy={}",
                 backend, strategyType);
-        response.setHeader(RETRY_AFTER_HEADER, String.valueOf(retryAfter));
+        // 星幕等上游把 Retry-After 当作正整数秒做退避；0/负值会导致立即忙重试。
+        response.setHeader(RETRY_AFTER_HEADER,
+                String.valueOf(Math.max(1, retryAfter)));
         FailureClassHttpSupport.apply(
                 response, HttpStatus.TOO_MANY_REQUESTS.value(), "TOO_MANY_REQUESTS");
         if (path != null && path.startsWith("/v1/")) {
