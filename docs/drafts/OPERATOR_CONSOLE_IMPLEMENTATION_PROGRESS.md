@@ -1,6 +1,6 @@
 # Spring AI RAG 多租户 P0/P1 修复与运营方管理控制台实施进度账本
 
-> 更新时间：2026-11-27  
+> 更新时间：2026-11-28（§2 第 3 项 P0-5 实测回填）
 > 关联文档：[多租户成熟度与 P0 审计](MULTI_TENANCY_MATURITY_AND_P0_AUDIT.md) | [运营方控制台总设计与实施规划](OPERATOR_CONSOLE_DESIGN_AND_PLAN.md) | [UI 原型施工手册](OPERATOR_CONSOLE_UI_CONSTRUCTION_MANUAL.md)
 
 ## 1. 已完成（代码已落地，沙箱离线校验通过项已标注）
@@ -23,9 +23,13 @@
 - **界面与交互**：落地 6 视图（`TenantsPage`、`CredentialsPage`、`QuotasPage`、`KnowledgeHealthPage`、`CompliancePage`、`AuditSupportPage`）、`TenantDrawer`、`ConfirmModal`、`OneTimeKeyModal`、`CommandPalette`（`Cmd+K`）、`DevPanel`（Mock 401/403/409 负向开关）、`j`/`k`/`Enter`/`Esc`/`[` 快捷键与 390px 堆叠卡片响应式。
 - **沙箱离线验证**：复借本地 `AI-Agent-Operator-Console/node_modules` 与 Node 24 执行 `tsc --noEmit` 与 `vite build`，均 **0 错误通过**。
 
-## 2. 待全权限环境接续完成项
+## 2. 全权限环境验证与收口状态
 
-1. **后端编译与单测/集成测试**（沙箱无 JDK/Maven/Docker）：运行 `mvn test` 与 STRICT PostgreSQL 集成测试（补充并运行第 2 条 `USING (true)` 拒启、纯 HTTP 双租户建户发 Key 隔离读写、V86 Flyway 迁移与 `/api/v1/rag/operator/**` 集成测试）。
-2. **前端独立依赖安装与 Playwright 冒烟**：在 `spring-ai-rag-operator-console/` 执行 `npm install`、`npm run build`，补写并运行 Playwright Mock/Real E2E 冒烟脚本（覆盖 6 视图、开户一次性 Key、`default` 保护、DevPanel 403、390px 无横向溢出）。
-3. **P0-5 大规模真实 PG 验证**：30 万行非均匀语料（80%/15%/5%）HNSW `iterative_scan` `Recall@10` 压测 + 百万行 `rag_embeddings` 在线 `CONCURRENTLY` 锁窗口演练，结果回填至 [升级演练记录](MULTI_TENANCY_UPGRADE_REHEARSAL.md)。
-4. **文档门禁与 Git 提交**：运行 `./scripts/verify-project-docs.sh` 并按逻辑拆分为干净的本地提交（Phase 0 / Phase 2 / Phase 1+3）。
+1. **后端编译与单测/集成测试（已通过）**：`mvn -pl spring-ai-rag-core test` 8604 tests / 0 failures / 308 skipped；`TenantRlsVerifierPostgresIntegrationTest -Dtenant-rls.it.enabled=true` 10/10（含第二条 `USING (true)` 拒启）；`OperatorConsoleStrictHttpPostgresIntegrationTest -Doperator-http.it.enabled=true` 1/1（STRICT HTTP 双租户建户发 Key、V86 审计、配额、暂停/恢复）。Scenemill 目标测试命令与 `OpenApiContractTest` 全绿（API 572、core 8615，0 failures / 0 errors）。
+2. **前端依赖、构建与 Playwright Mock（已通过）**：`npm install`、`npm run typecheck`、`npm run build`、`npm run test:e2e:mock` 全绿，Mock 6/6 覆盖 6 视图、开户一次性 Key、`default` 保护、DevPanel 403、390px 零横向溢出；`VITE_OPERATOR_CLIENT=real` 真实前端联调尚未执行，当前仅有上述 STRICT HTTP 后端集成证据，**不冒充真实前端联调已完成**。
+3. **P0-5 大规模真实 PG 验证（已于 2026-11-28 实测完成，含未达成项）**：见 [升级演练记录 §6](MULTI_TENANCY_UPGRADE_REHEARSAL.md)。摘要：
+   - 真实 `pgvector/pgvector:pg16`（PG 16.15 + pgvector 0.8.7）一次性容器，30 万行 80%/15%/5% 非均匀语料；`hnsw.iterative_scan` GUC 可用，无需拉新镜像。
+   - 强制全局 HNSW 场景：小租户（5%）`Recall@10=0.9080`，中租户 `0.8820`，大租户 `0.8000`；`off` 与 `relaxed_order` 召回相同，`relaxed_order` 将小租户 P95 从 11.803ms 降至 0.873ms。当前 schema 因 tenant B-tree 存在走精确排序，小租户 `Recall@10=1.0`、P95 43.120ms（relaxed）— 两种路径是延迟/召回权衡。
+   - 百万行 `CREATE INDEX CONCURRENTLY` **成功**：索引 `indisvalid=true`，4542 MB，期间并发写入 2136 行未阻塞；精确耗时与完整 `pg_locks` 采样因宿主 bridge 连接超时未捕获，记为未实测项。
+   - 脚本：`scripts/verify-p05-pg-benchmark.sh`、`verify-p05-hnsw-tenant-recall.py`、`verify-p05-hnsw-tenant-recall.sql`、`verify-p05-hnsw-tenant-recall-forced.sql`、`verify-p05-online-concurrent-index.py`。
+4. **文档门禁与本地 Git 提交**：`./scripts/verify-project-docs.sh` 24 checks passed；Phase 0 / Phase 2 / Phase 1+3 已拆分本地提交，Scenemill 与 P0-5 收口提交在本轮完成后落盘。全程未 `git push`。
