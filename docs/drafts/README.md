@@ -95,6 +95,13 @@ Active plans are listed here and in `docs/index*`.
   (Chinese only): product-manager and full-stack UI/UX audits benchmarking against BOS and
   ESA's shared `classic-light`/`classic-dark` design language and company glossary, covering
   Operator Console polish and conservative token/copy alignment for `spring-ai-rag-webui`.
+- [Scenemill system seam alignment and hardening plan](SCENEMILL_SEAM_ALIGNMENT_AND_HARDENING_PLAN.md)
+  (Chinese only): code-level seam hardening plan (3/3 reviewed) for upstream Scenemill's N:1
+  shared-collection and multi-tenancy evolution, covering P0s (pgvector `hnsw.iterative_scan`,
+  `/integration-capabilities` tenant-field parity with `/auth/me`,
+  `JsonRecordUpsertResponse.contentHash` and non-`ACTIVE` tenant `403` contract) and P1s
+  (dual-mode `ScenemillSeamContractTest`, response header parity, and `scenemill-prod`
+  `STRICT`-mode provisioning template).
 The processing/recovery, citation/streaming, chunking-correctness, and default-feature/automatic-upgrade/recovery batches,
 including supplemental real-LLM acceptance, are in the
 [historical archive](archive/README.md).

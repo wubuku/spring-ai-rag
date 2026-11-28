@@ -1,0 +1,342 @@
+import type {
+  ComplianceSnapshot,
+  CredentialRecord,
+  KnowledgeHealthRow,
+  PlatformAuditEvent,
+  QuotaPolicyRecord,
+  SupportSessionRecord,
+  TenantSummary,
+} from './operatorContract';
+
+export const MOCK_NOW = '2026-11-27T10:00:00Z';
+
+export function createInitialTenants(): TenantSummary[] {
+  return [
+    {
+      tenantId: 'default',
+      displayName: '默认租户（系统保留）',
+      status: 'ACTIVE',
+      protectedDefault: true,
+      principalCount: 2,
+      activeKeyCount: 2,
+      orphanPrincipalCount: 0,
+      dayTokenUsed: 185000,
+      dayTokenLimit: 1000000,
+      monthCostUsedUsd: 18.4,
+      monthCostLimitUsd: 200,
+      collectionCount: 4,
+      documentCount: 142,
+      embeddingCount: 18420,
+      createdAt: '2026-10-01T00:00:00Z',
+      updatedAt: '2026-11-27T08:15:00Z',
+    },
+    {
+      tenantId: 'acme-legal',
+      displayName: 'Acme 法务知识库',
+      status: 'ACTIVE',
+      protectedDefault: false,
+      principalCount: 3,
+      activeKeyCount: 3,
+      orphanPrincipalCount: 0,
+      dayTokenUsed: 860000,
+      dayTokenLimit: 1000000,
+      monthCostUsedUsd: 162.5,
+      monthCostLimitUsd: 200,
+      collectionCount: 12,
+      documentCount: 1840,
+      embeddingCount: 245000,
+      createdAt: '2026-11-02T03:20:00Z',
+      updatedAt: '2026-11-27T09:42:00Z',
+    },
+    {
+      tenantId: 'northstar-med',
+      displayName: 'Northstar 医疗检索',
+      status: 'ACTIVE',
+      protectedDefault: false,
+      principalCount: 2,
+      activeKeyCount: 2,
+      orphanPrincipalCount: 0,
+      dayTokenUsed: 520000,
+      dayTokenLimit: 500000,
+      monthCostUsedUsd: 148.2,
+      monthCostLimitUsd: 150,
+      collectionCount: 9,
+      documentCount: 960,
+      embeddingCount: 128400,
+      createdAt: '2026-11-06T06:10:00Z',
+      updatedAt: '2026-11-27T09:50:00Z',
+    },
+    {
+      tenantId: 'orbit-fin',
+      displayName: 'Orbit 投研知识中台',
+      status: 'ACTIVE',
+      protectedDefault: false,
+      principalCount: 1,
+      activeKeyCount: 0,
+      orphanPrincipalCount: 1,
+      dayTokenUsed: 0,
+      dayTokenLimit: 800000,
+      monthCostUsedUsd: 0,
+      monthCostLimitUsd: 250,
+      collectionCount: 0,
+      documentCount: 0,
+      embeddingCount: 0,
+      createdAt: '2026-11-27T07:30:00Z',
+      updatedAt: '2026-11-27T07:30:00Z',
+    },
+    {
+      tenantId: 'harbor-edu',
+      displayName: 'Harbor 在线教研',
+      status: 'SUSPENDED',
+      protectedDefault: false,
+      principalCount: 1,
+      activeKeyCount: 1,
+      orphanPrincipalCount: 0,
+      dayTokenUsed: 42000,
+      dayTokenLimit: 400000,
+      monthCostUsedUsd: 34.0,
+      monthCostLimitUsd: 120,
+      collectionCount: 5,
+      documentCount: 310,
+      embeddingCount: 41200,
+      createdAt: '2026-10-18T11:00:00Z',
+      updatedAt: '2026-11-26T16:20:00Z',
+    },
+    {
+      tenantId: 'sunset-legacy',
+      displayName: 'Sunset 归档客户',
+      status: 'DISABLED',
+      protectedDefault: false,
+      principalCount: 1,
+      activeKeyCount: 0,
+      orphanPrincipalCount: 0,
+      dayTokenUsed: 0,
+      dayTokenLimit: 100000,
+      monthCostUsedUsd: 0,
+      monthCostLimitUsd: 50,
+      collectionCount: 2,
+      documentCount: 58,
+      embeddingCount: 6400,
+      createdAt: '2026-09-14T09:00:00Z',
+      updatedAt: '2026-11-20T12:00:00Z',
+    },
+  ];
+}
+
+export function createInitialCredentials(): CredentialRecord[] {
+  return [
+    {
+      principalId: 'rag_p_default_main',
+      tenantId: 'default',
+      tenantStatus: 'ACTIVE',
+      role: 'ADMIN',
+      keyId: 'rag_k_def01a2b3c4d',
+      keyPrefix: 'rag_k_def01a...',
+      status: 'ACTIVE',
+      expiresAt: '2027-02-27T00:00:00Z',
+      lastUsedAt: '2026-11-27T09:55:00Z',
+      createdAt: '2026-10-01T00:05:00Z',
+    },
+    {
+      principalId: 'rag_p_acme_prod',
+      tenantId: 'acme-legal',
+      tenantStatus: 'ACTIVE',
+      role: 'NORMAL',
+      keyId: 'rag_k_acm98f7e6d5c',
+      keyPrefix: 'rag_k_acm98f...',
+      status: 'ACTIVE',
+      expiresAt: '2027-01-15T00:00:00Z',
+      lastUsedAt: '2026-11-27T09:58:00Z',
+      createdAt: '2026-11-02T03:25:00Z',
+    },
+    {
+      principalId: 'rag_p_acme_ci',
+      tenantId: 'acme-legal',
+      tenantStatus: 'ACTIVE',
+      role: 'NORMAL',
+      keyId: 'rag_k_acm22c3d4e5f',
+      keyPrefix: 'rag_k_acm22c...',
+      status: 'ROTATING',
+      expiresAt: '2026-12-02T00:00:00Z',
+      lastUsedAt: '2026-11-27T08:10:00Z',
+      createdAt: '2026-11-10T04:00:00Z',
+    },
+    {
+      principalId: 'rag_p_northstar_api',
+      tenantId: 'northstar-med',
+      tenantStatus: 'ACTIVE',
+      role: 'NORMAL',
+      keyId: 'rag_k_nst77a8b9c0d',
+      keyPrefix: 'rag_k_nst77a...',
+      status: 'ACTIVE',
+      expiresAt: '2027-02-01T00:00:00Z',
+      lastUsedAt: '2026-11-27T09:49:00Z',
+      createdAt: '2026-11-06T06:15:00Z',
+    },
+    {
+      principalId: 'rag_t_orbit_bootstrap01',
+      tenantId: 'orbit-fin',
+      tenantStatus: 'ACTIVE',
+      role: 'NORMAL',
+      keyId: null,
+      keyPrefix: null,
+      status: 'ORPHAN_NO_KEY',
+      expiresAt: null,
+      lastUsedAt: null,
+      createdAt: '2026-11-27T07:30:00Z',
+    },
+    {
+      principalId: 'rag_p_harbor_app',
+      tenantId: 'harbor-edu',
+      tenantStatus: 'SUSPENDED',
+      role: 'NORMAL',
+      keyId: 'rag_k_hrb44d5e6f7a',
+      keyPrefix: 'rag_k_hrb44d...',
+      status: 'ACTIVE',
+      expiresAt: '2027-01-20T00:00:00Z',
+      lastUsedAt: '2026-11-26T16:15:00Z',
+      createdAt: '2026-10-18T11:10:00Z',
+    },
+    {
+      principalId: 'rag_p_sunset_old',
+      tenantId: 'sunset-legacy',
+      tenantStatus: 'DISABLED',
+      role: 'NORMAL',
+      keyId: 'rag_k_sns00b1c2d3e',
+      keyPrefix: 'rag_k_sns00b...',
+      status: 'REVOKED',
+      expiresAt: '2026-11-01T00:00:00Z',
+      lastUsedAt: '2026-10-30T10:00:00Z',
+      createdAt: '2026-09-14T09:10:00Z',
+    },
+  ];
+}
+
+export function createInitialQuotas(tenants: TenantSummary[]): QuotaPolicyRecord[] {
+  const rows: QuotaPolicyRecord[] = [];
+  for (const t of tenants) {
+    rows.push({
+      tenantId: t.tenantId,
+      displayName: t.displayName,
+      period: 'DAY',
+      enabled: t.dayTokenLimit !== null,
+      maxTokens: t.dayTokenLimit,
+      maxCostUsd: t.monthCostLimitUsd ? Math.round((t.monthCostLimitUsd / 30) * 10) / 10 : null,
+      usedTokens: t.dayTokenUsed,
+      usedCostUsd: Math.round((t.monthCostUsedUsd / 27) * 100) / 100,
+      reservedTokens: t.status === 'ACTIVE' ? Math.round(t.dayTokenUsed * 0.02) : 0,
+      windowStart: '2026-11-27T00:00:00Z',
+      windowEnd: '2026-11-28T00:00:00Z',
+    });
+    rows.push({
+      tenantId: t.tenantId,
+      displayName: t.displayName,
+      period: 'MONTH',
+      enabled: t.monthCostLimitUsd !== null,
+      maxTokens: t.dayTokenLimit ? t.dayTokenLimit * 25 : null,
+      maxCostUsd: t.monthCostLimitUsd,
+      usedTokens: t.dayTokenUsed * 19,
+      usedCostUsd: t.monthCostUsedUsd,
+      reservedTokens: t.status === 'ACTIVE' ? Math.round(t.dayTokenUsed * 0.05) : 0,
+      windowStart: '2026-11-01T00:00:00Z',
+      windowEnd: '2026-12-01T00:00:00Z',
+    });
+  }
+  return rows;
+}
+
+export function createInitialKnowledgeHealth(tenants: TenantSummary[]): KnowledgeHealthRow[] {
+  const overrides: Record<string, Partial<KnowledgeHealthRow>> = {
+    default: { estimatedStorageMb: 92.4, embeddingQueuePending: 0, purgeJobsPending: 0, failedJobs24h: 0, lastRecallCheckStatus: 'PASS', lastRecallAt10: 0.96 },
+    'acme-legal': { estimatedStorageMb: 1240.8, embeddingQueuePending: 14, purgeJobsPending: 0, failedJobs24h: 0, lastRecallCheckStatus: 'PASS', lastRecallAt10: 0.94 },
+    'northstar-med': { estimatedStorageMb: 642.1, embeddingQueuePending: 38, purgeJobsPending: 1, failedJobs24h: 2, lastRecallCheckStatus: 'WARN', lastRecallAt10: 0.78 },
+    'orbit-fin': { estimatedStorageMb: 0, embeddingQueuePending: 0, purgeJobsPending: 0, failedJobs24h: 0, lastRecallCheckStatus: 'UNVERIFIED', lastRecallAt10: null },
+    'harbor-edu': { estimatedStorageMb: 206.5, embeddingQueuePending: 0, purgeJobsPending: 0, failedJobs24h: 0, lastRecallCheckStatus: 'UNVERIFIED', lastRecallAt10: null },
+    'sunset-legacy': { estimatedStorageMb: 31.2, embeddingQueuePending: 0, purgeJobsPending: 0, failedJobs24h: 0, lastRecallCheckStatus: 'UNVERIFIED', lastRecallAt10: null },
+  };
+  return tenants.map((t) => ({
+    tenantId: t.tenantId,
+    displayName: t.displayName,
+    status: t.status,
+    collectionCount: t.collectionCount,
+    documentCount: t.documentCount,
+    embeddingCount: t.embeddingCount,
+    estimatedStorageMb: 0,
+    embeddingQueuePending: 0,
+    purgeJobsPending: 0,
+    failedJobs24h: 0,
+    lastRecallCheckStatus: 'UNVERIFIED',
+    lastRecallAt10: null,
+    ...overrides[t.tenantId],
+  }));
+}
+
+export function createInitialCompliance(): ComplianceSnapshot {
+  return {
+    tenantMode: 'STRICT',
+    rlsVerifierStatus: 'PASS',
+    rlsVerifierCheckedAt: '2026-11-27T09:00:00Z',
+    rlsFindings: [
+      {
+        severity: 'INFO',
+        code: 'P0_FIXES_APPLIED',
+        message: 'P0-1..P0-4 校验逻辑已加固：全策略遍历、WITH CHECK GUC 绑定、非 ACTIVE 租户 403 短路与 default 保护已就位。',
+      },
+      {
+        severity: 'P1',
+        code: 'HNSW_MIXED_CORPUS_BENCH_PENDING',
+        message: 'P0-5 待执行：30 万行非均匀语料 HNSW iterative_scan Recall@10 压测与百万行 CONCURRENTLY 演练尚未回填。',
+      },
+    ],
+    tableCatalog: {
+      total: 78,
+      tenantPrivate: 48,
+      platformGlobal: 26,
+      credential: 4,
+    },
+    endpointGuard: {
+      totalRoutes: 54,
+      declaredRoutes: 54,
+      platformControlRoutes: 16,
+    },
+    dbRoleChecks: {
+      currentUser: 'rag_app',
+      isSuperuser: false,
+      hasBypassRls: false,
+      isTableOwner: false,
+    },
+  };
+}
+
+export function createInitialAudits(): PlatformAuditEvent[] {
+  return [
+    { seq: 112, eventId: 'evt_0112', occurredAt: '2026-11-27T09:42:00Z', actor: 'environment-root', actorType: 'ENVIRONMENT_ROOT', action: 'QUOTA_UPDATE', targetTenantId: 'acme-legal', targetResourceId: 'acme-legal:DAY', reason: '客户法务集中导入期临时调高日配额', outcome: 'SUCCESS' },
+    { seq: 111, eventId: 'evt_0111', occurredAt: '2026-11-27T08:15:00Z', actor: 'ops-alice', actorType: 'LIFECYCLE_ACTOR', action: 'SUPPORT_SESSION_START', targetTenantId: 'northstar-med', targetResourceId: 'sup_001', reason: '工单 #INC-4821 排查异步 Embedding 队列失败', outcome: 'SUCCESS' },
+    { seq: 110, eventId: 'evt_0110', occurredAt: '2026-11-27T07:30:00Z', actor: 'environment-root', actorType: 'ENVIRONMENT_ROOT', action: 'TENANT_CREATE', targetTenantId: 'orbit-fin', targetResourceId: 'orbit-fin', reason: '新客户签约开户（待补发首把 API Key）', outcome: 'SUCCESS' },
+    { seq: 109, eventId: 'evt_0109', occurredAt: '2026-11-26T16:20:00Z', actor: 'ops-alice', actorType: 'LIFECYCLE_ACTOR', action: 'TENANT_SUSPEND', targetTenantId: 'harbor-edu', targetResourceId: 'harbor-edu', reason: '客户申请暂停服务至下月初', outcome: 'SUCCESS' },
+    { seq: 108, eventId: 'evt_0108', occurredAt: '2026-11-25T14:05:00Z', actor: 'environment-root', actorType: 'ENVIRONMENT_ROOT', action: 'API_KEY_ROTATE', targetTenantId: 'acme-legal', targetResourceId: 'rag_k_acm22c3d4e5f', reason: '季度例行凭据轮换', outcome: 'SUCCESS' },
+    { seq: 107, eventId: 'evt_0107', occurredAt: '2026-11-20T12:00:00Z', actor: 'environment-root', actorType: 'ENVIRONMENT_ROOT', action: 'TENANT_DISABLE', targetTenantId: 'sunset-legacy', targetResourceId: 'sunset-legacy', reason: '客户合同到期下线归档', outcome: 'SUCCESS' },
+    { seq: 106, eventId: 'evt_0106', occurredAt: '2026-11-20T11:55:00Z', actor: 'environment-root', actorType: 'ENVIRONMENT_ROOT', action: 'API_KEY_REVOKE', targetTenantId: 'sunset-legacy', targetResourceId: 'rag_k_sns00b1c2d3e', reason: '下线前吊销全部业务密钥', outcome: 'SUCCESS' },
+    { seq: 105, eventId: 'evt_0105', occurredAt: '2026-11-18T09:30:00Z', actor: 'ops-bob', actorType: 'LIFECYCLE_ACTOR', action: 'TENANT_SOFT_DELETE', targetTenantId: 'default', targetResourceId: 'default', reason: '误触测试：验证默认租户受保护拒绝', outcome: 'DENIED' },
+    { seq: 104, eventId: 'evt_0104', occurredAt: '2026-11-12T10:00:00Z', actor: 'environment-root', actorType: 'ENVIRONMENT_ROOT', action: 'QUOTA_UPDATE', targetTenantId: 'northstar-med', targetResourceId: 'northstar-med:DAY', reason: '启用日 Token 硬阈值 500,000', outcome: 'SUCCESS' },
+    { seq: 103, eventId: 'evt_0103', occurredAt: '2026-11-06T06:15:00Z', actor: 'environment-root', actorType: 'ENVIRONMENT_ROOT', action: 'API_KEY_ISSUE', targetTenantId: 'northstar-med', targetResourceId: 'rag_k_nst77a8b9c0d', reason: '开户签发首把业务 Key', outcome: 'SUCCESS' },
+    { seq: 102, eventId: 'evt_0102', occurredAt: '2026-11-06T06:10:00Z', actor: 'environment-root', actorType: 'ENVIRONMENT_ROOT', action: 'TENANT_CREATE', targetTenantId: 'northstar-med', targetResourceId: 'northstar-med', reason: '医疗客户正式开户', outcome: 'SUCCESS' },
+    { seq: 101, eventId: 'evt_0101', occurredAt: '2026-11-02T03:20:00Z', actor: 'environment-root', actorType: 'ENVIRONMENT_ROOT', action: 'TENANT_CREATE', targetTenantId: 'acme-legal', targetResourceId: 'acme-legal', reason: '法务客户正式开户', outcome: 'SUCCESS' },
+  ];
+}
+
+export function createInitialSupportSessions(): SupportSessionRecord[] {
+  return [
+    {
+      sessionId: 'sup_001',
+      tenantId: 'northstar-med',
+      operatorActor: 'ops-alice',
+      ticketRef: 'INC-4821',
+      reason: '排查异步 Embedding 队列 2 条失败任务元数据（只读，不看正文）',
+      readOnly: true,
+      createdAt: '2026-11-27T09:50:00Z',
+      expiresAt: '2026-11-27T10:05:00Z',
+      revokedAt: null,
+    },
+  ];
+}

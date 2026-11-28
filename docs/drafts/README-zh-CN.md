@@ -71,6 +71,7 @@
 - [运营方管理控制台 UI/UX 全面审核报告](OPERATOR_CONSOLE_UI_UX_AUDIT.md) 与
   [客户 Web UI 保守对齐审核报告](CUSTOMER_WEBUI_UI_UX_AUDIT.md)：对照 BOS 与 ESA 共享的
   `classic-light`/`classic-dark` 统一设计语言与公司级词汇表，分别输出运营方控制台精修清单（词汇表、骨架屏/空态、排序、顶栏与 `DevPanel` 位置）及客户侧 `spring-ai-rag-webui` 保守对齐方案（仅改色值令牌与 i18n 文案，不改功能与布局）；仅中文。
+- [Scenemill（星幕 AI）系统接缝对齐与加固规划](SCENEMILL_SEAM_ALIGNMENT_AND_HARDENING_PLAN.md)：针对上游星幕 AI N:1 共享 Collection 与多租户演进的代码级接缝加固规划（3/3 审校冻结），覆盖 P0（pgvector `hnsw.iterative_scan`、`/integration-capabilities` 租户字段与 `/auth/me` 对齐、`JsonRecordUpsertResponse.contentHash` 与非 `ACTIVE` 租户 403 契约）及 P1（双模式 `ScenemillSeamContractTest` 契约护栏、响应头一致性与 `scenemill-prod` provisioning 模板）；仅中文。
 
 前三批文档处理恢复、引用/流式安全、分块正确性与诊断、默认启用与自动升级、故障后无人值守恢复，以及补充真实 LLM 验收已归档至
 [历史规划归档](archive/README-zh-CN.md)。
