@@ -102,6 +102,10 @@ Active plans are listed here and in `docs/index*`.
   `JsonRecordUpsertResponse.contentHash` and non-`ACTIVE` tenant `403` contract) and P1s
   (dual-mode `ScenemillSeamContractTest`, response header parity, and `scenemill-prod`
   `STRICT`-mode provisioning template).
+- [Scenemill STRICT provisioning template](SCENEMILL_STRICT_PROVISIONING.md)
+  (Chinese only): reference orchestration of the `scenemill-prod` tenant, six collections and
+  four restricted keys for a shared RAG instance, including the non-`ACTIVE` tenant `403`
+  contract check.
 The processing/recovery, citation/streaming, chunking-correctness, and default-feature/automatic-upgrade/recovery batches,
 including supplemental real-LLM acceptance, are in the
 [historical archive](archive/README.md).
